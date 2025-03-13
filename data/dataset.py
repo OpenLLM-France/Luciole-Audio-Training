@@ -3,7 +3,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from ssak.utils.audio import *
+from utils.audio import load_audio, get_audio_duration
 import whisper
 from pathlib import Path
 from textwrap import dedent

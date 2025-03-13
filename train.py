@@ -1,21 +1,27 @@
-import torch
-from ssak.utils.env import *
-from utils import * 
 import gc      
 import os
+import json
+import numpy as np
+
+import torch
+from torch.utils.checkpoint import checkpoint_sequential
 from torch.utils.data import DataLoader
+
+from utils.env import auto_device
+from utils.checkpoint_utils import save_model_checkpoint_peft, save_optimizer_scheduler_scaler
+from utils.metrics_utils import save_metrics_to_json
+
 from tqdm import tqdm
 from contextlib import nullcontext
-from torch.utils.checkpoint import checkpoint_sequential
-import logging
-import json
 
-# Setup logging
+import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def safe_mean(values):
-    return sum(values) / len(values) if values else None
+    return np.mean([v for v in values if v is not None]) if values else None
 
 class EarlyStopper:
     def __init__(self, patience=5):

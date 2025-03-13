@@ -5,7 +5,7 @@ from typing import List, Optional
 class ModelConfig:
     # LLM Configuration
     llm_name_hf: str = field(
-        default="OpenLLM-France/Lucie-7B-Instruct", # "unsloth/Llama-3.2-1B-Instruct-bnb-4bit", #
+        default="OpenLLM-France/Lucie-7B-Instruct-v1.1", # "unsloth/Llama-3.2-1B-Instruct-bnb-4bit", # 
         metadata={"help": "Hugging Face LLM model, e.g., Llama"}
     )
     llm_type: str = field(
@@ -17,7 +17,7 @@ class ModelConfig:
         metadata={"help": "Specific type of LLM in use"}
     )
     llm_dim: int = field(
-        default=2048, # 4096, #
+        default=4096, # , #
         metadata={"help": "Dimension size of the LLM"}
     )
 
@@ -35,7 +35,7 @@ class ModelConfig:
         metadata={"help": "Downsampling rate for encoder projector"}
     )
     encoder_projector_hidden_dim: int = field(
-        default= 4096 , # 4096, # 2048
+        default= 4096 , # 2048
         metadata={"help": "Encoder projector hidden dim"}
     )
     encoder_projector_activation:str = field(
@@ -305,25 +305,10 @@ class TrainConfig:
         metadata={"help": "Use gradient checkpointing or not"}
     )
     output_dir: str = field(
-        default="/path/to/save/model",
+        default="/home/hnaoura/hnaouara_Storage1/ASR_LLM_test",
         metadata={"help": "Directory to save model outputs"}
     )
     save_model: bool = field(
         default=True,
         metadata={"help": "Save model after training"}
     )
-    
-# @dataclass
-# class DataConfig:
-#     tsv_path: str = field(
-#         default="/home/hnaoura/hnaouara/Kaldi_corpus/TN/Datasets/test/TunSwitchCS",
-#         metadata={"help": "Path to training data in Kaldi format"}
-#     )
-#     # audio_path: str = field(
-#     #     default="/home/hnaoura/hnaouara/Kaldi_corpus/TN/Datasets/test/TunSwitchCS",
-#     #     metadata={"help": "Path to training data in Kaldi format"}
-#     # )
-#     val_data: str = field(
-#         default="/home/hnaoura/hnaouara/Kaldi_corpus/TN/Datasets/test/TunSwitchCS",
-#         metadata={"help": "Path to validation data in Kaldi format"}
-#     )

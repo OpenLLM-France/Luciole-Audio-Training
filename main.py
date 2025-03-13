@@ -1,21 +1,22 @@
 import os
 import json
+
+from configs import ModelConfig, TrainConfig
+from train import train
+from data.dataset import *
+
+from utils.checkpoint_utils import load_model_checkpoint_peft, load_optimizer_scheduler_scaler
+from utils.config_utils import setup_directories, save_config_files
+from utils.model_utils import freeze_transformer_layers, check_frozen_layers_peft_model
+
+from models.Lucas_setup import model_factory
+from utils.env import auto_device
+
 import torch
-import logging
 from torch.utils.data import DataLoader
 from torch.optim import AdamW, lr_scheduler
-from configs import ModelConfig, TrainConfig
-from train import freeze_transformer_layers, check_frozen_layers_peft_model, train
-from utils import *
-from data.dataset import *
-from models.model import model_factory
-from ssak.utils.env import auto_device
 
-# Environment setup
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
-# Logging setup
+import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -124,9 +125,9 @@ def main():
             start_epoch, start_step = last_epoch, last_step
     
     data_source = {
-        "audio_path": "/path/to/waves",
-        "dev": "/path/to/dev.json",
-        "train": "/path/to/train.json",
+        "audio_path": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_waves",
+        "dev": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_20.json",
+        "train": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_20.json",
     }
     
     train_loader, dataset_train = load_data(data_source, model_config, train_config, tokenizer)

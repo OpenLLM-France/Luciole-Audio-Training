@@ -2,34 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-# class EncoderAdaptor(nn.Module):
-#     def __init__(self, model_conf):
-#         super().__init__()
-#         self.k = model_conf.encoder_projector_ds_rate
-#         assert self.k > 0, "Downsampling rate (k) must be positive."
-#         self.hidden_dim = getattr(model_conf, 'encoder_projector_hidden_dim', 2048)
-        
-#         self.encoder_dim = model_conf.encoder_dim 
-#         self.llm_dim = model_conf.llm_dim
-#         self.linear1 = nn.Linear(self.encoder_dim * self.k, self.hidden_dim)
-#         self.relu = nn.ReLU()
-#         self.linear2 = nn.Linear(self.hidden_dim, self.llm_dim)
-
-#     def forward(self, x):
-#         batch_size, seq_len, dim = x.size()
-#         num_frames_to_discard = seq_len % self.k 
-#         if num_frames_to_discard > 0:
-#             x = x[:, :-num_frames_to_discard, :]
-#         seq_len = x.size(1)
-        
-#         x = x.contiguous()
-#         x = x.view(batch_size, seq_len // self.k, dim * self.k)
-#         x = self.linear1(x)
-#         x = self.relu(x)
-#         x = self.linear2(x)
-#         return x
-
 class EncoderAdaptor(nn.Module):
     def __init__(self, model_conf):
         super().__init__()

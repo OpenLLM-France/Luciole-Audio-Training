@@ -1,22 +1,28 @@
-# Setup logging
 import os
+import sys
 import json
-import torch
-from torch.utils.data import DataLoader
-from ssak.utils.env import *
-from ssak.utils.audio import load_audio
-from configs import TrainConfig, ModelConfig
-from utils import *
-from models.model import *
-from data.dataset import *
-import whisper
 from textwrap import dedent
-import logging
-from torch.optim import AdamW, lr_scheduler
+
+from configs import TrainConfig, ModelConfig
+
+from utils.env import auto_device
+from utils.audio import load_audio
+from utils.checkpoint_utils import load_model_checkpoint_peft
+
+from models.Lucas_setup import model_factory
+from models.lucas import get_embeddings
+
+from data.dataset import *
+
+import whisper
 from peft import PeftModel
 
-# Setup logging
-logger = logging.getLogger(__name__)# Logging setup
+import torch
+from torch.utils.data import DataLoader
+from torch.optim import AdamW, lr_scheduler
+
+import logging
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -62,8 +68,10 @@ def load_model_and_checkpoint(checkpoint_path, model_config, train_config, devic
     return model, tokenizer
 
 if __name__ == '__main__':
-    model_path = "/home/hnaoura/hnaouara_Storage1/ASR_LLM"
-    wave_path = "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_waves/chiyuanhsiao_llama-questions_test_9aee297c-07d0-4f0c-a69d-ce724e37612b.wav"
+    
+    model_path = sys.argv[1] 
+    wave_path = sys.argv[2] 
+    
     model_config, train_config = ModelConfig(), TrainConfig()
     
     device = auto_device()
