@@ -9,7 +9,7 @@ from train import freeze_transformer_layers, check_frozen_layers_peft_model, tra
 from utils import *
 from data.dataset import *
 from models.model import model_factory
-from linastt.utils.env import auto_device
+from ssak.utils.env import auto_device
 
 # Environment setup
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

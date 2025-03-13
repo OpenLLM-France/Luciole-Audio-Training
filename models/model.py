@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer
 
-from linastt.utils.env import *
+from ssak.utils.env import *
 from models.encoder import *
 from models.encoder_adaptor import *
 from utils import load_model_checkpoint_peft

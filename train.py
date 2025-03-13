@@ -1,5 +1,5 @@
 import torch
-from linastt.utils.env import *
+from ssak.utils.env import *
 from utils import * 
 import gc      
 import os

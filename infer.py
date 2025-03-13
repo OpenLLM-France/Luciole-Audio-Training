@@ -3,8 +3,8 @@ import os
 import json
 import torch
 from torch.utils.data import DataLoader
-from linastt.utils.env import *
-from linastt.utils.audio import load_audio
+from ssak.utils.env import *
+from ssak.utils.audio import load_audio
 from configs import TrainConfig, ModelConfig
 from utils import *
 from models.model import *
