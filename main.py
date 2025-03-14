@@ -101,7 +101,7 @@ def enable_gradient_checkpointing(model, train_config):
             model.llm.gradient_checkpointing_enable(dict(use_reentrant=False))
 
 def main():
-    torch.manual_seed(42)  # Ensure reproducibility
+    torch.manual_seed(1234)  # Ensure reproducibility
     
     model_config, train_config = ModelConfig(), TrainConfig()
     
