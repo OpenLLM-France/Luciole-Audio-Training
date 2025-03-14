@@ -305,7 +305,7 @@ class TrainConfig:
         metadata={"help": "Use gradient checkpointing or not"}
     )
     output_dir: str = field(
-        default="/home/hnaoura/hnaouara_Storage1/ASR_LLM_test",
+        default="path/to/output",
         metadata={"help": "Directory to save model outputs"}
     )
     save_model: bool = field(

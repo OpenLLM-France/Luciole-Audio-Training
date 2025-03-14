@@ -125,9 +125,9 @@ def main():
             start_epoch, start_step = last_epoch, last_step
     
     data_source = {
-        "audio_path": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_waves",
-        "dev": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_20.json",
-        "train": "/home/hnaoura/hnaouara/Audio_corpus/Audio_instruct_GPT/test_20.json",
+        "audio_path": ["path/to/audio_train", "path/to/audio_val"],
+        "dev": "path/to/dev.json",
+        "train": "path/to/train.json",
     }
     
     train_loader, dataset_train = load_data(data_source, model_config, train_config, tokenizer)
