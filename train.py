@@ -7,7 +7,7 @@ import torch
 from torch.utils.checkpoint import checkpoint_sequential
 from torch.utils.data import DataLoader
 
-from utils.env import auto_device
+from utils.env import *
 from utils.checkpoint_utils import save_model_checkpoint_peft, save_optimizer_scheduler_scaler
 from utils.metrics_utils import save_metrics_to_json
 

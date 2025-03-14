@@ -5,7 +5,7 @@ from textwrap import dedent
 
 from configs import TrainConfig, ModelConfig
 
-from utils.env import auto_device
+from utils.env import *
 from utils.audio import load_audio
 from utils.checkpoint_utils import load_model_checkpoint_peft
 

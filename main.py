@@ -10,15 +10,46 @@ from utils.config_utils import setup_directories, save_config_files
 from utils.model_utils import freeze_transformer_layers, check_frozen_layers_peft_model
 
 from models.Lucas_setup import model_factory
-from utils.env import auto_device
+from utils.env import *
 
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW, lr_scheduler
 
+import argparse
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+torch.manual_seed(1234)  # Ensure reproducibility
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Configure data source paths.")
+    parser.add_argument(
+        "--audio_path",
+        nargs="+",
+        required=True,
+        help="Paths for audio training and validation directories (provide one or more paths)."
+    )
+    parser.add_argument(
+        "--dev",
+        type=str,
+        required=True,
+        help="Path to the dev.json file."
+    )
+    parser.add_argument(
+        "--train",
+        type=str,
+        required=True,
+        help="Path to the train.json file."
+    )
+    parser.add_argument(
+        "--gpus",
+        type=int,
+        help="Path to the train.json file."
+    )
+    return parser.parse_args()
 
 def setup_logging(output_dir):
     """Initialize logging to file and console."""
@@ -101,8 +132,7 @@ def enable_gradient_checkpointing(model, train_config):
             model.llm.gradient_checkpointing_enable(dict(use_reentrant=False))
 
 def main():
-    torch.manual_seed(1234)  # Ensure reproducibility
-    
+    args = parse_args()
     model_config, train_config = ModelConfig(), TrainConfig()
     
     if not os.path.exists(os.path.join(train_config.output_dir, "model_config.json")) or not os.path.exists(os.path.join(train_config.output_dir, "train_config.json")):
@@ -124,11 +154,14 @@ def main():
         if last_epoch is not None and last_step is not None:
             start_epoch, start_step = last_epoch, last_step
     
+    
     data_source = {
-        "audio_path": ["path/to/audio_train", "path/to/audio_val"],
-        "dev": "path/to/dev.json",
-        "train": "path/to/train.json",
+        "audio_path": args.audio_path,
+        "dev": args.dev,
+        "train": args.train,
     }
+    print("Data Source Configuration:")
+    print(data_source)
     
     train_loader, dataset_train = load_data(data_source, model_config, train_config, tokenizer)
     validate_loader, dataset_val = (load_data(data_source, model_config, train_config, tokenizer, is_validation=True)
