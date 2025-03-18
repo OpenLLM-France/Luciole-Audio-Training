@@ -33,5 +33,5 @@ python infer.py path/to/model path/to/audio --gpus 1
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+This project is licensed under the AGPL v3 License. See the [LICENSE](LICENSE) file for more information.
 
