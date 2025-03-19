@@ -9,7 +9,7 @@ from utils.env import *
 from utils.audio import load_audio
 from utils.checkpoint_utils import load_model_checkpoint_peft
 
-from models.Lucas_setup import model_factory
+from models.lucas_setup import model_factory
 from models.lucas import get_embeddings
 
 from data.dataset import *
