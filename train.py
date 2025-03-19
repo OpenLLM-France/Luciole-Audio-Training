@@ -7,7 +7,6 @@ import torch
 from torch.utils.checkpoint import checkpoint_sequential
 from torch.utils.data import DataLoader
 
-from utils.env import *
 from utils.checkpoint_utils import save_model_checkpoint_peft, save_optimizer_scheduler_scaler
 from utils.metrics_utils import save_metrics_to_json
 
@@ -49,7 +48,7 @@ def load_last_epoch_and_step(log_file):
     last_log = logs[-1]
     return last_log['epoch'], last_log['step']
 
-def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config):
+def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config, device=None):
     """
     Trains the model with memory optimizations and supports resuming from a specific epoch and step.
     """
@@ -62,7 +61,6 @@ def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, sca
     best_val_loss = float("inf")
     best_val_acc = 0.0
 
-    device = auto_device()
     model.to(device)
     
     # If using fp16, ensure model parameters are in float16 (but optimizer works with float32)
