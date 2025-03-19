@@ -91,18 +91,26 @@ if not has_set_gpu:
     _set_visible_gpus("auto")
 
 
+if not os.environ.get("HOME"):
+    path = os.path.dirname(os.path.abspath(__file__))
+    if path.startswith("/home/"):
+        os.environ["HOME"] = "/".join(os.environ["HOME"].split("/")[:3])
+        
 # Cache Directory Handling
 def get_cache_dir(name=None):
     """Returns the cache directory for the given library name."""
     cache_dir = tempfile.gettempdir()
     if os.environ.get("HOME") and os.access(os.environ["HOME"], os.W_OK):
         cache_dir = os.path.join(os.environ["HOME"], ".cache")
+    elif __file__.startswith("/home/") and os.access("/".join(__file__.split("/")[:3]), os.W_OK):
+        cache_dir = os.path.join("/".join(__file__.split("/")[:3]), ".cache")
     else:
         for folder in ["/usr/share", "/workspace", "/opt"]:
             if os.access(folder, os.W_OK):
                 cache_dir = os.path.join(folder, ".cache")
                 break
     return os.path.join(cache_dir, name) if name else cache_dir
+
 
 # Set Hugging Face Cache Directories
 os.environ["HUGGINGFACE_HUB_CACHE"] = get_cache_dir("huggingface/hub")
