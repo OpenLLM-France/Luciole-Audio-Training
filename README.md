@@ -21,17 +21,17 @@ Before starting your training, you have to update the `configs.py` file to set u
 To train the model, use the following command. But first, you should change the dataset needed for training and development:
 
 ```bash
-python main.py --gpus 1
+python main.py --audio_path path/to/audio/train path/to/audio/train --dev path/to/dev.{json, tsv} --train path/to/train.{json, tsv} --gpus 1
 ```
 
 ## Inference:
 To infer the model, you just need to enter the path to the model (the script will take the last checkpoint trained) and an audio file, like in the following command:
 
 ```bash
-python infer.py <path/to/model> <path/to/audio> --gpus 1
+python infer.py path/to/model path/to/audio --gpus 1
 ```
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+This project is licensed under the AGPL v3 License. See the [LICENSE](LICENSE) file for more information.
 
