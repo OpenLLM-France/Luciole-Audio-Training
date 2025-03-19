@@ -9,8 +9,8 @@ from utils.checkpoint_utils import load_model_checkpoint_peft, load_optimizer_sc
 from utils.config_utils import setup_directories, save_config_files
 from utils.model_utils import freeze_transformer_layers, check_frozen_layers_peft_model
 
-from models.Lucas_setup import model_factory
-from utils.env import *
+from models.lucas_setup import model_factory
+from utils.env import auto_device
 
 import torch
 from torch.utils.data import DataLoader
@@ -192,7 +192,7 @@ def main():
     if model_config.using_llm_type == "unsloth":
         model = torch.compile(model)
     
-    results = train(model, train_loader, validate_loader, optimizer, scheduler, scaler, train_config)
+    results = train(model, train_loader, validate_loader, optimizer, scheduler, scaler, train_config, device)
     for k, v in results.items():
         logger.info(f'Key: {k}, Value: {v}')
 
