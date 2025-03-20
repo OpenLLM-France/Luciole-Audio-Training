@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "audio-adapter-training"
+version = "0.1.0"
+description = "Scripts to train Audio Adapter models"
+authors = []
+license = "GPL-3.0"
+readme = "README.md"
+packages = []
+
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+lightning = "^2.1.3"
+transformers = "^4.36.2"
+datasets = "^2.16.1"
+click = "^8.1.7"
+loguru = "^0.7.2"
+h5py = "^3.10.0"
+joblib = "^1.3.2"
+tensorboard = "^2.16.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.1.11"
+pre-commit = "^3.6.0"
+
+[tool.ruff]
+line-length = 120 # Allow lines to be as long as 120.
+target-version = "py39"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "C408",
+    "B023",
+    "C901", # C901 `...` is too complex
+    "C417"  # C417 Unnecessary `map` usage (rewrite using a generator expression)
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
