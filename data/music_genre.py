@@ -1,15 +1,12 @@
 import os
-import sys
 import random
 import datasets
 import pandas
 
-# Load audios
-import librosa
-import numpy as np
-import soxbindings as sox
-import torch
-import torchaudio
+# Relative import
+import sys
+sys.path.append(os.path.dirname(__file__))
+from audio import load_audio, conform_audio
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
 # - https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
@@ -186,148 +183,6 @@ def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK"):
     return genre
 
 
-AUDIO_EXTENSIONS = [".wav", ".mp3", ".flac", ".opus"]
-
-def load_audio(path, start = None, end = None, sampling_rate = 16_000, mono = True, return_format = 'array'):
-    """
-    Load an audio file and return the data.
-
-    Parameters
-    ----------
-    path: str
-        path to the audio file
-    start: float
-        start time in seconds. If None, the file will be loaded from the beginning.
-    end: float
-        end time in seconds. If None the file will be loaded until the end.
-    sampling_rate: int
-        destination sampling rate in Hz
-    mono: bool
-        if True, convert to mono
-    return_format: str (default: 'array')
-        'array': numpy.array
-        'torch': torch.Tensor
-        'bytes': bytes
-
-    verbose: bool
-        if True, print the steps
-    """
-    assert return_format in ['array', 'torch', 'bytes']
-    if not os.path.isfile(path):
-        # Because soxbindings does not indicate the filename if the file does not exist
-        raise RuntimeError(f"File not found: {path}")
-    # Test if we have read permission on the file
-    elif not os.access(path, os.R_OK):
-        # os.system("chmod a+r %s" % path)
-        raise RuntimeError(f"Missing reading permission for: {path}")
-
-    must_cut = start or end
-
-    if return_format == 'torch' and not must_cut:
-        if must_cut: # This path is super slow and has been disabled
-            start = float(start if start else 0)
-            sr = torchaudio.info(path).sampling_rate
-            offset = int(start * sr)
-            num_frames = -1
-            if end:
-                end = float(end)
-                num_frames = int((end - start) * sr)
-            audio, sr = torchaudio.load(path, frame_offset=offset, num_frames=num_frames)
-        else:
-            audio, sr = torchaudio.load(path)
-
-    else:
-
-        with suppress_stderr():
-            # stderr could print these harmless warnings:
-            # 1/ Could occur with sox.read
-            #   mp3: MAD lost sync
-            #   mp3: recoverable MAD error
-            # 2/ Could occur with sox.get_info
-            #   wav: wave header missing extended part of fmt chunk
-            if must_cut: # is not None:
-                start = float(start if start else 0)
-                sr = sox.get_info(path)[0].rate
-                offset = int(start * sr)
-                nframes = 0
-                if end: # is not None:
-                    end = float(end)
-                    nframes = int((end - start) * sr)
-                audio, sr = sox.read(path, offset = offset, nframes = nframes)
-            else:
-                audio, sr = sox.read(path)
-
-        audio = np.float32(audio)
-
-    audio = conform_audio(audio, sr, sampling_rate=sampling_rate, mono=mono, return_format=return_format)
-
-    if sampling_rate is None:
-        return (audio, sr)
-    return audio
-
-
-class suppress_stderr:
-    """
-    A context manager for doing a "deep suppression" of stdout and stderr in Python,
-    i.e. will suppress all print, even if the print originates in a compiled C/Fortran sub-function.
-    """
-    def __enter__(self):
-        self.errnull_file = open(os.devnull, 'w')
-        self.old_stderr_fileno_undup = sys.stderr.fileno()
-        self.old_stderr_fileno = os.dup(sys.stderr.fileno())
-        self.old_stderr = sys.stderr
-        os.dup2(self.errnull_file.fileno(), self.old_stderr_fileno_undup)
-        sys.stderr = self.errnull_file
-        return self
-
-    def __exit__(self, *_):
-        sys.stderr = self.old_stderr
-        os.dup2(self.old_stderr_fileno, self.old_stderr_fileno_undup)
-        os.close(self.old_stderr_fileno)
-        self.errnull_file.close()
-
-
-def conform_audio(audio, sr, sampling_rate=16_000, mono=True, return_format='array'):
-    """
-    Conform the audio to the desired format (mono channel, fixed frequency -- 16kHz)
-    """
-    if mono:
-        if len(audio.shape) == 1:
-            pass
-        elif len(audio.shape) > 2:
-            raise RuntimeError("Audio with more than 2 dimensions not supported")
-        elif min(audio.shape) == 1:
-            audio = audio.reshape(audio.shape[0] * audio.shape[1])
-        else:
-            if isinstance(audio, torch.Tensor):
-                audio = audio.numpy()
-            else:
-                audio = audio.transpose()
-            audio = librosa.to_mono(audio)
-    if sampling_rate is not None and sr != sampling_rate:
-        if not isinstance(audio, torch.Tensor):
-            audio = torch.Tensor(audio)
-
-        # # We don't use librosa here because there is a problem with multi-threading
-        # audio = librosa.resample(audio, orig_sr = sr, target_sr = sampling_rate)
-
-        audio = torchaudio.transforms.Resample(sr, sampling_rate)(torch.Tensor(audio))
-
-    if return_format == "torch" and not isinstance(audio, torch.Tensor):
-        audio = torch.Tensor(audio)
-    elif return_format != "torch":
-        if isinstance(audio, torch.Tensor):
-            audio = audio.numpy()
-        elif isinstance(audio, list):
-            audio = np.array(audio, dtype=np.float32)
-        if return_format == "bytes":
-            audio = array_to_bytes(audio)
-
-    return audio
-
-
-def array_to_bytes(audio):
-    return (audio * 32768).astype(np.int16).tobytes()
 
 
 def string_to_integer(s: str) -> int:
@@ -370,7 +225,7 @@ def main_dump_parquet():
                 dataset_name = new_dataset_name
                 # Reset indices
                 first_idx = last_idx = 0
-                # Pseudo-deterministic for each dataset
+                # Pseudo-deterministic randomness for each dataset
                 random.seed(string_to_integer(dataset_name))
             continue
         messages.append(data)
