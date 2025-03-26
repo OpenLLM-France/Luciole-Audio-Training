@@ -69,7 +69,6 @@ def set_llm(model_conf, train_config, inference_mode=None):
                 model_conf.llm_name_hf,
                 quantization_config=quantization_config,
                 device_map="auto",
-                local_files_only=True
             )
             tokenizer = set_tokenizer(model_conf)
             if train_config.use_peft:
