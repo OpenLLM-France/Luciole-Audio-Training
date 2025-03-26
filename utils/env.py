@@ -49,6 +49,11 @@ def vram_free(index=0):
     info = pynvml.nvmlDeviceGetMemoryInfo(handle)
     return info.free // 1024**2
 
+def has_gpu():
+    """
+        Returns True if GPU is available
+    """
+    return get_num_gpus() > 0
 
 def _get_gpu_handle(index=0):
     """Returns the GPU handle for the given index."""
