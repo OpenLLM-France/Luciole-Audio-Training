@@ -6,7 +6,7 @@ import pandas
 # Relative import
 import sys
 sys.path.append(os.path.dirname(__file__))
-from audio import load_audio, conform_audio
+from utils.audio import load_audio, conform_audio
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
 # - https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
