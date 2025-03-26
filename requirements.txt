@@ -1,9 +1,10 @@
-
 librosa
-soundfile
+nltk
+parler_tts
+peft
 pydub
+soundfile
 torch
 torchaudio
 torchvision
 transformers
-peft

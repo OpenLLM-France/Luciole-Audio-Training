@@ -1,5 +1,6 @@
 # Misc
 import argparse
+import sys
 import os
 import random
 import shlex
@@ -171,6 +172,8 @@ def save_audio(path, audio, sampling_rate=16_000):
     if isinstance(audio, torch.Tensor):
         audio = audio.numpy()
         audio = audio.transpose()
+    elif isinstance(audio, list):
+        audio = np.array(audio, dtype=np.float32)
     sox.write(path, audio, sampling_rate)
 
 
@@ -181,7 +184,7 @@ class Reverberation(BaseWaveformTransform):
         rir_list_files: list[str],
         p: Optional[float] = 1,
         rir_scale_factor = (0.5, 1.0),
-        gain_scaling_factor = (-6, -5), # NOCOMMIT 0
+        gain_scaling_factor = None,
     ):
         """
         :param path_dir: directory including the rir directory
@@ -195,6 +198,8 @@ class Reverberation(BaseWaveformTransform):
         super().__init__(p)
         self.path = path_dir
         self.rir_scale_factor = rir_scale_factor
+        if isinstance(gain_scaling_factor, float):
+            gain_scaling_factor = (gain_scaling_factor, gain_scaling_factor)
         if not gain_scaling_factor:
             self.gain_scaler = None
         elif isinstance(gain_scaling_factor, (tuple, list)):
@@ -211,12 +216,12 @@ class Reverberation(BaseWaveformTransform):
             else:
                 self.wavs += self._parse_rir_list(rir_file)
 
-    def apply(self, samples, sampling_rate):
-        # Cast samples object type to torch tensor
-        samples = torch.as_tensor(samples)
+    def apply(self, waveform, sampling_rate):
+        # Cast waveform object type to torch tensor
+        waveform = torch.as_tensor(waveform)
 
         if self.gain_scaler:
-            samples = self.gain_scaler(samples, sampling_rate)
+            waveform = self.gain_scaler(waveform, sampling_rate)
 
         samp_index = self.parameters["samp_index"]
         rir_samples = self._load_wav(self.wavs[samp_index], sampling_rate)
@@ -240,10 +245,10 @@ class Reverberation(BaseWaveformTransform):
             )
             rir_samples = rir_samples.transpose(1, -1)
 
-        return self._reverberate(samples, rir_samples, rescale_amp="avg")
+        return self._reverberate(waveform, rir_samples, rescale_amp="avg")
 
-    def randomize_parameters(self, samples, sampling_rate):
-        super().randomize_parameters(samples, sampling_rate)
+    def randomize_parameters(self, waveform, sampling_rate):
+        super().randomize_parameters(waveform, sampling_rate)
         if self.parameters["should_apply"]:
             self.parameters["samp_index"] = random.randint(0, len(self.wavs) - 1)
 
@@ -322,7 +327,7 @@ class Reverberation(BaseWaveformTransform):
         if len(waveforms.shape) > 3 or len(rir_waveform.shape) > 3:
             raise NotImplementedError
 
-        # if inputs are mono tensors we reshape to 1, samples
+        # if inputs are mono tensors we reshape to 1, waveform
         if len(waveforms.shape) == 1:
             waveforms = waveforms.unsqueeze(0).unsqueeze(-1)
         elif len(waveforms.shape) == 2:
@@ -465,7 +470,7 @@ class Reverberation(BaseWaveformTransform):
         Example
         -------
         >>> from speechbrain.dataio.dataio import read_audio
-        >>> signal = read_audio('samples/audio_samples/example1.wav')
+        >>> signal = read_audio('waveform/audio_samples/example1.wav')
         >>> signal = signal.unsqueeze(0).unsqueeze(2)
         >>> kernel = torch.rand(1, 10, 1)
         >>> signal = convolve1d(signal, kernel, padding=(9, 0))
@@ -641,31 +646,90 @@ _augmenter8k = _augmenter16k = None
 
 def reverberation_factory(
     path_parent: str= "/data-server/datasets/audio/noise",
-    path_dir_16k: str= "simulated_rirs_16k.small", # NOCOMMIT .small
+    path_dir_16k: str= "simulated_rirs_16k",
     path_dir_8k: str= "simulated_rirs_8k",
     rir_lists: list= ["smallroom/rir_list", "mediumroom/rir_list", "largeroom/rir_list"],
     sampling_rate=16_000,
     verbose=True,
+    **kwargs
     ):
     global _augmenter8k, _augmenter16k
     if sampling_rate <= 10_000:
         if _augmenter8k is None:
             if verbose: print("Loading augmenter for 8kHz...")
             rir_lists = [os.path.join(path_dir_8k, rir_list) for rir_list in rir_lists]
-            _augmenter8k = Reverberation(path_parent, rir_lists)
+            _augmenter8k = Reverberation(path_parent, rir_lists, **kwargs)
         return _augmenter8k
     else:
         if _augmenter16k is None:
             if verbose: print("Loading augmenter for 16kHz...")
             rir_lists = [os.path.join(path_dir_16k, rir_list) for rir_list in rir_lists]
-            _augmenter16k = Reverberation(path_parent, rir_lists)
+            _augmenter16k = Reverberation(path_parent, rir_lists, **kwargs)
         return _augmenter16k
+
+
+def cut_audio(waveform, sampling_rate, duration):
+
+    if isinstance(duration, (tuple, list)):
+        # Random duration
+        
+        assert len(duration) == 2
+        duration_range = duration
+        duration = random.uniform(*duration_range)
+
+    assert len(waveform.shape) == 1, f"{waveform.shape=}"
+    max_len = waveform.shape[0]
+    duration = min(duration, max_len / sampling_rate)
+    max_start = max_len / sampling_rate - duration
+    if max_start > 0:
+        start = random.uniform(0, max_start)
+    else:
+        start = 0
+    sample_start = round(start * sampling_rate)
+    sample_end = min(round((start + duration) * sampling_rate), max_len)
+    waveform = waveform[sample_start:sample_end]
+    return waveform
+    
+
+def mix_audios(larger_audio, smaller_audio, alpha1=None, alpha2=None, at_start=None):
+
+    # Ensure both are the same length
+    max_length = max(len(larger_audio), len(smaller_audio))
+    assert max_length > 1
+
+    if len(larger_audio) < max_length:
+        larger_audio = np.pad(larger_audio, (0, max_length - len(larger_audio)))
+        at_start = False
+
+    if at_start is None:
+        at_start = random.random() < 0.5
+    
+    if len(smaller_audio) < max_length:
+        silence_for_music = max_length - len(smaller_audio)
+        silence_waiting = 0
+        if silence_for_music > 16_000:
+            silence_waiting = round(random.uniform(0, min(silence_for_music, 32_000)) )
+            silence_for_music -= silence_waiting
+        if at_start:
+            smaller_audio = np.pad(smaller_audio, (silence_waiting, silence_for_music))
+        else:
+            smaller_audio = np.pad(smaller_audio, (silence_for_music, silence_waiting))
+
+    if alpha1 is None:
+        alpha1 = 1
+    if alpha2 is None:
+        alpha2 = random.uniform(0.5, 1)
+
+    return alpha1 * larger_audio + alpha2 * smaller_audio
 
 if __name__ == "__main__":
 
     # Temporary code to test
 
-    reverb = reverberation_factory()
+    reverb = reverberation_factory(
+        rir_scale_factor = (0.5, 1.0),
+        gain_scaling_factor = (-20, 6),
+    )
 
     # Input file
     import pandas as pd
@@ -680,11 +744,11 @@ if __name__ == "__main__":
         audio_in = audio["array"]
         sampling_rate = audio["sampling_rate"]
 
-        path = f"out/in_{i:03d}.wav" # NOCOMMIT
+        path = f"out/in_{i:03d}.wav"
         save_audio(path, audio_in, sampling_rate=sampling_rate)
 
         assert sampling_rate == 16_000
         audio_out = reverb(audio_in, sampling_rate)
 
-        path = f"out/out_{i:03d}.wav" # NOCOMMIT
+        path = f"out/out_{i:03d}.wav"
         save_audio(path, audio_out, sampling_rate=sampling_rate)

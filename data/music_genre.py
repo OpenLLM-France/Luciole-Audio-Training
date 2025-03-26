@@ -2,11 +2,20 @@ import os
 import random
 import datasets
 import pandas
+import torch
 
 # Relative import
 import sys
 sys.path.append(os.path.dirname(__file__))
-from audio import load_audio, conform_audio
+from audio import (
+    load_audio,
+    conform_audio,
+    reverberation_factory,
+    cut_audio,
+    mix_audios,
+    save_audio,
+)
+from tts import text_to_speech
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
 # - https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
@@ -15,19 +24,30 @@ from audio import load_audio, conform_audio
 # - https://huggingface.co/datasets/MahiA/GT-Music-Genre
 # - https://huggingface.co/datasets/ylacombe/music_genres_XXX (where XXX is Jazz, Punk, Country, ...)
 
-def iterate_data(
+def music_genre_instruct_data_iterator(
     streaming=True,
     system_prompt=None,
+    debug_folder=None,
+    proba_vocal=0.7,
     **kwargs):
 
     instruction_file = os.path.join(
         os.path.dirname(__file__),
         "assets",
-        "instruction_music_genre.txt"
+        "instruction_music_genre_en_written.txt"
     )
     assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
     with open(instruction_file) as f:
-        instructions = [line.strip() for line in f.read().split("\n") if line.strip()]
+        instructions_written = [line.strip() for line in f.read().split("\n") if line.strip()]
+
+    instruction_file = os.path.join(
+        os.path.dirname(__file__),
+        "assets",
+        "instruction_music_genre_en_spoken.txt"
+    )
+    assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
+    with open(instruction_file) as f:
+        instructions_spoken = [line.strip() for line in f.read().split("\n") if line.strip()]
 
     REPOS_INSTRUCTS = [
         (
@@ -49,11 +69,13 @@ def iterate_data(
             yield repo + "--" + split
 
             for sample in ds:
-                yield format_data(repo,
+                yield make_data_instruct(repo,
                     sample["instruction"],
                     sample[label],
                     sample["audio"],
-                    system_prompt=system_prompt
+                    system_prompt=system_prompt,
+                    vocal=False,
+                    debug_folder=debug_folder,
                )
 
     REPOS_CLASSIFICATION_TASK = [
@@ -102,16 +124,38 @@ def iterate_data(
                 **kwargs
             )
             for sample in ds:
-                yield format_data(repo,
-                    random.choice(instructions),
+                vocal = random.random() < proba_vocal
+                instruction = random.choice(instructions_written) if not vocal else random.choice(instructions_spoken)
+                yield make_data_instruct(repo,
+                    instruction,
                     format_genre(sample[label], label_dict=label_dict),
                     sample["audio"] if "audio" in sample else sample,
                     system_prompt=system_prompt,
+                    vocal=vocal,
+                    debug_folder=debug_folder,
                 )
 
 
-def format_data(repo, instruction, answer, audio, sampling_rate=16_000, system_prompt=None, label_dict=None):
+global _add_reverb_to_clip
+_add_reverb_to_clip = None
+global _add_reverb_to_recording
+_add_reverb_to_recording = None
+
+def make_data_instruct(
+    repo,
+    instruction,
+    answer,
+    audio,
+    sampling_rate=16_000,
+    system_prompt=None,
+    vocal=False,
+    label_dict=None,
+    debug_folder=None,
+    ):
+
     answer = format_genre(answer, label_dict=label_dict, repo=repo)
+
+    # Compile audio
     assert isinstance(audio, dict)
     if isinstance(audio, dict) and "array" in audio:
         # Example: https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
@@ -134,7 +178,53 @@ def format_data(repo, instruction, answer, audio, sampling_rate=16_000, system_p
         audio_array = load_audio(os.path.join(pulled_folder, audio_path), sampling_rate=sampling_rate)
     assert sampling_rate
     assert len(audio_array)
+
+
+    global _add_reverb_to_clip
+    if _add_reverb_to_clip is None:
+        _add_reverb_to_clip = reverberation_factory(
+            rir_scale_factor = (0.5, 1.0),
+            gain_scaling_factor = (-20, 6),
+        )
+    global _add_reverb_to_recording
+    if _add_reverb_to_recording is None:
+        _add_reverb_to_recording = reverberation_factory(
+            rir_scale_factor = (0.7, 1.0),
+        )
+
+    if vocal:
+        audio_instruction = text_to_speech(instruction)
+        audio_array = cut_audio(audio_array, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
+        audio_array = _add_reverb_to_clip(audio_array, sampling_rate)
+        add_reverb = _add_reverb_to_recording
+        audio_array = mix_audios(audio_array, audio_instruction, alpha1=1, alpha2=1, at_start=None)
+
+    else:
+        audio_array = cut_audio(audio_array, sampling_rate=sampling_rate, duration=(4, 12))
+        add_reverb = _add_reverb_to_clip
+
+    if debug_folder:
+        # Dump audio for manual inspection
+        if vocal:
+            debug_folder = os.path.join(debug_folder, "vocal")
+        else:
+            debug_folder = os.path.join(debug_folder, "textual")
+        os.makedirs(debug_folder, exist_ok=True)
+        audio_filename = os.path.join(debug_folder, f"{string_to_integer(instruction)}.wav")
+        save_audio(audio_filename, audio_array, sampling_rate=sampling_rate)
+
+    audio_array = add_reverb(audio_array, sampling_rate)
+
     audio_data = {"type": "audio", "array": audio_array, "sampling_rate": sampling_rate}
+
+    instruction_before = random.random() < 0.5 if not vocal else None
+    full_instruction = []
+    if instruction_before is True:
+        full_instruction.append({"type": "text", "text": instruction})
+    full_instruction.append(audio_data)
+    if instruction_before is False:
+        full_instruction.append({"type": "text", "text": instruction})
+
     if audio_path:
         audio_data["path"] = audio_path
     return ([
@@ -144,10 +234,7 @@ def format_data(repo, instruction, answer, audio, sampling_rate=16_000, system_p
             }] if system_prompt else []) + [
             {
             "role": "user",
-            "content": [
-                    audio_data,
-                    {"type": "text", "text": instruction},
-                ],
+            "content": full_instruction,
             },
             {
             "role": "assistant",
@@ -195,6 +282,7 @@ def main_dump_parquet():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="out", help="Output folder")
     parser.add_argument("--max_docs", default=200, type=int, help="Number of documents per parquet")
+    parser.add_argument("--debug_folder", default=None, help="Debug folder")
     args = parser.parse_args()
 
     global messages, first_idx, last_idx, dataset_name, explicit_subname
@@ -216,7 +304,7 @@ def main_dump_parquet():
             first_idx = last_idx
             messages = []
 
-    for data in iterate_data():
+    for data in music_genre_instruct_data_iterator(debug_folder=args.debug_folder):
         if isinstance(data, str):
             explicit_subname = True
             new_dataset_name = data.replace("/", "--")
