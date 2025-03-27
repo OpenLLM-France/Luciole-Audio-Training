@@ -58,6 +58,12 @@ def text_to_speech(
 
     if prompt is None:
         prompt = random.choice(_tts_speaker_prompts)
+    elif isinstance(prompt, list):
+        prompt = random.choice(prompt)
+    elif isinstance(prompt, str):
+        pass
+    else:
+        raise ValueError("Prompt must be a string or a list of strings")
 
     # Load processor and model from Hugging Face, with caching in (V)RAM
     if model_name not in _tts_models:

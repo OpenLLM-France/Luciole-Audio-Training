@@ -4,7 +4,11 @@ import sys
 import os
 import random
 import shlex
-from typing import Optional
+import functools
+from typing import Optional, List, Callable, Union
+from numpy.typing import NDArray
+from pathlib import Path
+from packaging import version
 
 # Load audios
 import librosa
@@ -18,8 +22,16 @@ import audiomentations
 import torch
 import torch.nn.functional as F
 import torchaudio
-from audiomentations.core.transforms_interface import BaseWaveformTransform
-from packaging import version
+from audiomentations.core.transforms_interface import (
+    BaseWaveformTransform,
+)
+from audiomentations.core.utils import (
+    calculate_desired_noise_rms,
+    calculate_rms,
+    convert_decibels_to_amplitude_ratio,
+)
+from audiomentations.core.audio_loading_utils import load_sound_file
+
 
 AUDIO_EXTENSIONS = [".wav", ".mp3", ".flac", ".opus"]
 
@@ -215,6 +227,7 @@ class Reverberation(BaseWaveformTransform):
                 print(f"WARNING: {rir_file} not found")
             else:
                 self.wavs += self._parse_rir_list(rir_file)
+        assert self.wavs, f"Could not find any RIR files in {self.path=}"
 
     def apply(self, waveform, sampling_rate):
         # Cast waveform object type to torch tensor
@@ -258,7 +271,7 @@ class Reverberation(BaseWaveformTransform):
             "--rir-id",
             type=str,
             required=True,
-            help="This id is unique for each RIR and the noise may associate with a particular RIR by refering to this id",
+            help="This id is unique for each RIR and the music may associate with a particular RIR by refering to this id",
         )
         rir_parser.add_argument("--room-id", type=str, required=True, help="This is the room that where the RIR is generated")
         rir_parser.add_argument("--receiver-position-id", type=str, default=None, help="receiver position id")
@@ -317,7 +330,7 @@ class Reverberation(BaseWaveformTransform):
 
         Returns
         -------
-        waveforms: tensor
+        waveforms: numpy.array
             Reverberated signal.
 
         """
@@ -363,6 +376,8 @@ class Reverberation(BaseWaveformTransform):
             waveforms = waveforms.squeeze(0).squeeze(-1)
         if len(orig_shape) == 2:
             waveforms = waveforms.squeeze(-1)
+
+        waveforms = conform_audio(waveforms, 16_000)
 
         return waveforms
 
@@ -641,6 +656,7 @@ class Reverberation(BaseWaveformTransform):
         """
         return 10 ** (SNR / 20)
 
+
 global _augmenter8k, _augmenter16k
 _augmenter8k = _augmenter16k = None
 
@@ -668,7 +684,130 @@ def reverberation_factory(
         return _augmenter16k
 
 
+class CombineAudios(BaseWaveformTransform):
+    """Mix in another sound, e.g. a background music. Useful if your original sound is clean and
+    you want to simulate an environment where background music is present.
+    Can also be used for mixup, as in https://arxiv.org/pdf/1710.09412.pdf
+    A folder of (background music) sounds to be mixed in must be specified. These sounds should
+    ideally be at least as long as the input sounds to be transformed. Otherwise, the background
+    sound will be repeated, which may sound unnatural.
+    Note that the gain of the added music is relative to the amount of signal in the input if the parameter music_rms
+    is set to "relative" (default option). This implies that if the input is completely silent, no music will be added.
+    Here are some examples of datasets that can be downloaded and used as background music:
+    * https://github.com/karolpiczak/ESC-50#download
+    * https://github.com/microsoft/DNS-Challenge/
+    """
+
+    def __init__(
+        self,
+        min_snr_db: float = None,
+        max_snr_db: float = None,
+        music_rms: str = "relative",
+        music_transform: Optional[
+            Callable[[NDArray[np.float32], int], NDArray[np.float32]]
+        ] = None,
+        p: float = 1.0,
+        lru_cache_size: int = 2,
+    ):
+        """
+        :param min_snr_db: Minimum signal-to-music ratio in dB.
+        :param max_snr_db: Maximum signal-to-music ratio in dB.
+        :param music_transform: A callable waveform transform (or composition of transforms) that
+            gets applied to the music before it gets mixed in. The callable is expected
+            to input audio waveform (numpy array) and sample rate (int).
+        :param p: The probability of applying this transform
+        :param lru_cache_size: Maximum size of the LRU cache for storing music files in memory
+        """
+        super().__init__(p)
+
+        if min_snr_db is not None:
+            self.min_snr_db = min_snr_db
+        else:
+            self.min_snr_db = 0.7  # the default
+
+        if max_snr_db is not None:
+            self.max_snr_db = max_snr_db
+        else:
+            self.max_snr_db = 2.5  # the default
+
+        assert self.min_snr_db <= self.max_snr_db
+
+        self.music_rms = music_rms
+        self._load_sound = functools.lru_cache(maxsize=lru_cache_size)(
+            CombineAudios._load_sound
+        )
+        self.music_transform = music_transform
+
+        self.music_clip = None
+
+    @staticmethod
+    def _load_sound(file_path, sample_rate):
+        return load_sound_file(file_path, sample_rate)
+
+    def randomize_parameters(self, samples: NDArray[np.float32], sample_rate: int):
+        super().randomize_parameters(samples, sample_rate)
+        if self.parameters["should_apply"]:
+            self.parameters["snr_db"] = random.uniform(self.min_snr_db, self.max_snr_db)
+
+    def apply(self, samples: NDArray[np.float32], sample_rate: int):
+        assert self.music_clip is not None, f"Set self.music_clip before calling apply"
+        music_clip = self.music_clip
+
+        num_samples = len(samples)
+
+        if self.music_transform:
+            music_clip = self.music_transform(music_clip, sample_rate)
+
+        music_rms = calculate_rms(music_clip)
+        clean_rms = calculate_rms(samples)
+
+        # Repeat the sound if it shorter than the input sound
+        while len(music_clip) < num_samples:
+            print("WARNING: music clip is repeated!")
+            music_clip = np.concatenate((music_clip, music_clip))
+
+        if len(music_clip) > num_samples:
+            # Pad with silence
+            at_start = random.random() < 0.5
+            big_silence = len(music_clip) - num_samples
+            small_silence = 0
+            if big_silence > 32_000:
+                small_silence = round(random.uniform(8_000, min(big_silence, 32_000)) )
+            big_silence -= small_silence
+            if at_start:
+                samples = np.pad(samples, (small_silence, big_silence))
+            else:
+                samples = np.pad(samples, (big_silence, small_silence))
+
+        desired_music_rms = calculate_desired_noise_rms(
+            clean_rms, self.parameters["snr_db"]
+        )
+
+        # Adjust the music to match the desired music RMS
+        music_clip = music_clip * (desired_music_rms / music_rms)
+
+        # Return a mix of the input sound and the background music sound
+        return samples + music_clip
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_load_sound"]
+        return state
+
+
+global _audio_combiner
+_audio_combiner = None
+
+def combine_audios_factory():
+    global _audio_combiner
+    if _audio_combiner is None:
+        _audio_combiner = CombineAudios()
+    return _audio_combiner
+
+
 def cut_audio(waveform, sampling_rate, duration):
+
+    waveform = conform_audio(waveform, sampling_rate, return_format='array')
 
     if isinstance(duration, (tuple, list)):
         # Random duration
@@ -691,36 +830,33 @@ def cut_audio(waveform, sampling_rate, duration):
     return waveform
     
 
-def mix_audios(larger_audio, smaller_audio, alpha1=None, alpha2=None, at_start=None):
-
-    # Ensure both are the same length
-    max_length = max(len(larger_audio), len(smaller_audio))
-    assert max_length > 1
-
-    if len(larger_audio) < max_length:
-        larger_audio = np.pad(larger_audio, (0, max_length - len(larger_audio)))
-        at_start = False
-
-    if at_start is None:
-        at_start = random.random() < 0.5
-    
-    if len(smaller_audio) < max_length:
-        silence_for_music = max_length - len(smaller_audio)
-        silence_waiting = 0
-        if silence_for_music > 16_000:
-            silence_waiting = round(random.uniform(0, min(silence_for_music, 32_000)) )
-            silence_for_music -= silence_waiting
-        if at_start:
-            smaller_audio = np.pad(smaller_audio, (silence_waiting, silence_for_music))
-        else:
-            smaller_audio = np.pad(smaller_audio, (silence_for_music, silence_waiting))
-
-    if alpha1 is None:
-        alpha1 = 1
-    if alpha2 is None:
-        alpha2 = random.uniform(0.5, 1)
-
-    return alpha1 * larger_audio + alpha2 * smaller_audio
+# # DEPRECATED: too simple audio combination (regardless of intensity)
+# def mix_audios(larger_audio, smaller_audio, sampling_rate, alpha1=None, alpha2=None, at_start=None):
+#     larger_audio = conform_audio(larger_audio, sampling_rate, return_format='array')
+#     smaller_audio = conform_audio(smaller_audio, sampling_rate, return_format='array')
+#     # Ensure both are the same length
+#     max_length = max(len(larger_audio), len(smaller_audio))
+#     assert max_length > 1
+#     if len(larger_audio) < max_length:
+#         larger_audio = np.pad(larger_audio, (0, max_length - len(larger_audio)))
+#         at_start = False
+#     if at_start is None:
+#         at_start = random.random() < 0.5
+#     if len(smaller_audio) < max_length:
+#         big_silence = max_length - len(smaller_audio)
+#         small_silence = 0
+#         if big_silence > 16_000:
+#             small_silence = round(random.uniform(0, min(big_silence, 32_000)) )
+#             big_silence -= small_silence
+#         if at_start:
+#             smaller_audio = np.pad(smaller_audio, (small_silence, big_silence))
+#         else:
+#             smaller_audio = np.pad(smaller_audio, (big_silence, small_silence))
+#     if alpha1 is None:
+#         alpha1 = 1
+#     if alpha2 is None:
+#         alpha2 = random.uniform(0.5, 1)
+#     return alpha1 * larger_audio + alpha2 * smaller_audio
 
 if __name__ == "__main__":
 

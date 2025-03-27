@@ -2,7 +2,7 @@ import os
 import random
 import datasets
 import pandas
-import torch
+import slugify
 
 # Relative import
 import sys
@@ -11,8 +11,8 @@ from audio import (
     load_audio,
     conform_audio,
     reverberation_factory,
+    combine_audios_factory,
     cut_audio,
-    mix_audios,
     save_audio,
 )
 from tts import text_to_speech
@@ -140,6 +140,8 @@ global _add_reverb_to_clip
 _add_reverb_to_clip = None
 global _add_reverb_to_recording
 _add_reverb_to_recording = None
+global _audios_combiner
+_audios_combiner = None
 
 def make_data_instruct(
     repo,
@@ -159,11 +161,11 @@ def make_data_instruct(
     assert isinstance(audio, dict)
     if isinstance(audio, dict) and "array" in audio:
         # Example: https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
-        audio_array = audio["array"]
+        music_clip = audio["array"]
         audio_path = audio["path"]
         actual_sampling_rate = audio.get("sampling_rate", sampling_rate)
         if sampling_rate and actual_sampling_rate != sampling_rate:
-            audio_array = conform_audio(audio_array, actual_sampling_rate, sampling_rate=sampling_rate)
+            music_clip = conform_audio(music_clip, actual_sampling_rate, sampling_rate=sampling_rate)
             actual_sampling_rate = sampling_rate
         sampling_rate = actual_sampling_rate
     else:
@@ -175,9 +177,9 @@ def make_data_instruct(
             cmd = f"git clone https://huggingface.co/{repo}"
             raise NotImplementedError(f"You must run:\n{cmd}")
         sampling_rate = 16_000
-        audio_array = load_audio(os.path.join(pulled_folder, audio_path), sampling_rate=sampling_rate)
+        music_clip = load_audio(os.path.join(pulled_folder, audio_path), sampling_rate=sampling_rate)
     assert sampling_rate
-    assert len(audio_array)
+    assert len(music_clip)
 
 
     global _add_reverb_to_clip
@@ -191,31 +193,46 @@ def make_data_instruct(
         _add_reverb_to_recording = reverberation_factory(
             rir_scale_factor = (0.7, 1.0),
         )
+    global _audios_combiner
+    if _audios_combiner is None:
+        _audios_combiner = combine_audios_factory()
 
     if vocal:
-        audio_instruction = text_to_speech(instruction)
-        audio_array = cut_audio(audio_array, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
-        audio_array = _add_reverb_to_clip(audio_array, sampling_rate)
+        audio_instruction = text_to_speech(
+            instruction,
+            [
+                "A female asks a question.",
+                "A male asks a question.",
+            ]
+        )
+        music_clip = cut_audio(music_clip, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
+        music_clip = _add_reverb_to_clip(music_clip, sampling_rate)
         add_reverb = _add_reverb_to_recording
-        audio_array = mix_audios(audio_array, audio_instruction, alpha1=1, alpha2=1, at_start=None)
+        _audios_combiner.music_clip = music_clip
+        final_waveform = _audios_combiner(audio_instruction, sampling_rate)
 
     else:
-        audio_array = cut_audio(audio_array, sampling_rate=sampling_rate, duration=(4, 12))
+        final_waveform = cut_audio(music_clip, sampling_rate, duration=(4, 12))
         add_reverb = _add_reverb_to_clip
 
     if debug_folder:
-        # Dump audio for manual inspection
+        # Dump audio for manual inspection (debug, check, ...)
         if vocal:
             debug_folder = os.path.join(debug_folder, "vocal")
         else:
             debug_folder = os.path.join(debug_folder, "textual")
         os.makedirs(debug_folder, exist_ok=True)
-        audio_filename = os.path.join(debug_folder, f"{string_to_integer(instruction)}.wav")
-        save_audio(audio_filename, audio_array, sampling_rate=sampling_rate)
+        audio_filename = os.path.join(debug_folder, f"{slugify.slugify(answer)}_{slugify.slugify(instruction)}.wav")
+        save_audio(audio_filename, final_waveform, sampling_rate=sampling_rate)
 
-    audio_array = add_reverb(audio_array, sampling_rate)
+    final_waveform = add_reverb(final_waveform, sampling_rate)
 
-    audio_data = {"type": "audio", "array": audio_array, "sampling_rate": sampling_rate}
+    ########################################################
+    # Here is defined the output format (list of messages)
+
+    audio_data = {"type": "audio", "array": final_waveform, "sampling_rate": sampling_rate}
+    if audio_path:
+        audio_data["path"] = audio_path
 
     instruction_before = random.random() < 0.5 if not vocal else None
     full_instruction = []
@@ -225,24 +242,15 @@ def make_data_instruct(
     if instruction_before is False:
         full_instruction.append({"type": "text", "text": instruction})
 
-    if audio_path:
-        audio_data["path"] = audio_path
-    return ([
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": system_prompt}],
-            }] if system_prompt else []) + [
-            {
-            "role": "user",
-            "content": full_instruction,
-            },
-            {
-            "role": "assistant",
-            "content": [
-                    {"type": "text", "text": answer},
-                ],
-            }
-        ]
+    return (
+        [{"role": "system", "content": [{"type": "text", "text": system_prompt}]}] if system_prompt else []
+    ) + [
+        {"role": "user", "content": full_instruction},
+        {"role": "assistant","content": [{"type": "text", "text": answer}]}
+    ]
+
+    ########################################################
+
 
 def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK"):
     if isinstance(genre, int):

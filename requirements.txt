@@ -1,8 +1,10 @@
+audiomentations==0.34.1
 librosa
 nltk
 parler_tts
 peft
 pydub
+python-slugify
 soundfile
 torch
 torchaudio
