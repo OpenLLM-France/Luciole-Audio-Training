@@ -28,13 +28,14 @@ def music_genre_instruct_data_iterator(
     streaming=True,
     system_prompt=None,
     debug_folder=None,
+    language="en",
     proba_vocal=0.7,
     **kwargs):
 
     instruction_file = os.path.join(
         os.path.dirname(__file__),
         "assets",
-        "instruction_music_genre_en_written.txt"
+        f"instruction_music_genre_{language}_written.txt"
     )
     assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
     with open(instruction_file) as f:
@@ -43,18 +44,20 @@ def music_genre_instruct_data_iterator(
     instruction_file = os.path.join(
         os.path.dirname(__file__),
         "assets",
-        "instruction_music_genre_en_spoken.txt"
+        f"instruction_music_genre_{language}_spoken.txt"
     )
     assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
     with open(instruction_file) as f:
         instructions_spoken = [line.strip() for line in f.read().split("\n") if line.strip()]
 
-    REPOS_INSTRUCTS = [
-        (
-            "DynamicSuperb/MusicGenreClassification_FMA",
-            ["test"], "label",
-        )
-    ]
+    REPOS_INSTRUCTS = {
+        "en": [
+            (
+                "DynamicSuperb/MusicGenreClassification_FMA",
+                ["test"], "label",
+            )
+        ]
+    }.get(language, [])
 
     # Already prepared dataset
     for repo, splits, label in REPOS_INSTRUCTS:
@@ -74,6 +77,7 @@ def music_genre_instruct_data_iterator(
                     sample[label],
                     sample["audio"],
                     system_prompt=system_prompt,
+                    language=language,
                     vocal=False,
                     debug_folder=debug_folder,
                )
@@ -128,9 +132,10 @@ def music_genre_instruct_data_iterator(
                 instruction = random.choice(instructions_written) if not vocal else random.choice(instructions_spoken)
                 yield make_data_instruct(repo,
                     instruction,
-                    format_genre(sample[label], label_dict=label_dict),
+                    sample[label],
                     sample["audio"] if "audio" in sample else sample,
                     system_prompt=system_prompt,
+                    language=language,
                     vocal=vocal,
                     debug_folder=debug_folder,
                 )
@@ -150,12 +155,13 @@ def make_data_instruct(
     audio,
     sampling_rate=16_000,
     system_prompt=None,
+    language="en",
     vocal=False,
     label_dict=None,
     debug_folder=None,
     ):
 
-    answer = format_genre(answer, label_dict=label_dict, repo=repo)
+    answer = format_genre(answer, label_dict=label_dict, repo=repo, language=language)
 
     # Compile audio
     assert isinstance(audio, dict)
@@ -200,10 +206,16 @@ def make_data_instruct(
     if vocal:
         audio_instruction = text_to_speech(
             instruction,
-            [
-                "A female asks a question.",
-                "A male asks a question.",
-            ]
+            {
+                "en": [
+                    "A female asks a question.",
+                    "A male asks a question.",
+                ],
+                "fr": [
+                    "Une femme pose une question.",
+                    "Un homme pose une question.",
+                ],
+            }[language],
         )
         music_clip = cut_audio(music_clip, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
         music_clip = _add_reverb_to_clip(music_clip, sampling_rate)
@@ -252,7 +264,7 @@ def make_data_instruct(
     ########################################################
 
 
-def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK"):
+def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK", language="en"):
     if isinstance(genre, int):
         # https://huggingface.co/datasets/mteb/music-genre
         assert label_dict, f"Missing label dictionary for {repo}"
@@ -263,11 +275,12 @@ def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK"):
     genre = genre.replace("Soul-RnB", "Soul / R&B")
     if " / " in genre:
         genres = genre.split(" / ")
-        if len(genres) == 2:
-            genre1, genre2 = genres
-            if random.random() <= 0.5:
-                genre1, genre2 = genre2, genre1
-            genres.append(f"{genre1} (or {genre2})")
+        # # We could do things like "Glitch (or Chiptune)", "Historic (or Old-Time)"
+        # if len(genres) == 2:
+        #     genre1, genre2 = genres
+        #     if random.random() <= 0.5:
+        #         genre1, genre2 = genre2, genre1
+        #     genres.append(f"{genre1} (or {genre2})")
         genre = random.choice(genres)
     if proba_this_is and random.random() <= proba_this_is:
         # We could do this, but it looks like a false good idea
@@ -275,9 +288,54 @@ def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK"):
         return "This is " + genre.lower()
     else: # Capitalize
         genre = genre[0].upper() + genre[1:]
-    return genre
 
+    if language == "en":
+        pass
+    elif language == "fr":
+        global _seen_genres
+        if genre not in _seen_genres:
+            _seen_genres.add(genre)
+            print(f'* new genre "{genre}"')
 
+        genre = {
+           "R&B": "Du R&B",
+           "Metal": "Du métal",
+           "Pop": "De la pop",
+           "Country": "De la country",
+           "Punk": "Du punk rock",
+           "Rock": "Du rock",
+           "Classical": "De la musique classique",
+           "Historic":  "De la musique baroque",
+           "Old-Time":  "De la musique baroque",
+           "International": "De la musique internationale",
+           "Instrumental": "De la musique instrumentale",
+           "Experimental": "De la musique expérimentale",
+           "Chiptune": "De la chiptune",
+           "Glitch": "De la chiptune",
+           "Electronic": "De l'électro",
+           "Ambient Electronic": "De l'électro ambient",
+           "Hip-Hop": "Du hip-hop",
+           "Jazz": "Du jazz",
+           "Blues": "Du blues",
+           "Folk": "Du folk",
+           "Reggae": "Du reggae",
+           "Soul": "De la soul",
+           "Ambient": "De l'ambient",
+           "Dubstep": "Du dubstep",
+           "Indie-Rock": "Du rock indé",
+           "House": "De la house",
+           "Techno": "De la techno",
+           "Drum-and-Bass": "De la drum and bass",
+           "Dub": "Du dub",
+           "Piano": "Du piano",
+           "Vocal": "De la musique vocale",
+           "Spoken": "Du parlé",
+        }.get(genre, genre)
+
+    return genre + "."
+
+global _seen_genres
+_seen_genres = set()
 
 
 def string_to_integer(s: str) -> int:
@@ -289,7 +347,9 @@ def main_dump_parquet():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="out", help="Output folder")
-    parser.add_argument("--max_docs", default=200, type=int, help="Number of documents per parquet")
+    parser.add_argument("--language", default="en", type=str, help="Language")
+    parser.add_argument("--max_docs", default=None, type=int, help="Maximum number of documents")
+    parser.add_argument("--num_docs_per_parquet", default=200, type=int, help="Number of documents per parquet")
     parser.add_argument("--debug_folder", default=None, help="Debug folder")
     args = parser.parse_args()
 
@@ -312,7 +372,13 @@ def main_dump_parquet():
             first_idx = last_idx
             messages = []
 
-    for data in music_genre_instruct_data_iterator(debug_folder=args.debug_folder):
+    for i, data in enumerate(
+        music_genre_instruct_data_iterator(
+            language=args.language,
+            debug_folder=args.debug_folder
+        )):
+        if args.max_docs and i >= args.max_docs:
+            break
         if isinstance(data, str):
             explicit_subname = True
             new_dataset_name = data.replace("/", "--")
@@ -325,7 +391,7 @@ def main_dump_parquet():
                 random.seed(string_to_integer(dataset_name))
             continue
         messages.append(data)
-        if len(messages) >= args.max_docs:
+        if len(messages) >= args.num_docs_per_parquet:
             _flush()
     _flush()
 
