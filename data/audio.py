@@ -186,7 +186,13 @@ def save_audio(path, audio, sampling_rate=16_000):
         audio = audio.transpose()
     elif isinstance(audio, list):
         audio = np.array(audio, dtype=np.float32)
-    sox.write(path, audio, sampling_rate)
+    parent_path = os.path.dirname(path)
+    if parent_path:
+        os.makedirs(parent_path, exist_ok=True)
+    try:
+        sox.write(path, audio, sampling_rate)
+    except Exception as err:
+        raise RuntimeError(f"Error writing {path}") from err
 
 
 class Reverberation(BaseWaveformTransform):
@@ -660,8 +666,23 @@ class Reverberation(BaseWaveformTransform):
 global _augmenter8k, _augmenter16k
 _augmenter8k = _augmenter16k = None
 
+_default_rir_path = os.environ.get("RIR_PATH")
+if _default_rir_path is None:
+    for rir_path in [
+        "/data-server/datasets/audio/noise",
+        "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise",
+    ]:
+        if os.path.isdir(rir_path):
+            _default_rir_path = rir_path
+            break
+    if _default_rir_path is None:
+        raise RuntimeError(
+            "Could not find RIR_PATH. Set the RIR_PATH environment variable to the directory containing the RIR files."
+        )
+
+
 def reverberation_factory(
-    path_parent: str= "/data-server/datasets/audio/noise",
+    path_parent: str= _default_rir_path,
     path_dir_16k: str= "simulated_rirs_16k",
     path_dir_8k: str= "simulated_rirs_8k",
     rir_lists: list= ["smallroom/rir_list", "mediumroom/rir_list", "largeroom/rir_list"],
@@ -700,9 +721,8 @@ class CombineAudios(BaseWaveformTransform):
 
     def __init__(
         self,
-        min_snr_db: float = None,
-        max_snr_db: float = None,
-        music_rms: str = "relative",
+        min_snr_db: float = 0.85,
+        max_snr_db: float = 2.5,
         music_transform: Optional[
             Callable[[NDArray[np.float32], int], NDArray[np.float32]]
         ] = None,
@@ -710,8 +730,8 @@ class CombineAudios(BaseWaveformTransform):
         lru_cache_size: int = 2,
     ):
         """
-        :param min_snr_db: Minimum signal-to-music ratio in dB.
-        :param max_snr_db: Maximum signal-to-music ratio in dB.
+        :param min_snr_db: Minimum speech-to-music ratio in dB.
+        :param max_snr_db: Maximum speech-to-music ratio in dB.
         :param music_transform: A callable waveform transform (or composition of transforms) that
             gets applied to the music before it gets mixed in. The callable is expected
             to input audio waveform (numpy array) and sample rate (int).
@@ -732,7 +752,6 @@ class CombineAudios(BaseWaveformTransform):
 
         assert self.min_snr_db <= self.max_snr_db
 
-        self.music_rms = music_rms
         self._load_sound = functools.lru_cache(maxsize=lru_cache_size)(
             CombineAudios._load_sound
         )

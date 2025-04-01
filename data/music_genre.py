@@ -219,9 +219,9 @@ def make_data_instruct(
         )
         music_clip = cut_audio(music_clip, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
         music_clip = _add_reverb_to_clip(music_clip, sampling_rate)
-        add_reverb = _add_reverb_to_recording
         _audios_combiner.music_clip = music_clip
         final_waveform = _audios_combiner(audio_instruction, sampling_rate)
+        add_reverb = _add_reverb_to_recording
 
     else:
         final_waveform = cut_audio(music_clip, sampling_rate, duration=(4, 12))
@@ -291,51 +291,59 @@ def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK", language="
 
     if language == "en":
         pass
-    elif language == "fr":
+    elif language in _genre_trad_dicts:
         global _seen_genres
-        if genre not in _seen_genres:
+        
+        if genre not in _genre_trad_dicts[language] and genre not in _seen_genres:
             _seen_genres.add(genre)
-            print(f'* new genre "{genre}"')
+            print(f'WARNING: new genre "{genre}"')
 
-        genre = {
-           "R&B": "Du R&B",
-           "Metal": "Du métal",
-           "Pop": "De la pop",
-           "Country": "De la country",
-           "Punk": "Du punk rock",
-           "Rock": "Du rock",
-           "Classical": "De la musique classique",
-           "Historic":  "De la musique baroque",
-           "Old-Time":  "De la musique baroque",
-           "International": "De la musique internationale",
-           "Instrumental": "De la musique instrumentale",
-           "Experimental": "De la musique expérimentale",
-           "Chiptune": "De la chiptune",
-           "Glitch": "De la chiptune",
-           "Electronic": "De l'électro",
-           "Ambient Electronic": "De l'électro ambient",
-           "Hip-Hop": "Du hip-hop",
-           "Jazz": "Du jazz",
-           "Blues": "Du blues",
-           "Folk": "Du folk",
-           "Reggae": "Du reggae",
-           "Soul": "De la soul",
-           "Ambient": "De l'ambient",
-           "Dubstep": "Du dubstep",
-           "Indie-Rock": "Du rock indé",
-           "House": "De la house",
-           "Techno": "De la techno",
-           "Drum-and-Bass": "De la drum and bass",
-           "Dub": "Du dub",
-           "Piano": "Du piano",
-           "Vocal": "De la musique vocale",
-           "Spoken": "Du parlé",
-        }.get(genre, genre)
+        genre = _genre_trad_dicts[language].get(genre, genre)
 
     return genre + "."
 
 global _seen_genres
 _seen_genres = set()
+
+_genre_trad_dicts = {
+    "fr": {
+        "Rock": "Du rock",
+        "Punk": "Du punk rock",
+        "R&B": "Du R&B",
+        "Pop": "De la pop",
+        "Country": "De la country",
+        "Hip-Hop": "Du hip-hop",
+        "Jazz": "Du jazz",
+        "Blues": "Du blues",
+        "Folk": "Du folk",
+        "Metal": "Du métal",
+        "Reggae": "Du reggae",
+        "Soul": "De la soul",
+        "Dubstep": "Du dubstep",
+        "Indie-Rock": "Du rock indé",
+        "House": "De la house",
+        "Techno": "De la techno",
+        "Drum-and-Bass": "De la drum and bass",
+        "Dub": "Du dub",
+        "Classical": "De la musique classique",
+        "Historic":  "De la musique baroque",
+        "Old-Time":  "De la musique baroque",
+        "International": "De la musique internationale",
+        "Instrumental": "De la musique instrumentale",
+        "Experimental": "De la musique expérimentale",
+        "Ambient Electronic": "De l'électro d'ambiance",
+        "Ambient": "De la musique d'ambiance",
+        "Chiptune": "De la chiptune",
+        "Glitch": "De la chiptune",
+        "Electronic": "De l'électro",
+        "Piano": "Du piano",
+        "Vocal": "De la musique vocale",
+        "Spoken": "Du parlé",
+        "Easy Listening": "De la musique d'ambiance",
+        "Acoustic": "De la musique acoustique",
+        "Acapella": "De la musique a cappella",
+    },
+}
 
 
 def string_to_integer(s: str) -> int:
