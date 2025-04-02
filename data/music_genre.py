@@ -204,37 +204,37 @@ def make_data_instruct(
         _audios_combiner = combine_audios_factory()
 
     if vocal:
-        audio_instruction = text_to_speech(
-            instruction,
-            {
-                "en": [
-                    "A female asks a question.",
-                    "A male asks a question.",
-                ],
-                "fr": [
-                    "Une femme pose une question.",
-                    "Un homme pose une question.",
-                ],
-            }[language],
-        )
+        description = {
+            "en": [
+                "A female asks a question.",
+                "A male asks a question.",
+            ],
+            "fr": [
+                "Une femme pose une question.",
+                "Un homme pose une question.",
+            ],
+        }[language]
+        description = random.choice(description)
+        audio_instruction = text_to_speech(instruction, description)
         music_clip = cut_audio(music_clip, sampling_rate=sampling_rate, duration=(4 + len(audio_instruction), 12 + len(audio_instruction)))
         music_clip = _add_reverb_to_clip(music_clip, sampling_rate)
         _audios_combiner.music_clip = music_clip
         final_waveform = _audios_combiner(audio_instruction, sampling_rate)
         add_reverb = _add_reverb_to_recording
-
     else:
         final_waveform = cut_audio(music_clip, sampling_rate, duration=(4, 12))
         add_reverb = _add_reverb_to_clip
 
     if debug_folder:
+        filename = f"{Slugify(answer)}_{Slugify(instruction)}"
         # Dump audio for manual inspection (debug, check, ...)
         if vocal:
+            filename += f"_{Slugify(description)}"
             debug_folder = os.path.join(debug_folder, "vocal")
         else:
             debug_folder = os.path.join(debug_folder, "textual")
         os.makedirs(debug_folder, exist_ok=True)
-        audio_filename = os.path.join(debug_folder, f"{slugify.slugify(answer)}_{slugify.slugify(instruction)}.wav")
+        audio_filename = os.path.join(debug_folder, filename + ".wav")
         save_audio(audio_filename, final_waveform, sampling_rate=sampling_rate)
 
     final_waveform = add_reverb(final_waveform, sampling_rate)
@@ -262,6 +262,10 @@ def make_data_instruct(
     ]
 
     ########################################################
+
+
+def Slugify(s):
+    return slugify.slugify(s).capitalize()
 
 
 def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK", language="en"):
@@ -380,6 +384,7 @@ def main_dump_parquet():
             first_idx = last_idx
             messages = []
 
+    dataset_name = None
     for i, data in enumerate(
         music_genre_instruct_data_iterator(
             language=args.language,
@@ -396,6 +401,7 @@ def main_dump_parquet():
                 # Reset indices
                 first_idx = last_idx = 0
                 # Pseudo-deterministic randomness for each dataset
+                print(f"Resetting random seed for dataset {dataset_name}")
                 random.seed(string_to_integer(dataset_name))
             continue
         messages.append(data)
