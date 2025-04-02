@@ -1,4 +1,6 @@
 audiomentations==0.34.1
+ctranslate2==4.0.0
+faster_whisper
 librosa
 nltk
 parler_tts
