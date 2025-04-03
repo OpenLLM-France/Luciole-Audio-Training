@@ -1,15 +1,19 @@
 import os
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import numpy as np
-import torch
-from torch.utils.data import Dataset
-from utils.audio import load_audio, get_audio_duration
-import whisper
-from pathlib import Path
-from textwrap import dedent
+import ast
 import csv
 import json
-import ast
+from pathlib import Path
+from textwrap import dedent
+
+import numpy as np
+import torch
+import whisper
+from torch.utils.data import Dataset
+
+from utils.audio import get_audio_duration, load_audio
+
 
 def resolve_audio_path(relative_path: str, base_paths) -> str:
     """
@@ -18,7 +22,7 @@ def resolve_audio_path(relative_path: str, base_paths) -> str:
     """
     if isinstance(base_paths, str):
         base_paths = [base_paths]
-    
+
     for base in base_paths:
         full_path = Path(base) / relative_path
         if full_path.exists():
@@ -27,34 +31,34 @@ def resolve_audio_path(relative_path: str, base_paths) -> str:
 
 def load_data_as_dict(data_file):
     required_cols = ['path', 'sentence', 'translation', 'start_time', 'end_time', 'language', 'language_dist', 'tokens', 'nlu_tokens']
-    
+
     def process_csv(file):
         is_csv = file.endswith(".csv")
         delimiter = "," if is_csv else "\t"
-        
-        with open(file, "r", encoding="utf-8") as f:
+
+        with open(file, encoding="utf-8") as f:
             reader = csv.DictReader(f, delimiter=delimiter)
             data = []
             for row in reader:
                 for col in required_cols:
                     row.setdefault(col, "" if col in ["translation", "language", "language_dist"] else "[]" if col in ["tokens", "nlu_tokens"] else 0.0)
-                
+
                 for col in ["tokens", "nlu_tokens"]:
                     try:
                         row[col] = ast.literal_eval(row[col]) if isinstance(row[col], str) else []
                     except (SyntaxError, ValueError):
                         row[col] = []
-                
+
                 row["start_time"] = float(row.get("start_time", 0.0))
                 row["end_time"] = float(row.get("end_time", 0.0))
-                
+
                 data.append(row)
         return data
-    
+
     def process_json(file):
-        with open(file, 'r', encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             return json.load(f)
-    
+
     if isinstance(data_file, str):
         return process_json(data_file) if data_file.endswith(".json") else process_csv(data_file)
     elif isinstance(data_file, list):
@@ -62,7 +66,7 @@ def load_data_as_dict(data_file):
         for f in data_file:
             combined_data.extend(process_json(f) if f.endswith(".json") else process_csv(f))
         return combined_data
-    
+
     raise TypeError("data_file must be a string (file path) or a list of file paths")
 
 def prepare_data(file, audio_paths):
@@ -71,7 +75,7 @@ def prepare_data(file, audio_paths):
     and handling start/end times for audio segments.
     """
     data_list = load_data_as_dict(file)
-    
+
     valid_data = []
     for item in data_list:
         resolved_path = resolve_audio_path(item["path"], audio_paths)
@@ -82,7 +86,7 @@ def prepare_data(file, audio_paths):
             valid_data.append(item)
         else:
             print(f"Warning: Audio file {item['path']} not found in given directories.")
-    
+
     return valid_data
 
 
@@ -106,7 +110,7 @@ class SpeechDatasetTSV(Dataset):
         self.train_config = train_config
         self.model_config = model_config
         self.inference_mode = kwargs.get("inference_mode", False)  # Inference mode flag
-        
+
         # Load model configurations
         self.IGNORE_INDEX = -100
         # self.prompt = model_config.prompt
@@ -205,7 +209,7 @@ class SpeechDatasetTSV(Dataset):
         elif speech_instruct is not None:
             user_message = f"\n{speech_instruct}"
             assistant_message = f"\n{output}"
-            
+
         # Format the prompt
         prompt_template = self.prompt_template or  (
             "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
@@ -362,26 +366,26 @@ class SpeechDatasetTSV(Dataset):
             # Pad the sequence: first pad on the left (for the prompt part) then on the right (for the answer part)
             padded_ids = self.padding(
                 self.padding(
-                    sample["input_ids"], 
-                    max_prompt_length - prompt_lengths[idx], 
-                    self.tokenizer.pad_token_id, 
+                    sample["input_ids"],
+                    max_prompt_length - prompt_lengths[idx],
+                    self.tokenizer.pad_token_id,
                     "left"
                 ),
-                max_answer_length - answer_lengths[idx], 
-                self.tokenizer.pad_token_id, 
+                max_answer_length - answer_lengths[idx],
+                self.tokenizer.pad_token_id,
                 "right"
             )
             padded_input_ids.append(padded_ids)
 
             attn_mask = self.padding(
                 self.padding(
-                    sample["attention_mask"].tolist(), 
-                    max_prompt_length - prompt_lengths[idx], 
-                    0, 
+                    sample["attention_mask"].tolist(),
+                    max_prompt_length - prompt_lengths[idx],
+                    0,
                     "left"
                 ),
-                max_answer_length - answer_lengths[idx], 
-                0, 
+                max_answer_length - answer_lengths[idx],
+                0,
                 "right"
             )
             padded_attention_masks.append(attn_mask)
@@ -425,13 +429,13 @@ class SpeechDatasetTSV(Dataset):
         for idx, sample in enumerate(samples):
             padded_lbl = self.padding(
                 self.padding(
-                    sample["labels"], 
-                    max_prompt_length - prompt_lengths[idx], 
-                    self.IGNORE_INDEX, 
+                    sample["labels"],
+                    max_prompt_length - prompt_lengths[idx],
+                    self.IGNORE_INDEX,
                     "left"
                 ),
-                max_answer_length - answer_lengths[idx], 
-                self.IGNORE_INDEX, 
+                max_answer_length - answer_lengths[idx],
+                self.IGNORE_INDEX,
                 "right"
             )
             padded_labels.append(padded_lbl)
@@ -445,22 +449,22 @@ class SpeechDatasetTSV(Dataset):
             "audio_mel_post_mask": audio_mel_post_masks,
             "modality_mask": modality_masks,
         }
-        
+
 def get_speech_dataset(file_data, audio_path, model_config, train_config, tokenizer):
     dataset = SpeechDatasetTSV(file_data, audio_path,  model_config, train_config, tokenizer)
     return dataset
 
 if __name__ == '__main__':
-    
-    from torch.utils.data import DataLoader
-    from configs import *
-    from linastt.utils.env import *
 
+    from linastt.utils.env import *
+    from torch.utils.data import DataLoader
+
+    from configs import *
     from models.model import model_factory
-   
+
     model_config = ModelConfig()
     train_config = TrainConfig()
-    
+
     torch.manual_seed(train_config.seed)
     # tokenizer = AutoTokenizer.from_pretrained(model_config.llm_name_hf)
     kwargs = {"metric": "acc"}
@@ -478,21 +482,21 @@ if __name__ == '__main__':
 
 
     dataset_val = get_speech_dataset(
-        data_source["dev"], 
-        data_source["audio_path"], 
-        model_config, 
-        train_config, 
+        data_source["dev"],
+        data_source["audio_path"],
+        model_config,
+        train_config,
         tokenizer
     )
     val_loader = DataLoader(
-                dataset_val, 
-                batch_size=1, 
-                shuffle=False, 
-                num_workers=1, 
+                dataset_val,
+                batch_size=1,
+                shuffle=False,
+                num_workers=1,
                 collate_fn=dataset_val.data_collator
             )
 
-    
+
     sample = dataset_val[-1]
 
     input_ids = sample['input_ids'][sample['input_ids'] != -1]

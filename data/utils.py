@@ -1,6 +1,8 @@
 import hashlib
 import pickle
+
 import numpy as np
+
 
 def array_signature(array):
     length = len(array)

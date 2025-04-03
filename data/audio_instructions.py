@@ -1,10 +1,12 @@
-import os
-from tqdm import tqdm
-from datasets import load_dataset, Dataset
-import uuid
 import argparse
+import os
+import uuid
 
-from utils.audio import conform_audio, load_audio  # Ensure these utilities are properly defined
+from datasets import Dataset, load_dataset
+from tqdm import tqdm
+
+from utils.audio import conform_audio  # Ensure these utilities are properly defined
+
 
 def get_instruction(row):
     """Extract instruction from available keys."""
@@ -59,13 +61,13 @@ def get_audio(row):
 
 def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
     """Process a row into a conversation format with audio."""
-    
+
     if row is None:
         print("Skipping row because row is None.")
         return None
-    
+
     query_id = f"{data_id}_{split}_{uuid.uuid4()}"
-    
+
     # Extract text instructions
     instruction = get_instruction(row)
     if not instruction:
@@ -86,7 +88,7 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
     if not audio_data or "array" not in audio_data:
         print(f"Skipping row {query_id} due to missing audio data.")
         return None
-    
+
     array = audio_data["array"]
     if not array.any():  # True if all elements are zero
         print(f"Skipping row {query_id} due to empty or silent audio array.")
@@ -108,7 +110,7 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
             "role": "system",
             "content": [{"type": "text", "text": system_prompt}]
         })
-    
+
     conversation.extend([
         {
             "role": "user",
@@ -122,7 +124,7 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
             "content": [{"type": "text", "text": output}]
         }
     ])
-    
+
     return {"messages": conversation}
 
 def save_batch(messages, data_id, split, data_path, shard_idx, total_shards=None):
@@ -157,12 +159,12 @@ def process_split(dataset_split, data_id, split, data_path, system_prompt, max_d
         message = process_row(row, data_id, split, system_prompt)
         if message:
             messages.append(message)
-        
+
         if len(messages) >= max_docs:
             shard_counter += 1
             save_batch(messages, data_id, split, data_path, shard_counter, total_shards)
             messages = []  # clear the batch
-    
+
     if messages:  # save any remaining messages
         shard_counter += 1
         save_batch(messages, data_id, split, data_path, shard_counter, total_shards)
@@ -175,7 +177,7 @@ def main():
     parser.add_argument("--max_docs", type=int, default=200, help="Max records per Parquet file")
     parser.add_argument("--streaming", action="store_true", help="Enable streaming mode for lower memory usage")
     args = parser.parse_args()
-    
+
     for ds_name in tqdm(args.hf_dataset, desc="Datasets"):
         try:
             if args.streaming:
@@ -185,7 +187,7 @@ def main():
         except Exception as e:
             print(f"Error loading {ds_name}: {e}")
             continue
-        
+
         data_id = ds_name.replace("/", "--")
         for split in ["train", "validation", "test"]:
             if split not in dataset:

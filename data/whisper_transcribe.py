@@ -1,14 +1,16 @@
 import os
 
-from faster_whisper import WhisperModel
-
 # Relative import
 import sys
+
+from faster_whisper import WhisperModel
+
 sys.path.append(os.path.dirname(__file__))
 from audio import (
     load_audio,
     save_audio,
 )
+
 from utils import array_signature
 
 
@@ -35,7 +37,7 @@ def transcribe(audio, language=None):
         _asr = WhisperModel("large-v3-turbo")
     segments, _ = _asr.transcribe(audio, language=language)
 
-    return "\n".join([seg.text for seg in segments])
+    return "\n".join([seg.text.strip() for seg in segments])
 
     # for seg in segments:
     #     yield {
@@ -44,23 +46,23 @@ def transcribe(audio, language=None):
     #         "text": seg.text
     #     }
 
-def transcribe_with_cache(cache_folder, audio, *kargs, also_dump_audio=True, **kwargs): # NOCOMMIT
+def transcribe_with_cache(cache_folder, audio, *kargs, also_dump_audio=False, **kwargs):
     if not cache_folder:
         return transcribe(audio, *kargs, **kwargs)
     cache_filename = array_signature(audio)
     cache_file = os.path.join(cache_folder, cache_filename + ".srt")
     if os.path.isfile(cache_file):
-        with open(cache_file, 'r') as f:
-            return f.read().strip()
+        with open(cache_file) as f:
+            result = f.read().strip()
     else:
-        if also_dump_audio:
-            audio_file = os.path.join(cache_folder, cache_filename + ".wav")
-            if not os.path.isfile(audio_file):
-                save_audio(audio_file, audio)
         result = transcribe(audio, *kargs, **kwargs)
         with open(cache_file, 'w') as f:
             f.write(result.strip() + "\n")
-        return result
+    if also_dump_audio:
+        audio_file = os.path.join(cache_folder, cache_filename + ".wav")
+        if not os.path.isfile(audio_file):
+            save_audio(audio_file, audio)
+    return result
 
 
 if __name__ == "__main__":

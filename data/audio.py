@@ -1,37 +1,32 @@
 # Misc
 import argparse
-import sys
+import functools
 import os
 import random
 import shlex
-import functools
-from typing import Optional, List, Callable, Union
-from numpy.typing import NDArray
-from pathlib import Path
-from packaging import version
+import sys
+from typing import Callable, Optional
+
+# Audio augmentation
+import audiomentations
 
 # Load audios
 import librosa
 import numpy as np
 import soxbindings as sox
 import torch
-import torchaudio
-
-# Audio augmentation
-import audiomentations
-import torch
 import torch.nn.functional as F
 import torchaudio
+from audiomentations.core.audio_loading_utils import load_sound_file
 from audiomentations.core.transforms_interface import (
     BaseWaveformTransform,
 )
 from audiomentations.core.utils import (
     calculate_desired_noise_rms,
     calculate_rms,
-    convert_decibels_to_amplitude_ratio,
 )
-from audiomentations.core.audio_loading_utils import load_sound_file
-
+from numpy.typing import NDArray
+from packaging import version
 
 AUDIO_EXTENSIONS = [".wav", ".mp3", ".flac", ".opus"]
 
@@ -295,11 +290,13 @@ class Reverberation(BaseWaveformTransform):
             "rir_rspecifier",
             type=str,
             help="""rir rspecifier, it can be either a filename or a piped command.
-                                E.g. data/impulses/Room001-00001.wav or "sox data/impulses/Room001-00001.wav -t wav - |" """,
+                e.g. data/impulses/Room001-00001.wav or "sox data/impulses/Room001-00001.wav -t wav - |" """,
         )
 
         rir_list = []
-        current_rir_list = [rir_parser.parse_args(shlex.split(x.strip())) for x in open(os.path.join(self.path, rir_file))]
+        current_rir_list = [
+            rir_parser.parse_args(shlex.split(x.strip())) for x in open(os.path.join(self.path, rir_file))
+        ]
         for rir in current_rir_list:
             # check if the rspecifier is a pipe or not
             filepath = self.path + "/" + rir.rir_rspecifier
@@ -693,13 +690,15 @@ def reverberation_factory(
     global _augmenter8k, _augmenter16k
     if sampling_rate <= 10_000:
         if _augmenter8k is None:
-            if verbose: print("Loading augmenter for 8kHz...")
+            if verbose:
+                print("Loading augmenter for 8kHz...")
             rir_lists = [os.path.join(path_dir_8k, rir_list) for rir_list in rir_lists]
             _augmenter8k = Reverberation(path_parent, rir_lists, **kwargs)
         return _augmenter8k
     else:
         if _augmenter16k is None:
-            if verbose: print("Loading augmenter for 16kHz...")
+            if verbose:
+                print("Loading augmenter for 16kHz...")
             rir_lists = [os.path.join(path_dir_16k, rir_list) for rir_list in rir_lists]
             _augmenter16k = Reverberation(path_parent, rir_lists, **kwargs)
         return _augmenter16k
@@ -767,12 +766,25 @@ class CombineAudios(BaseWaveformTransform):
         super().randomize_parameters(samples, sample_rate)
         if self.parameters["should_apply"]:
             self.parameters["snr_db"] = random.uniform(self.min_snr_db, self.max_snr_db)
+            self.parameters["at_start"] = random.random() < 0.5
+            self.parameters["overlap"] = 1 if random.random() < 0.5 else random.uniform(0, 1)
+            self.parameters["fadein"] = 0 if (self.parameters["overlap"] == 1 and random.random() < 0.5) \
+                else random.uniform(0, 0.4)
+            self.parameters["fadeout"] = 0 if (self.parameters["overlap"] == 1 and random.random() < 0.5) \
+                else random.uniform(0, 0.4)
 
     def apply(self, samples: NDArray[np.float32], sample_rate: int):
-        assert self.music_clip is not None, f"Set self.music_clip before calling apply"
+        assert self.music_clip is not None, "Set self.music_clip before calling apply"
         music_clip = self.music_clip
 
         num_samples = len(samples)
+
+        at_start = self.parameters["at_start"]
+        snr_db = self.parameters["snr_db"]
+        overlap = self.parameters["overlap"]
+        if (num_samples / sample_rate) < 1: # No overlap for instruction with short duration
+            overlap = 0
+        assert 1 >= overlap >= 0, f"Overlap must be between 0 and 1, got {overlap}"
 
         if self.music_transform:
             music_clip = self.music_transform(music_clip, sample_rate)
@@ -787,7 +799,6 @@ class CombineAudios(BaseWaveformTransform):
 
         if len(music_clip) > num_samples:
             # Pad with silence
-            at_start = random.random() < 0.5
             big_silence = len(music_clip) - num_samples
             small_silence = 0
             if big_silence > 32_000:
@@ -798,15 +809,36 @@ class CombineAudios(BaseWaveformTransform):
             else:
                 samples = np.pad(samples, (big_silence, small_silence))
 
-        desired_music_rms = calculate_desired_noise_rms(
-            clean_rms, self.parameters["snr_db"]
-        )
+        desired_music_rms = calculate_desired_noise_rms(clean_rms, snr_db)
 
         # Adjust the music to match the desired music RMS
         music_clip = music_clip * (desired_music_rms / music_rms)
 
+        # Apply fade-in effect
+        if self.parameters["fadein"] > 0:
+            fadein_length = int(self.parameters["fadein"] * sample_rate)
+            fadein = np.linspace(0, 1, fadein_length)
+            music_clip[:fadein_length] *= fadein
+
+        # Apply fade-out effect
+        if self.parameters["fadeout"] > 0:
+            fadeout_length = int(self.parameters["fadeout"] * sample_rate)
+            fadeout = np.linspace(1, 0, fadeout_length)
+            music_clip[-fadeout_length:] *= fadeout
+
+        if overlap != 1:
+            num_samples_overlap = round(num_samples * self.parameters["overlap"])
+            added_silence = num_samples - num_samples_overlap
+            if at_start:
+                music_clip = np.pad(music_clip, (added_silence, 0))
+                samples = np.pad(samples, (0, added_silence))
+            else:
+                music_clip = np.pad(music_clip, (0, added_silence))
+                samples = np.pad(samples, (added_silence, 0))
+
         # Return a mix of the input sound and the background music sound
         return samples + music_clip
+
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -830,7 +862,7 @@ def cut_audio(waveform, sampling_rate, duration):
 
     if isinstance(duration, (tuple, list)):
         # Random duration
-        
+
         assert len(duration) == 2
         duration_range = duration
         duration = random.uniform(*duration_range)
@@ -847,4 +879,4 @@ def cut_audio(waveform, sampling_rate, duration):
     sample_end = min(round((start + duration) * sampling_rate), max_len)
     waveform = waveform[sample_start:sample_end]
     return waveform
-    
+
