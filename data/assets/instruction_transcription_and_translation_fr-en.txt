@@ -1,0 +1,80 @@
+{
+    "transcription": {
+        "en": [
+            "Transcribe the following spoken French audio as accurately as possible.",
+            "Write down exactly what is being said in the following French audio.",
+            "Provide a full transcription of the French speech in this audio clip.",
+            "Listen to the French audio and transcribe it word-for-word.",
+            "Write the complete transcription of this French spoken text.",
+            "Transcribe this audio clip in French, making sure to include all pauses and hesitations.",
+            "Accurately transcribe the spoken French in this audio, including any background noises or interjections.",
+            "Generate a written transcription of this French speech, ensuring no details are omitted.",
+            "Transcribe the spoken French while maintaining punctuation for clarity.",
+            "Provide a clean transcription of this French conversation."
+        ],
+        "fr": [
+            "Transcrivez l'audio en français suivant de la manière la plus précise possible.",
+            "Écrivez exactement ce qui est dit dans cet audio en français.",
+            "Fournissez une transcription complète du discours en français dans ce clip audio.",
+            "Écoutez l'audio en français et transcrivez-le mot pour mot.",
+            "Écrivez la transcription complète de ce texte parlé en français.",
+            "Transcrivez cet audio en français en incluant toutes les pauses et hésitations.",
+            "Transcrivez avec précision l'audio en français, y compris tous les bruits de fond ou interjections.",
+            "Générez une transcription écrite de ce discours en français, en vous assurant qu'aucun détail n'est omis.",
+            "Transcrivez le discours en français en respectant la ponctuation pour plus de clarté.",
+            "Fournissez une transcription propre de cette conversation en français."
+        ]
+    },
+    "translation": {
+        "en": [
+            "Translate the following spoken French audio into English.",
+            "Convert the French text from the audio into natural English, while preserving the meaning.",
+            "Provide an English translation of this French speech while keeping the tone intact.",
+            "Translate the French speech into English, focusing on clarity and fluency.",
+            "Convert the spoken French into an accurate English translation.",
+            "Translate the French dialogue in the audio into English, keeping the structure of the sentences intact.",
+            "Listen to the French audio and translate it into English, ensuring natural flow.",
+            "Provide a fluent English translation of the French speech, without losing any nuance.",
+            "Translate this spoken French into English, keeping cultural references in mind.",
+            "Translate the French speech into English, focusing on formal tone and accuracy."
+        ],
+        "fr": [
+            "Traduisez le fichier audio en français suivant en anglais.",
+            "Convertissez le texte en français de l'audio en un anglais naturel tout en préservant le sens.",
+            "Fournissez une traduction en anglais de ce discours en français tout en conservant le ton.",
+            "Traduisez ce discours en français en anglais en vous concentrant sur la clarté et la fluidité.",
+            "Convertissez le français parlé en une traduction précise en anglais.",
+            "Traduisez le dialogue en français de l'audio en anglais en conservant la structure des phrases.",
+            "Écoutez l'audio en français et traduisez-le en anglais en assurant une fluidité naturelle.",
+            "Fournissez une traduction en anglais fluide de ce discours en français sans perdre de nuances.",
+            "Traduisez ce français parlé en anglais en tenant compte des références culturelles.",
+            "Traduisez le discours en français en anglais en vous concentrant sur un ton formel et sur l'exactitude."
+        ]
+    },
+    "transcription_and_translation": {
+        "en": [
+            "First, transcribe the French speech, and then translate it into English.",
+            "Convert the spoken French into written French, and then translate it into English.",
+            "Listen to the French audio, transcribe it, and provide an English translation.",
+            "Transcribe the French text first and then translate it into English.",
+            "Transcribe this French speech and provide the corresponding English translation.",
+            "Listen to the audio, write down the French text, then provide an English translation.",
+            "Transcribe the French dialogue and then provide a fluent English translation.",
+            "Transcribe the French speech and translate it into natural English.",
+            "First, transcribe the French content, then translate it into English with accuracy.",
+            "Provide a transcription of the French audio, then give a fluent translation in English."
+        ],
+        "fr": [
+            "Tout d'abord, transcrivez le discours en français, puis traduisez-le en anglais.",
+            "Convertissez l'audio en français en texte écrit, puis traduisez-le en anglais.",
+            "Écoutez l'audio en français, transcrivez-le, puis fournissez la traduction en anglais.",
+            "Transcrivez d'abord ce texte en français, puis traduisez-le en anglais.",
+            "Transcrivez ce discours en français et fournissez la traduction correspondante en anglais.",
+            "Écoutez l'audio, écrivez le texte en français, puis fournissez une traduction en anglais.",
+            "Transcrivez le dialogue en français, puis fournissez une traduction fluide en anglais.",
+            "Transcrivez ce discours en français puis traduisez-le en anglais naturel.",
+            "D'abord, transcrivez le contenu en français, puis traduisez-le en anglais avec précision.",
+            "Fournissez une transcription de l'audio en français, puis donnez une traduction fluide en anglais."
+        ]
+    }
+}
