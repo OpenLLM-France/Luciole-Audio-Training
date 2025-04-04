@@ -80,8 +80,8 @@ def create_message_record(row: Dict[str, Any], audio_base_path: str) -> Dict[str
     if array is None or sr is None:
         return None
 
-    task = "transcription_and_translation" # np.random.choice(["transcription", "translation", "transcription_and_translation"]) 
-    lang = "fr" # np.random.choice(["fr", "en"])
+    task = "transcription_and_translation"
+    lang = "fr"
     instruction = np.random.choice(prompt_cache[task][lang])
     output = f"{row.get('sentence', '')}\n{row.get('translation', '')}"
 
