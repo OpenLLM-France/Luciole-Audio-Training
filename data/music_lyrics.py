@@ -1,4 +1,5 @@
 import os
+import re
 import random
 
 # Relative import
@@ -16,7 +17,7 @@ from audio import (
     reverberation_factory,
 )
 from tts import text_to_speech
-from whisper_transcribe import transcribe_with_cache
+from transcribe import transcribe_with_cache
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
 # - https://huggingface.co/datasets/gmenon/slt-lyrics-audio
@@ -146,17 +147,20 @@ def make_data_instruct(
 
     music_clip = cut_audio(music_clip, sampling_rate, duration=(10, 90))
 
-    answer = transcribe_with_cache(debug_folder, music_clip).strip()
+    transcript = transcribe_with_cache(debug_folder, music_clip).strip()
 
-    num_words = len(answer.split())
-    num_different_words = len(set(answer.lower().replace(",","").replace(".","").split()))
-    num_lines = len(answer.split("\n"))
-    if num_lines == 1 and num_words < 5 and (
-        not answer
-        or num_different_words < 3
-        or any(expr in answer.lower() for expr in ["thank", "music", "right back"])):
-        # Skip short answers that are probably not relevant (hallucinations of Whisper ASR)
-        print(f"Skipping short answer: '{answer}'")
+    # Remove all non word characters
+    transcript_norm = re.sub(r"[^a-zA-Z0-9\s]", "", transcript)
+    transcript_norm = re.sub(r"\s+", " ", transcript_norm).strip()
+
+    num_words = len(transcript_norm.split())
+    num_lines = len(transcript_norm.split("\n"))
+    if num_lines == 1 and (
+        not transcript_norm
+        or num_words < 3
+        or any(expr in transcript.lower() for expr in ["thank", "music", "right back", "production"])):
+        # Skip short transcripts that are probably not relevant (hallucinations of Whisper ASR)
+        print(f"Skipping short transcript: '{transcript}'")
         return None
 
     if _add_reverb_to_clip is None:
@@ -227,7 +231,7 @@ def make_data_instruct(
         [{"role": "system", "content": [{"type": "text", "text": system_prompt}]}] if system_prompt else []
     ) + [
         {"role": "user", "content": full_instruction},
-        {"role": "assistant","content": [{"type": "text", "text": answer}]}
+        {"role": "assistant","content": [{"type": "text", "text": transcript}]}
     ]
 
     ########################################################

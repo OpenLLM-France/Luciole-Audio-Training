@@ -1,5 +1,6 @@
 audiomentations==0.34.1
 ctranslate2==4.0.0
+datasets
 faster_whisper
 librosa
 nltk
@@ -7,7 +8,9 @@ parler_tts
 peft
 pydub
 python-slugify
+soxbindings
 soundfile
+tokenizers==0.20.3
 torch
 torchaudio
 torchvision
