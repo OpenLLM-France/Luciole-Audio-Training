@@ -151,7 +151,6 @@ def make_data_instruct(
 
     # Remove all non word characters
     transcript_norm = re.sub(r"[^a-zA-Z0-9\s]", "", transcript)
-    transcript_norm = re.sub(r"\s+", " ", transcript_norm).strip()
 
     num_words = len(transcript_norm.split())
     num_lines = len(transcript_norm.split("\n"))
