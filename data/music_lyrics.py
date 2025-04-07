@@ -27,6 +27,7 @@ def music_lyrics_instruct_data_iterator(
     system_prompt=None,
     debug_folder=None,
     language="en",
+    only_empty=False,
     proba_vocal=0.5,
     **kwargs):
 
@@ -95,6 +96,7 @@ def music_lyrics_instruct_data_iterator(
                     sample["audio"] if "audio" in sample else sample,
                     system_prompt=system_prompt,
                     language=language,
+                    only_empty=only_empty,
                     vocal=vocal,
                     debug_folder=debug_folder,
                 )
@@ -118,6 +120,7 @@ def make_data_instruct(
     language="en",
     vocal=False,
     debug_folder=None,
+    only_empty=False,
     ):
     global _add_reverb_to_clip, _add_reverb_to_recording, _audios_combiner
 
@@ -150,17 +153,35 @@ def make_data_instruct(
     transcript = transcribe_with_cache(debug_folder, music_clip).strip()
 
     # Remove all non word characters
-    transcript_norm = re.sub(r"[^a-zA-Z0-9\s]", "", transcript)
+    transcript_norm = re.sub(r"[^\w\s]", "", transcript).strip().lower()
 
     num_words = len(transcript_norm.split())
     num_lines = len(transcript_norm.split("\n"))
-    if num_lines == 1 and (
-        not transcript_norm
-        or num_words < 3
-        or any(expr in transcript.lower() for expr in ["thank", "music", "right back", "production"])):
-        # Skip short transcripts that are probably not relevant (hallucinations of Whisper ASR)
-        print(f"Skipping short transcript: '{transcript}'")
-        return None
+    if only_empty:
+        if num_lines > 1:
+            return None
+        if transcript_norm not in [
+            "",
+            "we'll be right back",
+            "music", "música",
+            "outro music",
+            "guitar solo",
+        ] and not (num_words < 10 and any([
+            # example: "thank you [very/so much] [for joigning us/listening]",
+            transcript_norm.startswith(start)
+            for start in ["thank you", "this is a production"]
+        ])):
+            return None
+        print(f"Caught Whisper Hallucination: '{transcript}'")
+        transcript = "[...]"
+    else:
+        if num_lines == 1 and (
+            not transcript_norm
+            or num_words < 3
+            or any(expr in transcript.lower() for expr in ["thank", "music", "right back", "production"])):
+            # Skip short transcripts that are probably not relevant (hallucinations of Whisper ASR)
+            print(f"Skipping short transcript: '{transcript}'")
+            return None
 
     if _add_reverb_to_clip is None:
         _add_reverb_to_clip = reverberation_factory(
@@ -245,6 +266,7 @@ def main_dump_parquet():
     parser = argparse.ArgumentParser(description="Dump Music Genre Classification datasets")
     parser.add_argument("--output", default="out", help="Output folder")
     parser.add_argument("--language", default="en", type=str, help="Language")
+    parser.add_argument("--only_empty", action="store_true", help="Only empty transcripts")
     parser.add_argument("--max_docs", default=None, type=int, help="Maximum number of documents")
     parser.add_argument("--num_docs_per_parquet", default=200, type=int, help="Number of documents per parquet")
     parser.add_argument("--debug_folder", default=None, help="Debug folder")
@@ -272,6 +294,7 @@ def main_dump_parquet():
     for i, data in enumerate(
         music_lyrics_instruct_data_iterator(
             language=args.language,
+            only_empty=args.only_empty,
             debug_folder=args.debug_folder
         )):
         if args.max_docs and i >= args.max_docs:
