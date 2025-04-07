@@ -815,14 +815,14 @@ class CombineAudios(BaseWaveformTransform):
         music_clip = music_clip * (desired_music_rms / music_rms)
 
         # Apply fade-in effect
-        if self.parameters["fadein"] > 0:
-            fadein_length = int(self.parameters["fadein"] * sample_rate)
+        fadein_length = int(self.parameters["fadein"] * sample_rate)
+        if fadein_length:
             fadein = np.linspace(0, 1, fadein_length)
             music_clip[:fadein_length] *= fadein
 
         # Apply fade-out effect
-        if self.parameters["fadeout"] > 0:
-            fadeout_length = int(self.parameters["fadeout"] * sample_rate)
+        fadeout_length = int(self.parameters["fadeout"] * sample_rate)
+        if fadeout_length:
             fadeout = np.linspace(1, 0, fadeout_length)
             music_clip[-fadeout_length:] *= fadeout
 
