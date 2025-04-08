@@ -5,10 +5,6 @@ _translation_models = {
     "en-fr": "Helsinki-NLP/opus-mt-tc-big-en-fr",
 }
 
-_translation_models = {
-    "fr-en": "Helsinki-NLP/opus-mt-tc-big-fr-en",
-    "en-fr": "Helsinki-NLP/opus-mt-tc-big-en-fr",
-}
 _loaded_models = {}
 
 def translate_text(text, lan_from, lan_to):
