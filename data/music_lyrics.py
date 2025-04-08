@@ -153,35 +153,47 @@ def make_data_instruct(
     transcript = transcribe_with_cache(debug_folder, music_clip).strip()
 
     # Remove all non word characters
-    transcript_norm = re.sub(r"[^\w\s]", "", transcript).strip().lower()
+    transcript_norm = re.sub(r"[^\w\s']", "", transcript).strip().lower()
 
     num_words = len(transcript_norm.split())
     num_lines = len(transcript_norm.split("\n"))
-    if only_empty:
-        if num_lines > 1:
-            return None
-        if transcript_norm not in [
+
+    whisper_hallu = (num_lines == 1) and (
+        transcript_norm in [
             "",
             "we'll be right back",
-            "music", "música",
-            "outro music",
-            "guitar solo",
-        ] and not (num_words < 10 and any([
+            "music", "música", "muzica",
+            "outro music", "music playing",
+            "guitar solo", "the end",
+            "let's go",
+        ] or (num_words < 10 and any([
             # example: "thank you [very/so much] [for joigning us/listening]",
             transcript_norm.startswith(start)
-            for start in ["thank you", "this is a production"]
-        ])):
+            for start in ["thank you", "this is a production", "welcome to", "music by"]
+        ]))
+    )
+
+    if only_empty:
+        if not whisper_hallu:
             return None
         print(f"Caught Whisper Hallucination: '{transcript}'")
         transcript = "[...]"
     else:
-        if num_lines == 1 and (
-            not transcript_norm
-            or num_words < 3
-            or any(expr in transcript.lower() for expr in ["thank", "music", "right back", "production"])):
+        whisper_maybe_hallu = (not whisper_hallu) and (num_lines == 1) and (
+            any(expr in transcript_norm for expr in ["thank", "music", "solo"])
+            or any([
+                # example: "thank you [very/so much] [for joigning us/listening]",
+                transcript_norm.startswith(start)
+                for start in ["thank you", "this is a production", "welcome to", "music by"]
+            ])
+        )
+        if whisper_hallu or whisper_maybe_hallu:
             # Skip short transcripts that are probably not relevant (hallucinations of Whisper ASR)
             print(f"Skipping short transcript: '{transcript}'")
             return None
+        elif num_lines == 1:
+            print(f"Keeping short transcript: '{transcript}' ({transcript_norm})")
+
 
     if _add_reverb_to_clip is None:
         _add_reverb_to_clip = reverberation_factory(
