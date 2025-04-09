@@ -183,6 +183,7 @@ def _has_parquet_files(folder_path):
     return any(Path(folder_path).glob("*.parquet"))
 
 def main():
+    from pathlib import Path
     parser = argparse.ArgumentParser(description="🎛️ Convert HF datasets to audio instruction format.")
     parser.add_argument("hf_dataset", nargs="+", help="📚 HuggingFace dataset names")
     parser.add_argument("--output", default="output", help="📂 Output directory")
@@ -192,33 +193,47 @@ def main():
     args = parser.parse_args()
 
     hf_datasets = args.hf_dataset
-
     for hf_dataset in tqdm(hf_datasets, desc="Processing datasets"):
         if os.path.isdir(hf_dataset):
             for sub in tqdm(os.listdir(hf_dataset), desc="Local Datasets"):
                 sub_path = os.path.join(hf_dataset, sub)
-                if not _has_parquet_files(sub_path):
-                    print(f"🚫 Skipping {sub_path} because it does not contain Parquet files.")
-                    continue
+                if not os.path.isdir(sub_path):
+                    continue  # Skip files, we only want folders
+                
                 name_parts = sub.split("-")
                 split_mtnsc = name_parts[-1] if len(name_parts) > 1 else "train"
                 data_id = "-".join(name_parts[:-1]) if len(name_parts) > 1 else sub
+                parquet_paths = [str(p) for p in Path(sub_path).rglob("*.parquet")]
                 
-                for parquet_file in os.listdir(sub_path):
-                    if parquet_file.endswith(".parquet"):
-                        dataset = load_dataset(sub_path, data_files=parquet_file)
-                        for split in ["train", "validation", "test"]:
-                            if split not in dataset:
-                                continue
-                            if os.path.basename(hf_dataset) == "Multitask-National-Speech-Corpus-v1-extend":
-                                ssplit = split_mtnsc
-                            else:
-                                ssplit = split
-
-                            process_split(
-                                dataset[split], data_id, ssplit, args.output,
-                                args.system_prompt, args.max_docs
-                            )
+                if not _has_parquet_files(sub_path):
+                    print(f"🚫 Skipping {sub_path} because it does not contain Parquet files.")
+                    continue
+                
+                print(f"✅ Loading dataset from: {sub_path}")
+                parquet_paths = [str(p) for p in Path(sub_path).rglob("*.parquet")]
+                
+                try:
+                    dataset = load_dataset(
+                        "parquet",
+                        data_files={"train": parquet_paths},
+                        features=None,
+                        streaming=True  # set to False if you want to inspect the data immediately
+                        )
+                except Exception as e:
+                    print(f"❌ Failed to load dataset from {sub_path}: {e}")
+                    continue
+                for split in ["train", "validation", "test"]:
+                    if split not in dataset:
+                        continue
+                    if os.path.basename(hf_dataset) == "Multitask-National-Speech-Corpus-v1-extend":
+                        ssplit = split_mtnsc
+                    else:
+                        ssplit = split
+                    process_split(
+                        dataset[split], data_id, ssplit, args.output,
+                        args.system_prompt, args.max_docs, streaming=True
+                    )
+            
         else:
             try:
                 print(f"📡 Loading from 🤗 Hub: {hf_dataset}")
