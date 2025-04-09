@@ -1,12 +1,18 @@
 import argparse
 import os
 import uuid
-
-from datasets import Dataset, load_dataset
+import io  
+from datasets import Dataset, load_dataset, load_from_disk
 from tqdm import tqdm
+import soundfile as sf
 
-from utils.audio import conform_audio  # Ensure these utilities are properly defined
+from utils.audio import conform_audio 
 
+def _convert_bytes_to_audio(bytes_data):
+    """Convert bytes data to audio array."""
+    audio_stream = io.BytesIO(bytes_data)
+    audio_array, sr = sf.read(audio_stream)
+    return audio_array, sr
 
 def get_instruction(row):
     """Extract instruction from available keys."""
@@ -30,7 +36,7 @@ def get_speech_instruction(row):
     return speech_instruction
 
 def get_output(row, split):
-    """Extract output with special handling for 'response_interleaf'."""
+    """Extract output with handling for 'response_interleaf'."""
     if "output" in row:
         return row["output"] if row["output"] is not None else ""
     elif "response_interleaf" in row:
@@ -51,11 +57,28 @@ def get_audio(row):
     for key in ["audio", "input_audio", "context", "question_audio", "question_audio_path", "filename"]:
         if key in row and row[key] is not None:
             audio_data = row[key]
-            # Ensure the audio data is a dictionary
             if isinstance(audio_data, dict):
                 return audio_data
+            elif isinstance(audio_data, bytes):
+                audio_array, sr = _convert_bytes_to_audio(audio_data)
+                return {
+                    "array": audio_array,
+                    "sampling_rate": sr,
+                    "path": row.get("audio_path", None)
+                }
+            elif isinstance(audio_data, str):
+                if os.path.isfile(audio_data):
+                    audio_array, sr = sf.read(audio_data)
+                    return {
+                        "array": audio_array,
+                        "sampling_rate": sr,
+                        "path": audio_data
+                    }
+                else:
+                    print(f"🚫 Audio file {audio_data} does not exist.")
+                    return None
             else:
-                print("Audio data is not a dictionary.")
+                print("⚠️ Audio data is not a dictionary.")
                 return None
     return None
 
@@ -63,35 +86,32 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
     """Process a row into a conversation format with audio."""
 
     if row is None:
-        print("Skipping row because row is None.")
+        print("🚫 Skipping row because row is None.")
         return None
 
     query_id = f"{data_id}_{split}_{uuid.uuid4()}"
 
-    # Extract text instructions
     instruction = get_instruction(row)
     if not instruction:
-        print(f"Skipping row {query_id} due to missing text instruction.")
+        print(f"🚫 Skipping row {query_id} due to missing text instruction.")
         return None
 
-    speech_instruct = get_speech_instruction(row)
-    if not speech_instruct:
-        speech_instruct = instruction
-
+    speech_instruct = get_speech_instruction(row) or instruction
     output = get_output(row, split)
     if not output:
-        print(f"Skipping row {query_id} due to missing output.")
+        print(f"🚫 Skipping row {query_id} due to missing output.")
         return None
+
     output = output.replace("Omni", "Lucie")
-    # Process audio
+
     audio_data = get_audio(row)
     if not audio_data or "array" not in audio_data:
-        print(f"Skipping row {query_id} due to missing audio data.")
+        print(f"🚫 Skipping row {query_id} due to missing audio data.")
         return None
 
     array = audio_data["array"]
-    if not array.any():  # True if all elements are zero
-        print(f"Skipping row {query_id} due to empty or silent audio array.")
+    if not array.any():
+        print(f"🔇 Skipping row {query_id} due to empty or silent audio array.")
         return None
 
     audio_path = audio_data.get("path", f'{query_id}.wav')
@@ -100,10 +120,9 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
         if sr != sampling_rate:
             array = conform_audio(array, sr, sampling_rate)
     except Exception as e:
-        print(f"Skipping row {query_id} due to audio conversion error: {e}")
+        print(f"⚠️ Skipping row {query_id} due to audio conversion error: {e}")
         return None
 
-    # Build conversation
     conversation = []
     if system_prompt:
         conversation.append({
@@ -128,29 +147,20 @@ def process_row(row, data_id, split, system_prompt, sampling_rate=16000):
     return {"messages": conversation}
 
 def save_batch(messages, data_id, split, data_path, shard_idx, total_shards=None):
-    """
-    Convert a list of messages to a dataset and save as a Parquet shard.
-    If total_shards is known, it is included in the file name.
-    """
+    """Save a list of messages as a Parquet shard."""
     dataset = Dataset.from_list(messages)
     os.makedirs(data_path, exist_ok=True)
-    if total_shards is not None:
-        shard_info = f"{shard_idx:04d}--{total_shards:04d}"
-    else:
-        shard_info = f"{shard_idx:04d}"
-    file_path = os.path.join(data_path, f"AudioInstruction--{data_id}--{split}--{shard_info}.parquet")
+    shard_info = f"{shard_idx:04d}--{total_shards:04d}" if total_shards else f"{shard_idx:04d}"
+    data_path_split = os.path.join(data_path, split)
+    os.makedirs(data_path_split, exist_ok=True)
+    file_path = os.path.join(data_path_split, f"AudioInstruction--{data_id}--{split}--{shard_info}.parquet")
     dataset.to_parquet(file_path)
-    print(f"Saved {len(messages)} records to {file_path}")
+    print(f"✅ Saved {len(messages)} records to {file_path}")
 
 def process_split(dataset_split, data_id, split, data_path, system_prompt, max_docs, streaming=False):
-    """
-    Process dataset split in batches and save each batch immediately.
-    For non-streaming datasets, the total shard count is computed in advance.
-    """
+    """Process dataset split in batches."""
     messages = []
     shard_counter = 0
-
-    # For non-streaming mode, we can compute the total number of shards.
     total_shards = None
     if not streaming and hasattr(dataset_split, '__len__'):
         total_shards = (len(dataset_split) + max_docs - 1) // max_docs
@@ -159,43 +169,76 @@ def process_split(dataset_split, data_id, split, data_path, system_prompt, max_d
         message = process_row(row, data_id, split, system_prompt)
         if message:
             messages.append(message)
-
         if len(messages) >= max_docs:
             shard_counter += 1
             save_batch(messages, data_id, split, data_path, shard_counter, total_shards)
-            messages = []  # clear the batch
+            messages = []
 
-    if messages:  # save any remaining messages
+    if messages:
         shard_counter += 1
         save_batch(messages, data_id, split, data_path, shard_counter, total_shards)
 
+def _has_parquet_files(folder_path):
+    from pathlib import Path
+    return any(Path(folder_path).glob("*.parquet"))
+
 def main():
-    parser = argparse.ArgumentParser(description="Convert HF datasets to audio instruction format.")
-    parser.add_argument("hf_dataset", nargs="+", help="HuggingFace dataset names")
-    parser.add_argument("--output", default="output", help="Output directory")
-    parser.add_argument("--system_prompt", default="You are a helpful speech assistant who understands user input and aids with various tasks", help="System prompt")
-    parser.add_argument("--max_docs", type=int, default=200, help="Max records per Parquet file")
-    parser.add_argument("--streaming", action="store_true", help="Enable streaming mode for lower memory usage")
+    parser = argparse.ArgumentParser(description="🎛️ Convert HF datasets to audio instruction format.")
+    parser.add_argument("hf_dataset", nargs="+", help="📚 HuggingFace dataset names")
+    parser.add_argument("--output", default="output", help="📂 Output directory")
+    parser.add_argument("--system_prompt", default="You are a helpful speech assistant who understands user input and aids with various tasks", help="🧠 System prompt")
+    parser.add_argument("--max_docs", type=int, default=200, help="📦 Max records per Parquet file")
+    parser.add_argument("--streaming", action="store_true", help="🔄 Enable streaming mode")
     args = parser.parse_args()
 
-    for ds_name in tqdm(args.hf_dataset, desc="Datasets"):
-        try:
-            if args.streaming:
-                dataset = load_dataset(ds_name, streaming=True)
-            else:
-                dataset = load_dataset(ds_name)
-        except Exception as e:
-            print(f"Error loading {ds_name}: {e}")
-            continue
+    hf_datasets = args.hf_dataset
 
-        data_id = ds_name.replace("/", "--")
-        for split in ["train", "validation", "test"]:
-            if split not in dataset:
+    for hf_dataset in tqdm(hf_datasets, desc="Processing datasets"):
+        if os.path.isdir(hf_dataset):
+            for sub in tqdm(os.listdir(hf_dataset), desc="Local Datasets"):
+                sub_path = os.path.join(hf_dataset, sub)
+                if not _has_parquet_files(sub_path):
+                    print(f"🚫 Skipping {sub_path} because it does not contain Parquet files.")
+                    continue
+                name_parts = sub.split("-")
+                split_mtnsc = name_parts[-1] if len(name_parts) > 1 else "train"
+                data_id = "-".join(name_parts[:-1]) if len(name_parts) > 1 else sub
+                
+                for parquet_file in os.listdir(sub_path):
+                    if parquet_file.endswith(".parquet"):
+                        dataset = load_dataset(sub_path, data_files=parquet_file)
+                        for split in ["train", "validation", "test"]:
+                            if split not in dataset:
+                                continue
+                            if os.path.basename(hf_dataset) == "Multitask-National-Speech-Corpus-v1-extend":
+                                ssplit = split_mtnsc
+                            else:
+                                ssplit = split
+
+                            process_split(
+                                dataset[split], data_id, ssplit, args.output,
+                                args.system_prompt, args.max_docs
+                            )
+        else:
+            try:
+                print(f"📡 Loading from 🤗 Hub: {hf_dataset}")
+                if args.streaming:
+                    dataset = load_dataset(hf_dataset, streaming=True)
+                else:
+                    dataset = load_dataset(hf_dataset)
+            except Exception as e:
+                print(f"❌ Error loading {hf_dataset}: {e}")
                 continue
-            process_split(
-                dataset[split], data_id, split, args.output,
-                args.system_prompt, args.max_docs, streaming=args.streaming
-            )
+
+            data_id = hf_dataset.replace("/", "--")
+            for split in ["train", "validation", "test"]:
+                if split not in dataset:
+                    continue
+                process_split(
+                    dataset[split], data_id, split, args.output,
+                    args.system_prompt, args.max_docs, streaming=args.streaming
+                )
+
 
 if __name__ == "__main__":
     main()
