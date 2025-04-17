@@ -3,7 +3,7 @@ import json
 
 from configs import ModelConfig, TrainConfig
 from train import train
-from data.dataset import *
+from data.audio_chat_to_dataset import get_dataset
 
 from utils.checkpoint_utils import load_model_checkpoint_peft, load_optimizer_scheduler_scaler
 from utils.config_utils import setup_directories, save_config_files
@@ -23,34 +23,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 torch.manual_seed(1234)  # Ensure reproducibility
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Configure data source paths.")
-    parser.add_argument(
-        "--audio_path",
-        nargs="+",
-        required=True,
-        help="Paths for audio training and validation directories (provide one or more paths)."
-    )
-    parser.add_argument(
-        "--dev",
-        type=str,
-        required=True,
-        help="Path to the dev.json file."
-    )
-    parser.add_argument(
-        "--train",
-        type=str,
-        required=True,
-        help="Path to the train.json file."
-    )
-    parser.add_argument(
-        "--gpus",
-        type=int,
-        help="Path to the train.json file."
-    )
-    return parser.parse_args()
-
 def setup_logging(output_dir):
     """Initialize logging to file and console."""
     formatter = logging.Formatter('[%(asctime)s][%(levelname)s] - %(message)s')
@@ -60,15 +32,30 @@ def setup_logging(output_dir):
     console_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+    
+def parse_args():
+    parser = argparse.ArgumentParser(description="Configure data source paths.")
+    parser.add_argument(
+        "--dataset_dirs",
+        nargs="+",
+        required=True,
+        help="Paths for training and validation directories (these dirs should contain train/test folders with *.parquet files)."
+    )
+    parser.add_argument(
+        "--gpus",
+        type=int,
+        help="Whether to use a GPU (specify GPU index). Default is CPU if not set."
+    )
+    return parser.parse_args()
 
-def load_data(data_source, model_config, train_config, tokenizer, is_validation=False):
+def load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation=False):
     """Load dataset and create DataLoader."""
-    dataset = get_speech_dataset(
-        file_data=data_source["dev"] if is_validation else data_source["train"],
-        audio_path=data_source["audio_path"],
+    dataset = get_dataset(
+        dataset_dir=dataset_dirs,
+        tokenizer = tokenizer,
         model_config=model_config,
         train_config=train_config,
-        tokenizer=tokenizer,
+        split="test" if is_validation else "train",
     )
     return DataLoader(
         dataset,
@@ -148,23 +135,20 @@ def main():
     model.to(device)
    
     model, train_config, model_config = load_latest_checkpoint(model, train_config, model_config)
-    # Load the last epoch and step from the training log if it exists
+
     if os.path.exists(os.path.join(train_config.output_dir, "train_log.json")):
         last_epoch, last_step = load_last_epoch_and_step(train_config.output_dir)
         if last_epoch is not None and last_step is not None:
             start_epoch, start_step = last_epoch, last_step
     
     
-    data_source = {
-        "audio_path": args.audio_path,
-        "dev": args.dev,
-        "train": args.train,
-    }
-    print("Data Source Configuration:")
-    print(data_source)
+    dataset_dirs = args.dataset_dirs
     
-    train_loader, dataset_train = load_data(data_source, model_config, train_config, tokenizer)
-    validate_loader, dataset_val = (load_data(data_source, model_config, train_config, tokenizer, is_validation=True)
+    print("Data Source Configuration:")
+    print(dataset_dirs)
+    
+    train_loader, dataset_train = load_data(dataset_dirs, model_config, train_config, tokenizer)
+    validate_loader, dataset_val = (load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation=True)
                                     if train_config.run_validation else (None, None))
     
     logger.info(f"--> Training Set Length = {len(dataset_train)}")
