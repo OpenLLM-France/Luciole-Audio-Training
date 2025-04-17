@@ -104,7 +104,7 @@ class LucAS(nn.Module):
                 inputs_embeds = get_embeddings(self.llm, input_ids)
             except ValueError as e:
                 logger.error(f"Embedding error: {e}")
-                raise
+                raise e
 
         if inputs_embeds is None:
             raise ValueError("`inputs_embeds` cannot be None. Provide input_ids or precomputed embeddings.")
