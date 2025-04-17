@@ -1,5 +1,6 @@
 import os
 import json
+from typing import Dict, Any
 
 from configs import ModelConfig, TrainConfig
 from train import train
@@ -109,6 +110,71 @@ def load_latest_checkpoint(model, train_config, model_config):
     logger.info("No valid checkpoint found.")
     return model, train_config, model_config
 
+def compare_configs(old_config: Dict[str, Any], new_config: Dict[str, Any]) -> bool:
+    """Compare two config dictionaries, handling non-serializable objects."""
+    
+    # helper to properly handle PeftConfig and similar objects
+    def complicated_config(config):
+        complicated = {}
+        for k, v in config.items():
+            if hasattr(v, '__dict__'):  # Handle objects with __dict__ attribute
+                complicated[k] = complicated_config(v.__dict__)
+            elif isinstance(v, (list, tuple)):
+                complicated[k] = [complicated_config(i.__dict__) if hasattr(i, '__dict__') else i for i in v]
+            elif isinstance(v, dict):
+                complicated[k] = complicated_config(v)
+            else:
+                complicated[k] = v
+        return complicated
+    
+    try:
+        return json.dumps(complicated_config(old_config), sort_keys=True) != \
+               json.dumps(complicated_config(new_config), sort_keys=True)
+    except TypeError:
+        # Fallback to simple dict comparison if complicated config func fails
+        return old_config != new_config
+
+def update_train_config_if_changed(
+    train_config: 'TrainConfig',
+    output_dir: str,
+    force_update: bool = False
+) -> None:
+    """Check if training config changed and update if needed."""
+    train_config_path = os.path.join(output_dir, "train_config.json")
+    new_train_config = train_config.__dict__
+    
+    # Check if update is needed
+    needs_update = force_update or not os.path.exists(train_config_path)
+    
+    if not needs_update:
+        try:
+            with open(train_config_path, 'r') as f:
+                old_train_config = json.load(f)
+            needs_update = compare_configs(old_train_config, new_train_config)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Error reading existing config: {e}")
+            needs_update = True
+    
+    # Update if needed
+    if needs_update:
+        os.makedirs(output_dir, exist_ok=True)
+        try:
+            # Convert PeftConfig and other complex objects to dicts
+            complicated_config = {}
+            for k, v in new_train_config.items():
+                if hasattr(v, '__dict__'):
+                    complicated_config[k] = v.__dict__
+                else:
+                    complicated_config[k] = v
+            
+            with open(train_config_path, 'w') as f:
+                json.dump(complicated_config, f, indent=4)
+            logger.info("Training configuration updated.")
+        except Exception as e:
+            logger.error(f"Failed to update training config: {e}")
+            raise
+    else:
+        logger.info("Training configuration unchanged - using existing file.")
 
 def enable_gradient_checkpointing(model, train_config):
     """Enable gradient checkpointing if applicable."""
@@ -122,51 +188,54 @@ def main():
     args = parse_args()
     model_config, train_config = ModelConfig(), TrainConfig()
     
-    if not os.path.exists(os.path.join(train_config.output_dir, "model_config.json")) or not os.path.exists(os.path.join(train_config.output_dir, "train_config.json")):
-        model_config_file, train_config_file = setup_directories(train_config)
-        save_config_files(model_config, train_config, model_config_file, train_config_file)
-        
+    # Initialize directories and handle config updates
     os.makedirs(train_config.output_dir, exist_ok=True)
     setup_logging(train_config.output_dir)
-    start_epoch, start_step = 1, 0
-   
+    
+    # Update configs if changed (only training config in your case)
+    update_train_config_if_changed(train_config, train_config.output_dir)
+    
+    # Load model and tokenizer
     model, tokenizer = model_factory(train_config, model_config, metric="acc")
     device = auto_device()
     model.to(device)
-   
+    
+    # Handle checkpoint loading
     model, train_config, model_config = load_latest_checkpoint(model, train_config, model_config)
-
+    
+    # Handle training resumption
+    start_epoch, start_step = 1, 0
     if os.path.exists(os.path.join(train_config.output_dir, "train_log.json")):
         last_epoch, last_step = load_last_epoch_and_step(train_config.output_dir)
         if last_epoch is not None and last_step is not None:
             start_epoch, start_step = last_epoch, last_step
     
-    
+    # Data loading
     dataset_dirs = args.dataset_dirs
-    
-    print("Data Source Configuration:")
-    print(dataset_dirs)
+    logger.info(f"Data Source Configuration: {dataset_dirs}")
     
     train_loader, dataset_train = load_data(dataset_dirs, model_config, train_config, tokenizer)
     validate_loader, dataset_val = (load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation=True)
-                                    if train_config.run_validation else (None, None))
+                                  if train_config.run_validation else (None, None))
     
     logger.info(f"--> Training Set Length = {len(dataset_train)}")
     logger.info(f"--> Validation Set Length = {len(dataset_val) if validate_loader else 0}")
     
-    
+    # Optimizer setup
     optimizer = AdamW(model.parameters(), lr=train_config.learning_rate, weight_decay=train_config.weight_decay)
     num_steps = train_config.num_epochs * len(train_loader)
     scheduler = lr_scheduler.LambdaLR(
         optimizer,
         lr_lambda=lambda step: (step / train_config.warmup_step if step < train_config.warmup_step
-                                else max(0.0, 1 - (step - train_config.warmup_step) / max(1, num_steps - train_config.warmup_step)))
+                              else max(0.0, 1 - (step - train_config.warmup_step) / max(1, num_steps - train_config.warmup_step)))
     )
     scaler = torch.amp.GradScaler() if train_config.use_fp16 else None
     
-    if  os.path.isdir(train_config.output_dir):
+    # Load optimizer state if available
+    if os.path.isdir(train_config.output_dir):
         optimizer, scheduler, scaler = load_optimizer_scheduler_scaler(optimizer, scheduler, scaler, train_config.output_dir, device)
-        
+    
+    # Model configuration
     enable_gradient_checkpointing(model, train_config)
     
     if not train_config.use_peft and train_config.freeze_layers:
@@ -176,6 +245,7 @@ def main():
     if model_config.using_llm_type == "unsloth":
         model = torch.compile(model)
     
+    # Training
     results = train(model, train_loader, validate_loader, optimizer, scheduler, scaler, train_config, device)
     for k, v in results.items():
         logger.info(f'Key: {k}, Value: {v}')
