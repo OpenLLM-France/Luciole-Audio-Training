@@ -8,21 +8,49 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def get_embeddings(model, input_ids):
+    # Determine where the embeddings are stored
     if hasattr(model, "embed_tokens"):
-        return model.embed_tokens(input_ids)
+        embedding_layer = model.embed_tokens
     elif hasattr(model.model, "embed_tokens"):
-        return model.model.embed_tokens(input_ids)
+        embedding_layer = model.model.embed_tokens
     elif hasattr(model.model.model, "embed_tokens"):
-        return model.model.model.embed_tokens(input_ids)
+        embedding_layer = model.model.model.embed_tokens
     elif hasattr(model.model.model.model, "embed_tokens"):
-        return model.model.model.model.embed_tokens(input_ids)
-    raise ValueError("embed_tokens method not found in the LLM model structure.")
+        embedding_layer = model.model.model.model.embed_tokens
+    else:
+        raise ValueError("embed_tokens method not found in the LLM model structure.")
+    
+    vocab_size = embedding_layer.num_embeddings
+    # Sanity check
+    if input_ids.max() >= vocab_size or input_ids.min() < 0:
+        raise ValueError(
+            f"Invalid input_ids detected. Found values in range [{input_ids.min().item()}, {input_ids.max().item()}], "
+            f"but vocab size is {vocab_size}."
+        )
+    
+    return embedding_layer(input_ids)
 
 def compute_accuracy(pad_outputs, pad_targets, ignore_label=-100):
     mask = pad_targets != ignore_label
     numerator = torch.sum(pad_outputs.masked_select(mask) == pad_targets.masked_select(mask))
     denominator = torch.sum(mask)
     return (numerator.float() / denominator.float())
+
+def split_audio_tensor(audio_tensor, chunk_size=3000):
+    """
+    Splits an audio tensor along the time dimension into fixed-size chunks.
+    Input shape: [batch, time, mel]
+    Output: list of tensors [batch, time_chunk, mel]
+    """
+    batch_size, time_length, mel_dim = audio_tensor.shape
+    splits = []
+
+    for start in range(0, time_length, chunk_size):
+        end = min(start + chunk_size, time_length)
+        chunk = audio_tensor[:, start:end, :]
+        splits.append(chunk)
+
+    return splits
 
 class LucAS(nn.Module):
     def __init__(self, encoder: nn.Module, llm: nn.Module, encoder_projector: nn.Module, tokenizer, train_config, model_config, **kwargs):
@@ -51,15 +79,32 @@ class LucAS(nn.Module):
         if audio_mel is not None:
             if audio_mel.dim() == 2:  # Single sample
                 audio_mel = audio_mel.unsqueeze(0)
-            encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1))
+            # print(f"Audio shape: {audio_mel.shape}")
+            try:
+                encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1))
+            except AssertionError as e:
+                print(f"Assertion error: {e}")
+                chunks = split_audio_tensor(audio_mel, chunk_size=3000)
+                encoder_outs_list = []
+                for chunk in chunks:
+                    out = self.encoder.extract_variable_length_features(chunk.permute(0, 2, 1))
+                    encoder_outs_list.append(out)
+                encoder_outs = torch.cat(encoder_outs_list, dim=1)
+            # encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1))
             encoder_outs = self.encoder_projector(encoder_outs)
 
-        # Process tokenized input
+        # Process tokenized input (if provided)
         if input_ids is not None:
-            input_ids[input_ids == -1] = 0
+            input_ids = input_ids.clone()  # avoid in-place operations
+            input_ids[input_ids == -100] = 0  # Replace padding with a valid token ID
             if input_ids.dtype != torch.long:
                 input_ids = input_ids.long()
-            inputs_embeds = get_embeddings(self.llm, input_ids)
+
+            try:
+                inputs_embeds = get_embeddings(self.llm, input_ids)
+            except ValueError as e:
+                logger.error(f"Embedding error: {e}")
+                raise
 
         if inputs_embeds is None:
             raise ValueError("`inputs_embeds` cannot be None. Provide input_ids or precomputed embeddings.")
@@ -68,6 +113,7 @@ class LucAS(nn.Module):
         if modality_mask is not None:
             modality_mask_start_indices = (modality_mask == True).float().argmax(dim=1)
             modality_lengths = torch.clamp(modality_mask.sum(dim=1), max=encoder_outs.shape[1]).tolist()
+
             encoder_outs_pad = torch.zeros_like(inputs_embeds)
             for i in range(encoder_outs.shape[0]):
                 start_idx = modality_mask_start_indices[i]
@@ -116,3 +162,4 @@ class LucAS(nn.Module):
             **kwargs,
         )
         return model_outputs
+
