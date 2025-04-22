@@ -50,90 +50,121 @@ def create_arrow_schema():
         ))
     ])
 
-def load_audio(audio_path: str, sampling_rate=16000) -> tuple:
-    """Load audio file, convert to mono if needed, and resample to 16kHz.
+# def load_audio(audio_path: str, start_dur:float = None, end_dur: float = None sampling_rate=16000) -> tuple:
+#     """Load audio file, convert to mono if needed, and resample to 16kHz.
     
-    If the file does not exist or fails to load, return (None, None).
+#     If the file does not exist or fails to load, return (None, None).
+#     """
+#     if not os.path.exists(audio_path):
+#         print(f"Warning: Audio file not found, skipping: {audio_path}")
+#         return None, None
+    
+#     try:
+#         array, sr = sf.read(audio_path)
+#         if array.ndim > 1:  # Convert stereo to mono
+#             array = array.mean(axis=1)
+#         if sr != sampling_rate:  # Resample if needed
+#             array = librosa.resample(array, orig_sr=sr, target_sr=sampling_rate)
+#             sr = sampling_rate
+#         return array, sr
+#     except Exception as e:
+#         print(f"Error loading audio {audio_path}: {e}, skipping this file.")
+#         return None, None
+
+def load_audio(audio_path: str, start_dur: float = None, end_dur: float = None, sampling_rate: int = 16000) -> tuple:
+    """Load audio, convert to mono, resample to 16kHz, and trim by duration if specified.
+
+    Returns (audio_array, sampling_rate) or (None, None) on failure.
     """
     if not os.path.exists(audio_path):
         print(f"Warning: Audio file not found, skipping: {audio_path}")
         return None, None
-    
+
     try:
         array, sr = sf.read(audio_path)
-        if array.ndim > 1:  # Convert stereo to mono
+        if array.ndim > 1:
             array = array.mean(axis=1)
-        if sr != sampling_rate:  # Resample if needed
+        if sr != sampling_rate:
             array = librosa.resample(array, orig_sr=sr, target_sr=sampling_rate)
             sr = sampling_rate
+
+        start_sample = int(start_dur * sr) if start_dur is not None else 0
+        end_sample = int(end_dur * sr) if end_dur is not None else len(array)
+        array = array[start_sample:end_sample]
+
         return array, sr
     except Exception as e:
         print(f"Error loading audio {audio_path}: {e}, skipping this file.")
         return None, None
 
-def create_message_record(row: Dict[str, Any], audio_base_path: str) -> Dict[str, Any]:
-    """Create a properly structured message record with audio data."""
-    audio_path = os.path.join(audio_base_path, row.get("path", ""))
-    
-    array, sr = load_audio(audio_path, 16000)
-    # Skip record if audio could not be loaded.
-    if array is None or sr is None:
+def create_message_record(
+    row: Dict[str, Any],
+    audio_base_paths: List[str],             # ← a list of strings now with ',' to split the audios paths
+) -> Dict[str, Any]:
+    """Try each base path in turn; return the first valid message-record or None."""
+    # parse start/end
+    start_dur = float(row["start_time"]) if row.get("start_time") else None
+    end_dur   = float(row["end_time"])   if row.get("end_time")   else None
+
+    array, sr, audio_path = None, None, None
+
+    # ──────── loop through each candidate root ────────
+    for base in audio_base_paths:
+        candidate = os.path.join(base, row.get("path", ""))
+        arr, rate = load_audio(candidate, start_dur=start_dur, end_dur=end_dur)
+        if arr is not None and rate is not None:
+            array, sr, audio_path = arr, rate, candidate
+            break
+
+    # if none found, bail out
+    if array is None:
         return None
 
-    task = "transcription_and_translation"
-    lang = "fr"
+    # build your messages exactly as before
+    task        = "transcription_and_translation"
+    lang        = "fr"
     instruction = np.random.choice(prompt_cache[task][lang])
-    output = f"{row.get('sentence', '')}\n{row.get('translation', '')}"
+    output      = f"{row.get('sentence','')}\n{row.get('translation','')}"
 
     return {
         "messages": [
             {"role": "system",
              "content": [{
                  "type": "text",
-                 "text": "You are a helpful speech assistant." if lang == "en"
-                         else "Vous êtes un assistant vocal utile.",
+                 "text": "Vous êtes un assistant vocal utile.",
                  "audio": {"array": [], "sampling_rate": 0, "path": ""}
-             }]
-            },
-            {"role": "user",
+             }]}
+          , {"role": "user",
              "content": [
-                 {
-                     "type": "audio",
-                     "text": "",
-                     "audio": {
-                         "array": array.tolist(),
-                         "sampling_rate": sr,
-                         "path": audio_path
-                     }
-                 },
-                 {
-                     "type": "text",
-                     "text": instruction,
-                     "audio": {"array": [], "sampling_rate": 0, "path": ""}
-                 }
-             ]
-            },
-            {"role": "assistant",
+               {"type": "audio", "text": "", "audio":{
+                   "array": array.tolist(),
+                   "sampling_rate": sr,
+                   "path": audio_path
+               }},
+               {"type": "text", "text": instruction, "audio": {"array": [], "sampling_rate": 0, "path": ""}}
+             ]}
+          , {"role": "assistant",
              "content": [{
-                 "type": "text",
-                 "text": output,
-                 "audio": {"array": [], "sampling_rate": 0, "path": ""}
-             }]
-            }
+               "type": "text", "text": output,
+               "audio": {"array": [], "sampling_rate": 0, "path": ""}
+             }]}
         ]
     }
 
-def process_batch(batch: List[Dict[str, Any]], audio_base_path: str, audio_load_workers=4) -> List[Dict[str, Any]]:
-    """Process a batch of records in parallel."""
-    processed = []
+def process_batch(
+    batch: List[Dict[str, Any]],
+    audio_base_paths: List[str],
+    audio_load_workers=4
+) -> List[Dict[str, Any]]:
     with ThreadPoolExecutor(max_workers=audio_load_workers) as executor:
-        results = list(tqdm(executor.map(lambda row: create_message_record(row, audio_base_path), batch),
-                            total=len(batch), desc="Processing batch", leave=False))
-    
-    for record in results:
-        if record:
-            processed.append(record)
-    return processed
+        results = list(tqdm(
+            executor.map(
+                lambda row: create_message_record(row, audio_base_paths),
+                batch
+            ),
+            total=len(batch), desc="Processing batch", leave=False
+        ))
+    return [r for r in results if r]
 
 def save_shard(shard_data: List[Dict[str, Any]], output_path: str, split: str, shard_counter: int, data_id: str, parquet_prefix: str) -> None:
     """Save a single shard to a Parquet file."""
@@ -179,9 +210,9 @@ if __name__ == '__main__':
     parser.add_argument('--max_shard_size', type=int, default=500, help='Max number of messages per Parquet file')
     parser.add_argument('--audio_load_workers', type=int, default=4, help='Number of workers to load audio')
     parser.add_argument('--sampling_rate', type=int, default=16000, help='Sampling rate for audio processing')
-    parser.add_argument('--audio_base_path', type=str, default='/home/hnaoura/hnaouara/CommonVoice/cv-corpus-18.0-2024-06-14/fr/clips', help='Path to audio base directory')
-    parser.add_argument('--output_base_path', type=str, default='/home/hnaoura/hnaouara/Audio_corpus/En-Fr/audio-translation/both', help='Path to output base directory')
-    parser.add_argument('--tsv_path', type=str, default='/home/hnaoura/hnaouara/CV/', help='Path to TSV files')
+    parser.add_argument('--audio_base_paths', type=str, default='path/to/audios', help='Path to audio base directory')
+    parser.add_argument('--output_base_path', type=str, default='path/to/save/data', help='Path to output base directory')
+    parser.add_argument('--tsv_path', type=str, default='path/to/tsv_fils', help='Path to TSV files (should be like test.tsv, train.tsv, dev.tsv, valid.tsv)')
     parser.add_argument('--parquet_prefix', type=str, default='Audio--Transcription--Translation', help='Prefix for Parquet file names')
     parser.add_argument('--load_last', action='store_true', help='Resume processing by skipping records already processed in previous Parquet shards')
 
@@ -193,7 +224,7 @@ if __name__ == '__main__':
     SAMPLING_RATE = args.sampling_rate
     # ===================================
 
-    audio_base_path = args.audio_base_path
+    audio_base_paths = [p.strip() for p in args.audio_base_paths.split(',')]
     output_base_path = args.output_base_path
     tsv_path = args.tsv_path
     parquet_prefix = args.parquet_prefix
@@ -201,7 +232,8 @@ if __name__ == '__main__':
     # Generate a new data_id if processing new records.
     new_data_id = uuid.uuid4().hex[:8]
 
-    for split in ['test', 'dev', 'train']:
+    for split in ['test', 'valid', 'dev', 'train']:
+        
         print(f"\n{'='*40}\nProcessing {split} split\n{'='*40}")
 
         processed_count = 0
@@ -215,6 +247,9 @@ if __name__ == '__main__':
 
         # 1. Load data from TSV
         data_file = os.path.join(tsv_path, f'{split}.tsv')
+        if not os.path.exists(data_file):
+            print(f"❌ TSV file not found for split '{split}': {data_file}. Skipping...")
+            continue
         dataset = pd.read_csv(data_file, sep="\t").to_dict('records')
         print(f"📂 Loaded {len(dataset)} records from {data_file}")
 
@@ -236,7 +271,7 @@ if __name__ == '__main__':
         
         # 3. Process each batch and save new shards
         for batch in tqdm(batches, desc=f"📦 Streaming {split} batches"):
-            processed_data = process_batch(batch, audio_base_path, AUDIO_LOAD_WORKERS)
+            processed_data = process_batch(batch, audio_base_paths, AUDIO_LOAD_WORKERS)
             if not processed_data:
                 continue
             
