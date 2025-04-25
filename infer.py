@@ -56,7 +56,7 @@ def load_model_and_checkpoint(checkpoint_path, model_config, train_config, devic
 
         if latest_epoch_folder:
             model, train_config, model_config = load_model_checkpoint_peft(
-                model, train_config, model_config, checkpoint_name=latest_epoch_folder
+                model, train_config, model_config, checkpoint_name=latest_epoch_folder, is_trainable=False
             )
         else:
             logger.info("No valid checkpoint found.")

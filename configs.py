@@ -17,7 +17,7 @@ class ModelConfig:
         metadata={"help": "Specific type of LLM in use"}
     )
     llm_dim: int = field(
-        default=4096, # , #
+        default=4096, # 2048 for "unsloth/Llama-3.2-1B-Instruct-bnb-4bit"
         metadata={"help": "Dimension size of the LLM"}
     )
 
@@ -305,10 +305,44 @@ class TrainConfig:
         metadata={"help": "Use gradient checkpointing or not"}
     )
     output_dir: str = field(
-        default="path/to/output",
+        default="model_output",
         metadata={"help": "Directory to save model outputs"}
     )
     save_model: bool = field(
         default=True,
         metadata={"help": "Save model after training"}
+    )
+    save_top_k_checkpoints: int = field(
+        default=3,
+        metadata={"help": "Max chkp to save"}
+    )
+    gradient_clip_val: float = field(
+        default=1.0,
+        metadata={"help": "Gradient Clipping Value"}
+    )
+    
+    # Audio specifications:
+    chunk_duration_per_s: int = field(
+        default=30,
+        metadata={"help": "Maximum duration (in seconds) for each audio chunk"}
+    )
+    min_segment_duration: float = field(
+        default=0.1,
+        metadata={"help": "Minimum allowed duration (in seconds) for an audio segment"}
+    )
+    max_segment_duration: float = field(
+        default=30.0,
+        metadata={"help": "Maximum allowed duration (in seconds) for an audio segment"}
+    )
+    silence_thresh: int = field(
+        default=-40,
+        metadata={"help": "Silence threshold in dBFS; audio quieter than this is considered silence"}
+    )
+    min_silence_len: int = field(
+        default=400,
+        metadata={"help": "Minimum length (in milliseconds) of silence to be used for splitting"}
+    )
+    keep_silence: int = field(
+        default=300,
+        metadata={"help": "Amount of silence (in milliseconds) to retain at the start and end of each chunk"}
     )

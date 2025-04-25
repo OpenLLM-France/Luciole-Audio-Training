@@ -117,7 +117,7 @@ def save_model_checkpoint_peft(model, train_config, epoch, step_count, checkpoin
     limit_checkpoints(train_config.output_dir, max_checkpoints=3)
     logger.info("--> PEFT model checkpoint save completed.")
 
-def load_model_checkpoint_peft(model, train_config, model_config, checkpoint_name="checkpoint"):
+def load_model_checkpoint_peft(model, train_config, model_config, checkpoint_name="checkpoint", is_trainable=True):
     logger.info("--> Loading PEFT model checkpoint ...")
     load_dir = os.path.join(train_config.output_dir, checkpoint_name)
     output_dir = train_config.output_dir
@@ -145,8 +145,8 @@ def load_model_checkpoint_peft(model, train_config, model_config, checkpoint_nam
         adapter_save_dir = os.path.join(load_dir, "peft_adapter")
         if os.path.exists(adapter_save_dir):
             try:
-                from peft import PeftModel
-                model.llm = PeftModel.from_pretrained(model.llm, adapter_save_dir, strict=False)
+                logger.info(f"Attempting to load PEFT adapter from {adapter_save_dir}")
+                model.llm = PeftModel.from_pretrained(model.llm, adapter_save_dir, strict=False, is_trainable=is_trainable)
                 logger.info(f"--> PEFT adapter configuration loaded from {adapter_save_dir}")
             except Exception as e:
                 logger.warning(f"Error loading PEFT adapter: {e}")

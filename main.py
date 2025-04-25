@@ -7,7 +7,7 @@ from train import train
 from data.audio_chat_to_dataset import get_dataset
 
 from utils.checkpoint_utils import load_model_checkpoint_peft, load_optimizer_scheduler_scaler
-from utils.config_utils import setup_directories, save_config_files
+from utils.config_utils import save_config_files
 from utils.model_utils import freeze_transformer_layers, check_frozen_layers_peft_model
 
 from models.lucas_setup import model_factory
@@ -191,6 +191,10 @@ def main():
     # Initialize directories and handle config updates
     os.makedirs(train_config.output_dir, exist_ok=True)
     setup_logging(train_config.output_dir)
+    
+    if not os.path.exists(os.path.join(train_config.output_dir, "model_config.json")):
+        model_config_file = os.path.join(train_config.output_dir, "model_config.json")
+        save_config_files(model_config, model_config_file)
     
     # Update configs if changed (only training config in your case)
     update_train_config_if_changed(train_config, train_config.output_dir)

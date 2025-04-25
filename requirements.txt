@@ -1,6 +1,8 @@
 audiomentations==0.34.1
+AudioSegment
 ctranslate2==4.0.0
 datasets
+dask
 faster_whisper
 librosa
 nltk
@@ -8,6 +10,7 @@ parler_tts
 peft
 pydub
 python-slugify
+pytorch_lightning
 soxbindings
 soundfile
 tokenizers==0.20.3

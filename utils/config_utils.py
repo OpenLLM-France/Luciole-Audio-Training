@@ -16,10 +16,6 @@ def setup_directories(train_config):
     
     return model_config_file, train_config_file
 
-def save_config_files(model_config, train_config, model_config_file, train_config_file):
-    with open(model_config_file, "w") as json_file:
-        json.dump(asdict(model_config), json_file, indent=4)
-    
-    with open(train_config_file, "w") as json_file:
-        data = asdict(train_config)
-        json.dump(data, json_file, indent=4)
+def save_config_files(configs, config_file):
+    with open(config_file, "w") as json_file:
+        json.dump(asdict(configs), json_file, indent=4)
