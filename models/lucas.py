@@ -53,7 +53,16 @@ def split_audio_tensor(audio_tensor, chunk_size=3000):
     return splits
 
 class LucAS(nn.Module):
-    def __init__(self, encoder: nn.Module, llm: nn.Module, encoder_projector: nn.Module, tokenizer, train_config, model_config, **kwargs):
+    def __init__(
+        self,
+        encoder: nn.Module,
+        llm: nn.Module,
+        encoder_projector: nn.Module,
+        tokenizer,
+        train_config,
+        model_config,
+        **kwargs
+    ):  
         super().__init__()
         self.encoder = encoder
         self.llm = llm
@@ -61,7 +70,7 @@ class LucAS(nn.Module):
         self.tokenizer = tokenizer
         self.train_config = train_config
         self.model_config = model_config
-        self.metric = self.train_config.metric
+        self.metric = getattr(train_config, 'metric', None)
 
     def forward(
         self,
@@ -71,67 +80,73 @@ class LucAS(nn.Module):
         labels: Optional[torch.LongTensor] = None,
         **kwargs,
     ):
-        audio_mel = kwargs.get("audio", None)
+        audio = kwargs.get("audio", None)
         modality_mask = kwargs.get("modality_mask", None)
         encoder_outs = None
 
-        # Process audio input
-        if audio_mel is not None:
-            if audio_mel.dim() == 2:  # Single sample
-                audio_mel = audio_mel.unsqueeze(0)
-            # print(f"Audio shape: {audio_mel.shape}")
-            try:
-                encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1))
-            except AssertionError as e:
-                print(f"Assertion error: {e}")
-                chunks = split_audio_tensor(audio_mel, chunk_size=3000)
-                encoder_outs_list = []
-                for chunk in chunks:
-                    out = self.encoder.extract_variable_length_features(chunk.permute(0, 2, 1))
-                    encoder_outs_list.append(out)
-                encoder_outs = torch.cat(encoder_outs_list, dim=1)
-            # encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1))
-            encoder_outs = self.encoder_projector(encoder_outs)
+        # ==== Audio encoding ====                
+        if audio is not None:
+            bsz, num_chunks, frames_per_chunk, n_mels = audio.shape
 
-        # Process tokenized input (if provided)
+            if num_chunks > 1:
+                logger.info(f"Multiple chunks detected ({num_chunks}), processing each separately.")
+                # Process each chunk individually and concatenate
+                encoder_feats = torch.cat([
+                    self.encoder.extract_variable_length_features(audio[:, i].permute(0, 2, 1))
+                    for i in range(num_chunks)
+                ], dim=1)
+            else:
+                # Flatten and process the single chunk
+                audio_flat = audio.reshape(bsz, -1, n_mels).permute(0, 2, 1)
+                encoder_feats = self.encoder.extract_variable_length_features(audio_flat)
+
+            # Project into hidden space
+            encoder_outs = self.encoder_projector(encoder_feats)
+
+        
+        # ==== Text embeddings ====        
         if input_ids is not None:
-            input_ids = input_ids.clone()  # avoid in-place operations
-            input_ids[input_ids == -100] = 0  # Replace padding with a valid token ID
-            if input_ids.dtype != torch.long:
-                input_ids = input_ids.long()
-
-            try:
-                inputs_embeds = get_embeddings(self.llm, input_ids)
-            except ValueError as e:
-                logger.error(f"Embedding error: {e}")
-                raise e
+            # Replace ignore_index with pad token for embedding lookup
+            input_ids = input_ids.clone()
+            input_ids[input_ids == -100] = self.tokenizer.pad_token_id
+            inputs_embeds = get_embeddings(self.llm, input_ids.long())
 
         if inputs_embeds is None:
-            raise ValueError("`inputs_embeds` cannot be None. Provide input_ids or precomputed embeddings.")
+            raise ValueError("Either input_ids or inputs_embeds must be provided.")
 
-        # Handle modality masking
-        if modality_mask is not None:
-            modality_mask_start_indices = (modality_mask == True).float().argmax(dim=1)
-            modality_lengths = torch.clamp(modality_mask.sum(dim=1), max=encoder_outs.shape[1]).tolist()
+        # ==== Modality mixing ====        
+        if modality_mask is not None and encoder_outs is not None:
+            # modality_mask: (batch_size, seq_len), True for audio-token positions
+            # compute start and length per example
+            start_idxs = modality_mask.float().argmax(dim=1)
+            lengths = torch.clamp(modality_mask.sum(dim=1), max=encoder_outs.shape[1]).long()
+            # build a tensor matching inputs_embeds shape to receive encoder_outs
+            batch_size, seq_len, hid_dim = inputs_embeds.size()
+            mixed = torch.zeros_like(inputs_embeds)
+            for i in range(bsz):
+                start = start_idxs[i].item()
+                length = lengths[i].item()
+                # copy encoder outputs into mixed
+                mixed[i, start:start+length, :] = encoder_outs[i, :length, :]
+                # retain text embeddings for non-audio positions
+                text_mask = ~modality_mask[i].unsqueeze(-1)
+                mixed[i] = mixed[i] + inputs_embeds[i] * text_mask
+            inputs_embeds = mixed
 
-            encoder_outs_pad = torch.zeros_like(inputs_embeds)
-            for i in range(encoder_outs.shape[0]):
-                start_idx = modality_mask_start_indices[i]
-                length = modality_lengths[i]
-                encoder_outs_pad[i, start_idx:start_idx + length] = encoder_outs[i][:length]
-            inputs_embeds = encoder_outs_pad + inputs_embeds * (~modality_mask[:, :, None])
-
-        # Pass through LLM
-        model_outputs = self.llm(
+        # ==== Forward through LLM ====        
+        outputs = self.llm(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             labels=labels,
-            use_cache=False,
-            use_reentrant=False,
+            use_cache=False
         )
-        preds = torch.argmax(model_outputs.logits, -1)
-        acc = -1 if labels is None else compute_accuracy(preds[:, :-1], labels[:, 1:], ignore_label=-100)
-        return model_outputs, acc
+        logits = outputs.logits
+        preds = torch.argmax(logits, dim=-1)
+        acc = None
+        if labels is not None:
+            acc = compute_accuracy(preds[:, :-1], labels[:, 1:], ignore_label=-100)
+
+        return outputs, acc
 
     @torch.no_grad()
     def generate(
