@@ -2,7 +2,9 @@ import torch
 from torch.nn import functional as F
 import torch.nn as nn
 import types
-
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class WhisperWrappedEncoder:
     """
@@ -79,6 +81,12 @@ class WhisperWrappedEncoder:
 
         return encoder
 
-def set_encoder(model_conf):
+def set_encoder(model_conf, train_config):
     encoder = WhisperWrappedEncoder.load(model_conf)
+    
+    if train_config.freeze_encoder:
+        from utils.model_utils import freeze_component
+        freeze_component(encoder, 'encoder')
+        encoder.eval()
+    
     return encoder
