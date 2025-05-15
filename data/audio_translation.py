@@ -50,27 +50,6 @@ def create_arrow_schema():
         ))
     ])
 
-# def load_audio(audio_path: str, start_dur:float = None, end_dur: float = None sampling_rate=16000) -> tuple:
-#     """Load audio file, convert to mono if needed, and resample to 16kHz.
-    
-#     If the file does not exist or fails to load, return (None, None).
-#     """
-#     if not os.path.exists(audio_path):
-#         print(f"Warning: Audio file not found, skipping: {audio_path}")
-#         return None, None
-    
-#     try:
-#         array, sr = sf.read(audio_path)
-#         if array.ndim > 1:  # Convert stereo to mono
-#             array = array.mean(axis=1)
-#         if sr != sampling_rate:  # Resample if needed
-#             array = librosa.resample(array, orig_sr=sr, target_sr=sampling_rate)
-#             sr = sampling_rate
-#         return array, sr
-#     except Exception as e:
-#         print(f"Error loading audio {audio_path}: {e}, skipping this file.")
-#         return None, None
-
 def load_audio(audio_path: str, start_dur: float = None, end_dur: float = None, sampling_rate: int = 16000) -> tuple:
     """Load audio, convert to mono, resample to 16kHz, and trim by duration if specified.
 
@@ -99,32 +78,45 @@ def load_audio(audio_path: str, start_dur: float = None, end_dur: float = None, 
 
 def create_message_record(
     row: Dict[str, Any],
-    audio_base_paths: List[str],             # ← a list of strings now with ',' to split the audios paths
+    audio_base_paths: List[str] = None,
 ) -> Dict[str, Any]:
-    """Try each base path in turn; return the first valid message-record or None."""
+    """Create a message record from a row of data.
+    
+    If audio_base_paths is provided, try each base path in turn.
+    If not provided, use the full path from the row after checking it exists.
+    Return the first valid message-record or None.
+    """
     # parse start/end
     start_dur = float(row["start_time"]) if row.get("start_time") else None
-    end_dur   = float(row["end_time"])   if row.get("end_time")   else None
+    end_dur = float(row["end_time"]) if row.get("end_time") else None
 
     array, sr, audio_path = None, None, None
 
-    # ──────── loop through each candidate root ────────
-    for base in audio_base_paths:
-        candidate = os.path.join(base, row.get("path", ""))
-        arr, rate = load_audio(candidate, start_dur=start_dur, end_dur=end_dur)
-        if arr is not None and rate is not None:
-            array, sr, audio_path = arr, rate, candidate
-            break
+    if audio_base_paths:
+        # ──────── loop through each candidate root if base paths are provided ────────
+        for base in audio_base_paths:
+            candidate = os.path.join(base, row.get("path", ""))
+            arr, rate = load_audio(candidate, start_dur=start_dur, end_dur=end_dur)
+            if arr is not None and rate is not None:
+                array, sr, audio_path = arr, rate, candidate
+                break
+    else:
+        # ──────── use the full path from the TSV if no base paths are provided ────────
+        candidate = row.get("path", "")
+        if candidate:  # Only proceed if path exists in the TSV
+            arr, rate = load_audio(candidate, start_dur=start_dur, end_dur=end_dur)
+            if arr is not None and rate is not None:
+                array, sr, audio_path = arr, rate, candidate
 
     # if none found, bail out
     if array is None:
         return None
 
     # build your messages exactly as before
-    task        = "transcription_and_translation"
-    lang        = "fr"
+    task = "transcription"
+    lang = "fr"
     instruction = np.random.choice(prompt_cache[task][lang])
-    output      = f"{row.get('sentence','')}\n{row.get('translation','')}"
+    output = f"{row.get('sentence','')}\n{row.get('translation','')}"
 
     return {
         "messages": [
@@ -133,8 +125,8 @@ def create_message_record(
                  "type": "text",
                  "text": "Vous êtes un assistant vocal utile.",
                  "audio": {"array": [], "sampling_rate": 0, "path": ""}
-             }]}
-          , {"role": "user",
+             }]},
+            {"role": "user",
              "content": [
                {"type": "audio", "text": "", "audio":{
                    "array": array.tolist(),
@@ -142,8 +134,8 @@ def create_message_record(
                    "path": audio_path
                }},
                {"type": "text", "text": instruction, "audio": {"array": [], "sampling_rate": 0, "path": ""}}
-             ]}
-          , {"role": "assistant",
+             ]},
+            {"role": "assistant",
              "content": [{
                "type": "text", "text": output,
                "audio": {"array": [], "sampling_rate": 0, "path": ""}
@@ -153,7 +145,7 @@ def create_message_record(
 
 def process_batch(
     batch: List[Dict[str, Any]],
-    audio_base_paths: List[str],
+    audio_base_paths: List[str] = None,
     audio_load_workers=4
 ) -> List[Dict[str, Any]]:
     with ThreadPoolExecutor(max_workers=audio_load_workers) as executor:
@@ -205,12 +197,16 @@ def get_last_shard_counter(output_path: str, split: str, parquet_prefix: str) ->
             max_shard = max(max_shard, shard_num)
     return max_shard
 
+def is_path(path_str):
+    # Checks if it contains any directory part (i.e., not just the filename)
+    return os.path.dirname(path_str) != ''
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Configuration for audio processing.")
     parser.add_argument('--max_shard_size', type=int, default=500, help='Max number of messages per Parquet file')
     parser.add_argument('--audio_load_workers', type=int, default=4, help='Number of workers to load audio')
     parser.add_argument('--sampling_rate', type=int, default=16000, help='Sampling rate for audio processing')
-    parser.add_argument('--audio_base_paths', type=str, default='path/to/audios', help='Path to audio base directory')
+    parser.add_argument('--audio_base_paths', type=str, default=None, help='Comma-separated paths to audio base directories (optional)')
     parser.add_argument('--output_base_path', type=str, default='path/to/save/data', help='Path to output base directory')
     parser.add_argument('--tsv_path', type=str, default='path/to/tsv_fils', help='Path to TSV files (should be like test.tsv, train.tsv, dev.tsv, valid.tsv)')
     parser.add_argument('--parquet_prefix', type=str, default='Audio--Transcription--Translation', help='Prefix for Parquet file names')
@@ -224,7 +220,7 @@ if __name__ == '__main__':
     SAMPLING_RATE = args.sampling_rate
     # ===================================
 
-    audio_base_paths = [p.strip() for p in args.audio_base_paths.split(',')]
+    audio_base_paths = [p.strip() for p in args.audio_base_paths.split(',')] if args.audio_base_paths else None
     output_base_path = args.output_base_path
     tsv_path = args.tsv_path
     parquet_prefix = args.parquet_prefix
