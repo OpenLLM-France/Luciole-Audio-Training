@@ -7,20 +7,28 @@ import torch
 from torch.utils.checkpoint import checkpoint_sequential
 from torch.utils.data import DataLoader
 
-from utils.checkpoint_utils import save_model_checkpoint_peft, save_optimizer_scheduler_scaler
+from utils.checkpoint_utils import save_model_checkpoint_peft
 from utils.metrics_utils import save_metrics_to_json
 
 from tqdm import tqdm
 from contextlib import nullcontext
-
+from torch.amp import autocast
 import logging
+from torch.utils.tensorboard import SummaryWriter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def safe_mean(values):
-    return np.mean([v for v in values if v is not None]) if values else None
+    cleaned = []
+    for v in values:
+        if v is None:
+            continue
+        if torch.is_tensor(v):
+            v = v.detach().cpu().numpy()
+        cleaned.append(v)
+    return np.mean(cleaned) if cleaned else None
 
 class EarlyStopper:
     def __init__(self, patience=5):
@@ -48,12 +56,14 @@ def load_last_epoch_and_step(log_file):
     last_log = logs[-1]
     return last_log['epoch'], last_log['step']
 
-def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config, device=None):
-    """
-    Trains the model with memory optimizations and supports resuming from a specific epoch and step.
-    """
+def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config, start_epoch=1, start_step=0, device=None):
+
+    writer = SummaryWriter(log_dir=os.path.join(train_config.output_dir, "runs"))
     use_fp16 = train_config.use_fp16
-    autocast = torch.amp.autocast if use_fp16 else nullcontext
+    autocast_context = autocast(device_type=device.type, enabled=use_fp16) if use_fp16 else nullcontext()
+
+    model.to(device)
+    model.train()
 
     train_metrics = {"loss": [], "acc": [], "ppl": []}
     val_metrics = {"loss": [], "acc": [], "ppl": []}
@@ -61,172 +71,139 @@ def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, sca
     best_val_loss = float("inf")
     best_val_acc = 0.0
 
-    model.to(device)
-    
-    # If using fp16, ensure model parameters are in float16 (but optimizer works with float32)
-    if use_fp16:
-        model.to(dtype=torch.float16)
-        for param in model.parameters():
-            if param.requires_grad:
-                param.data = param.data.float()
-        
+    if not any(p.requires_grad for p in model.encoder_projector.parameters()):
+        logger.error("No projector parameters require gradients!")
+        raise RuntimeError("Projector parameters are frozen")
+
     early_stopping = EarlyStopper(train_config.patience) if train_config.patience else None
 
-    # Load the last epoch and step from the training log
-    start_epoch, start_step = load_last_epoch_and_step(os.path.join(train_config.output_dir, "train_log.json"))
-    logger.info(f"Resuming training from epoch {start_epoch}, step {start_step}")
-
-    # Overall step counter across epochs
-    step_count = start_step  
-    # Total number of batches for progress reporting (might be approximate when resuming)
+    step_count = start_step
     total_batches = (train_config.num_epochs - start_epoch + 1) * len(train_dataloader)
-    initial_progress = (start_epoch - 1) * len(train_dataloader) + start_step
 
-    with tqdm(total=total_batches, initial=initial_progress, desc="Training", dynamic_ncols=True, colour='blue') as pbar:
+    with tqdm(total=total_batches, initial=(start_epoch - 1) * len(train_dataloader) + start_step, desc="Training", dynamic_ncols=True, colour='blue') as pbar:
         for epoch in range(start_epoch, train_config.num_epochs + 1):
+            if epoch != start_epoch:
+                start_step = 0
+
             model.train()
-            epoch_loss, epoch_acc = 0.0, 0.0
-            optimizer.zero_grad(set_to_none=True)
-            total_steps = 0
-            
-            # For the first resumed epoch, skip batches that were already processed.
+            epoch_loss, epoch_acc, steps_this_epoch = 0.0, 0.0, 0
+            optimizer.zero_grad()
+
             for step, batch in enumerate(train_dataloader):
-                # Skip already processed steps in the resumed epoch.
                 if epoch == start_epoch and step < start_step:
                     continue
 
                 step_count += 1
-                total_steps += 1
+                steps_this_epoch += 1
 
-                # Move batch to device
-                batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v 
-                         for k, v in batch.items()}
-                
-                with autocast(device_type=device.type, enabled=use_fp16):
-                    outputs, *rest = model(**batch)
-                    # Scale loss if using gradient accumulation.
+                batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+
+                try:
+                    with autocast_context:
+                        outputs, *rest = model(**batch)
                     loss = outputs.loss / train_config.gradient_accumulation_steps
-                    loss_item = loss.detach().item()
+                    acc = rest[0] / train_config.gradient_accumulation_steps if rest else 0.0
 
-                # Optionally, calculate accuracy (assuming rest[0] holds accuracy info)
-                acc = rest[0].cpu().item() / train_config.gradient_accumulation_steps if rest else None
-
-                epoch_loss += loss_item
-                if acc is not None:
+                    epoch_loss += loss.item()
                     epoch_acc += acc
 
-                # Backward pass (using AMP if enabled)
-                if use_fp16 and scaler is not None:
-                    scaler.scale(loss).backward()
-                else:
-                    loss.backward()
+                except Exception as e:
+                    logger.error(f"Error in forward pass at step {step_count}: {str(e)}")
+                    raise
 
-                # Update parameters when gradient accumulation steps are met.
-                if (step + 1) % train_config.gradient_accumulation_steps == 0 or (step == len(train_dataloader) - 1):
-                    if use_fp16 and scaler is not None:
-                        scaler.step(optimizer)
-                        scaler.update()
+                try:
+                    if use_fp16 and scaler:
+                        scaler.scale(loss).backward()
                     else:
-                        optimizer.step()
+                        loss.backward()
 
-                    if lr_scheduler is not None:
-                        lr_scheduler.step()
+                    if (step + 1) % train_config.gradient_accumulation_steps == 0 or (step == len(train_dataloader) - 1):
+                        params = model.encoder_projector.parameters() if train_config.train_projector_only else model.parameters()
+                        if use_fp16 and scaler:
+                            scaler.unscale_(optimizer)
+                            torch.nn.utils.clip_grad_norm_(params, train_config.gradient_clip_val)
+                            scaler.step(optimizer)
+                            scaler.update()
+                        else:
+                            torch.nn.utils.clip_grad_norm_(params, train_config.gradient_clip_val)
+                            optimizer.step()
 
-                    optimizer.zero_grad(set_to_none=True)
-               
-                # Update progress bar and metrics per batch
-                current_loss = epoch_loss / total_steps
-                current_acc = epoch_acc / total_steps if total_steps > 0 else 0
-               
-                pbar.set_description(
-                    f"Epoch {epoch}/{train_config.num_epochs} | "
-                    f"Loss: {current_loss:.4f} | Acc: {current_acc:.4f}" +
-                    (f" | LR: {optimizer.param_groups[0]['lr']:.2e}" if optimizer else "")
-                )
-                pbar.set_postfix({'mem': f"{torch.cuda.max_memory_allocated()/1e9:.2f}GB"})
+                        optimizer.zero_grad()
+                        if lr_scheduler:
+                            lr_scheduler.step()
+
+                except Exception as e:
+                    logger.error(f"Error in backward pass at step {step_count}: {str(e)}")
+                    raise
+
+                del loss, outputs, rest
+                torch.cuda.empty_cache()
+
+
+                avg_loss = epoch_loss / steps_this_epoch
+                avg_acc = epoch_acc / steps_this_epoch if steps_this_epoch else 0.0
+                
+                # save on TensorBoard
+                writer.add_scalar("Train/Loss", avg_loss, step_count)
+                writer.add_scalar("Train/Accuracy", avg_acc, step_count)
+                
+                pbar.set_description(f"Epoch {epoch}/{train_config.num_epochs} | Loss: {avg_loss:.4f} | Acc: {avg_acc:.4f}")
+                pbar.set_postfix({'mem': f"{torch.cuda.max_memory_allocated() / 1e9:.2f}GB"})
                 pbar.update(1)
 
-                # Evaluation logic at intervals (or at end of epoch)
+                # Run validation
                 if step_count % train_config.validation_step == 0 or step == len(train_dataloader) - 1:
-                    current_progress = pbar.n
                     model.eval()
                     with torch.no_grad():
                         eval_ppl, eval_loss, eval_acc = evaluation(model, device, train_config, eval_dataloader)
-
+                        
+                    writer.add_scalar("Val/Loss", eval_loss, step_count)
+                    writer.add_scalar("Val/Accuracy", eval_acc, step_count)
+                    writer.add_scalar("Val/Perplexity", eval_ppl, step_count)
+                        
                     if eval_loss < best_val_loss:
                         best_val_loss = eval_loss
                         best_val_acc = max(best_val_acc, eval_acc)
-
                         if train_config.save_model:
-                            checkpoint_name = f"{train_config.model_name}_step_{step_count}"
-                            save_model_checkpoint_peft(
-                                model, train_config, epoch, step_count, checkpoint_name=checkpoint_name, save_trainable_only=True
-                            )
-                            save_optimizer_scheduler_scaler(
-                                optimizer, lr_scheduler, scaler, train_config.output_dir
-                            )
-                            logger.info(f"Model saved: {checkpoint_name}")
+                            save_model_checkpoint_peft(model, optimizer, lr_scheduler, scaler, train_config, epoch, step_count)
+                            logger.info(f"Model checkpoint saved at step {step_count}")
+                        torch.cuda.reset_peak_memory_stats()
+
 
                     val_metrics["loss"].append(eval_loss)
                     val_metrics["acc"].append(eval_acc)
                     val_metrics["ppl"].append(eval_ppl)
 
-                    model.train()
-                    pbar.n = current_progress
-                    pbar.last_print_n = current_progress
-                    pbar.refresh()
-
-                    steps_metrics = {
+                    save_metrics_to_json({
                         "epoch": epoch,
                         "step": step_count,
-                        "train_loss": current_loss,
-                        "train_acc": current_acc,
-                        "train_ppl": torch.exp(torch.tensor(current_loss)).item(),
+                        "train_loss": avg_loss if steps_this_epoch else None,
+                        "train_acc": avg_acc if steps_this_epoch else None,
+                        "train_ppl": avg_loss if steps_this_epoch else None,
                         "val_loss": eval_loss,
                         "val_acc": eval_acc,
-                        "val_ppl": eval_ppl if eval_ppl else None,
-                        "best_val_loss": best_val_loss if best_val_loss != float("inf") else None,
-                    }
-                    save_metrics_to_json(steps_metrics, filepath=os.path.join(train_config.output_dir, "train_log.json"))
-                    # Reset evaluation trigger if needed
+                        "val_ppl": eval_ppl,
+                        "best_val_loss": best_val_loss
+                    }, filepath=os.path.join(train_config.output_dir, "train_log.json"))
 
-            # Compute and record epoch metrics
-            train_epoch_loss = epoch_loss / total_steps if total_steps else float('inf')
-            train_epoch_acc = epoch_acc / total_steps if total_steps and acc is not None else None
-            train_epoch_ppl = torch.exp(torch.tensor(train_epoch_loss)).item() if total_steps else None
+                    if early_stopping and early_stopping(eval_loss):
+                        logger.info(f"Early stopping triggered at epoch {epoch}")
+                        return summarize_results(train_metrics, val_metrics)
+            del batch
+            torch.cuda.empty_cache()
+            # End of epoch
+            if steps_this_epoch > 0:
+                train_metrics["loss"].append(avg_loss)
+                train_metrics["acc"].append(avg_acc)
+                train_metrics["ppl"].append(avg_loss)
+            else:
+                logger.warning(f"Epoch {epoch} had no training steps, skipping metric logging.")
+    writer.close()        
+    return summarize_results(train_metrics, val_metrics)
 
-            train_metrics["loss"].append(train_epoch_loss)
-            train_metrics["acc"].append(train_epoch_acc)
-            train_metrics["ppl"].append(train_epoch_ppl)
 
-            # Evaluate at the end of the epoch if evaluation loader is provided
-            if train_config.run_validation and eval_dataloader:
-                eval_ppl, eval_loss, eval_acc = evaluation(model, device, train_config, eval_dataloader)
-                    
-                if eval_loss < best_val_loss:
-                    best_val_loss = eval_loss
-                    best_val_acc = max(best_val_acc, eval_acc)
-
-                    if train_config.save_model:
-                        checkpoint_name = f"{train_config.model_name}_step_{step_count}"
-                        save_model_checkpoint_peft(
-                            model, train_config, epoch, step_count, checkpoint_name=checkpoint_name, save_trainable_only=True
-                        )
-                        save_optimizer_scheduler_scaler(
-                            optimizer, lr_scheduler, scaler, train_config.output_dir
-                        )
-                        logger.info(f"Model saved: {checkpoint_name}")
-
-                val_metrics["loss"].append(eval_loss)
-                val_metrics["acc"].append(eval_acc)
-                val_metrics["ppl"].append(eval_ppl)
-            
-            # Check for early stopping if enabled
-            if early_stopping and early_stopping(eval_loss):
-                logger.info(f"Early stopping triggered at epoch {epoch + 1}")
-                break
-
-    results = {
+def summarize_results(train_metrics, val_metrics):
+    return {
         "train_loss": safe_mean(train_metrics["loss"]),
         "train_acc": safe_mean(train_metrics["acc"]),
         "train_ppl": safe_mean(train_metrics["ppl"]),
@@ -235,47 +212,48 @@ def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, sca
         "val_ppl": safe_mean(val_metrics["ppl"]),
     }
 
-    return results
-
-
+@torch.no_grad()
 def evaluation(model, device, train_config, eval_dataloader):
     """
     Memory-optimized evaluation
     """
     model.eval()
+    use_fp16 = train_config.use_fp16
+    autocast_context = autocast(device_type=device.type, enabled=use_fp16) if use_fp16 else nullcontext()
+
     eval_loss, eval_acc = 0.0 , 0.0
-    autocast = torch.amp.autocast(device_type='cuda', dtype=torch.float16, enabled=train_config.use_fp16)   
+    acc_steps = 0
 
-    with torch.no_grad(), tqdm(eval_dataloader, desc="Evaluating", colour='green') as pbar:
+    with tqdm(eval_dataloader, desc="Evaluating", colour='green') as pbar:
         for step, batch in enumerate(pbar):
-            # FIXED: Batch cleanup
             batch = {k: (v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v) for k, v in batch.items()}
-
-            with autocast:
+            with autocast_context:
                 outputs, *rest = model(**batch)
-            
-            # FIXED: Immediate tensor conversion
+
             loss = outputs.loss.detach().cpu().item()
-            acc = rest[0].detach().cpu().item() if rest else -1
-
             eval_loss += loss
-            eval_acc += acc
 
-            # FIXED: Clear intermediates
+            if rest:
+                acc = rest[0].detach().cpu().item()
+                eval_acc += acc
+                acc_steps += 1
+            else:
+                acc = None
+
             del batch, outputs, rest
+            torch.cuda.empty_cache()
 
             pbar.set_postfix({
                 'eval_loss': f"{eval_loss/(step + 1):.4f}",
-                'eval_acc': f"{eval_acc/(step + 1):.4f}" if acc else "N/A",
-                'eval_ppl': f"{torch.exp(torch.tensor(eval_loss/(step + 1))):.4f}" if acc else "N/A",
-                
+                'eval_acc': f"{(eval_acc/acc_steps):.4f}" if acc is not None else "N/A",
+                'eval_ppl': f"{torch.exp(torch.tensor(eval_loss/(step + 1))):.4f}",
             })
-            
+
     avg_loss = eval_loss / len(eval_dataloader)
-    avg_acc = eval_acc / len(eval_dataloader)
+    avg_acc = eval_acc / acc_steps if acc_steps > 0 else None
     eval_ppl = torch.exp(torch.tensor(avg_loss))
 
-    # logger.info(f"Evaluation - Perplexity: {eval_ppl:.4f}, Loss: {avg_loss:.4f}, Accuracy: {avg_acc:.4f}")
-
     return eval_ppl.item(), avg_loss, avg_acc
+
+
 
