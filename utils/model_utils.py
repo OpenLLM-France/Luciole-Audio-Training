@@ -1,4 +1,5 @@
 import logging
+import torch 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -14,3 +15,9 @@ def freeze_transformer_layers(model, num_layer):
             for param in layer.parameters():
                 param.requires_grad = False
             
+def freeze_component(component: torch.nn.Module, name: str) -> None:
+    if component is None:
+        return
+    logger.info(f"Freezing {name} for training")
+    for param in component.parameters():
+        param.requires_grad = False

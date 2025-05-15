@@ -1,21 +1,10 @@
-import json
-import os
-from dataclasses import asdict
+from configs import TrainConfig, ModelConfig
 
-def load_config(config_path):
-    with open(config_path, "r") as file:
-        config = json.load(file)
-    return config
+def load_all_configs(model_path: str, train_path: str):
+    model_config = ModelConfig.load(model_path)
+    train_config = TrainConfig.load(train_path)
+    return model_config, train_config
 
-def setup_directories(train_config):
-    if not os.path.exists(train_config.output_dir):
-        os.makedirs(train_config.output_dir, exist_ok=True)
-    
-    model_config_file = os.path.join(train_config.output_dir, "model_config.json")
-    train_config_file = os.path.join(train_config.output_dir, "train_config.json")
-    
-    return model_config_file, train_config_file
-
-def save_config_files(configs, config_file):
-    with open(config_file, "w") as json_file:
-        json.dump(asdict(configs), json_file, indent=4)
+def save_all_configs(model_config: ModelConfig, train_config: TrainConfig, output_dir: str):
+    model_config.save(f"{output_dir}/model_config.json")
+    train_config.save(f"{output_dir}/train_config.json")

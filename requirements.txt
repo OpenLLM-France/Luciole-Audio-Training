@@ -3,6 +3,7 @@ AudioSegment
 ctranslate2==4.0.0
 datasets
 dask
+dask[dataframe]
 faster_whisper
 librosa
 nltk
@@ -13,8 +14,12 @@ python-slugify
 pytorch_lightning
 soxbindings
 soundfile
+tensorboard
 tokenizers==0.20.3
 torch
 torchaudio
 torchvision
 transformers
+git+https://github.com/openai/whisper.git
+py3nvml
+unsloth

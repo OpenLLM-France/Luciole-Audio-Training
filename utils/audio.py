@@ -1,6 +1,7 @@
 # Misc
 import argparse
 import os
+import sys
 import random
 import shlex
 from typing import Optional
@@ -99,6 +100,19 @@ def load_audio(path, start = None, end = None, sampling_rate = 16_000, mono = Tr
         return (audio, sr)
     return audio
 
+def get_audio_duration(path, verbose=False):
+    try:
+        info = torchaudio.info(path)
+        duration = info.num_frames / info.sample_rate
+        if verbose:
+            print(f"[INFO] File: {path}")
+            print(f"[INFO] Sample rate: {info.sample_rate} Hz")
+            print(f"[INFO] Duration: {duration:.2f} seconds")
+        return duration
+    except Exception as e:
+        if verbose:
+            print(f"[ERROR] Could not process file: {path}\n{e}")
+        return None
 
 class suppress_stderr:
     """
