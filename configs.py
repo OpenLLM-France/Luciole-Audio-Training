@@ -4,9 +4,9 @@ from typing import List, Optional
 
 @dataclass
 class ModelConfig:
-    llm_name_hf: str = "unsloth/Llama-3.2-1B-Instruct-bnb-4bit"
+    llm_name_hf: str = "OpenLLM-France/Lucie-7B-Instruct-v1.1"
     llm_type: str = "decoder_only"
-    llm_dim: int = 2048
+    llm_dim: int = 4096
     using_llm_type: str = None
     
     encoder_path_hf: Optional[str] = None

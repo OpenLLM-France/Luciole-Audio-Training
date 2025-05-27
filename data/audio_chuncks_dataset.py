@@ -353,20 +353,21 @@ class SpeechDataset(torch.utils.data.Dataset):
         
         assistant = row['assistant_text'] or ""
         # build prompts and examples
-        prompt = [
-            {"role":"system","content":[{"type":"text","text":system}]},
-            {"role":"user","content":[{"type":"text","text":user_text}]},
-        ]
-        full = prompt + [{"role":"assistant","content":[{"type":"text","text":assistant}]}]
-
-        # tokenize prompt
-        prompt_ids = self.tokenizer.apply_chat_template(
-            prompt, add_generation_prompt=True, tokenize=True, return_tensors='pt'
-        ).squeeze(0)
-        p_len = prompt_ids.size(0)
+        prompt_template = (
+            "<|start_header_id|>user<|end_header_id|>\n"
+            "{user_message}\n<|eot_id|>\n\n"
+            "<|start_header_id|>assistant<|end_header_id|>\n"
+        )
+        formatted_prompt = prompt_template.format(
+                                user_message=user_text.strip()
+                            )
+        prompt_ids = self.tokenizer.encode(formatted_prompt)
+        p_len = len(prompt_ids)
 
         if self.inference_mode:
-            inp = torch.cat([tokens, prompt_ids])
+            prompt_tensor = torch.tensor(prompt_ids, dtype=torch.int64)
+            inp = torch.cat([tokens, prompt_tensor])
+            assistant = self.tokenizer.encode(assistant)
             result = {
                 'input_ids': inp,
                 'attention_mask': inp != self.IGNORE_INDEX,
@@ -374,17 +375,16 @@ class SpeechDataset(torch.utils.data.Dataset):
                 'audio_chunk_lengths': [m.shape[0] for m in mel_chunks],
                 'audio_token_length': at_len,
                 'prompt_length': p_len,
-                'target': assistant,
+                'labels': torch.tensor(assistant, dtype=torch.int64),
             }
             # Add to cache
             self._add_to_cache(idx, result)
             return result
 
-        # training mode: labels include generated part
-        example_ids = self.tokenizer.apply_chat_template(
-            full, add_generation_prompt=False, tokenize=True, return_tensors='pt'
-        ).squeeze(0)
-        inp = torch.cat([tokens, example_ids])
+        example = f"{formatted_prompt}\n{assistant.strip()}"
+        example_ids = self.tokenizer.encode(example) + [self.tokenizer.eos_token_id]
+        example_tensor = torch.tensor(example_ids, dtype=torch.int64)
+        inp = torch.cat([tokens, example_tensor])
         labels = inp.clone()
         labels[:at_len + p_len] = self.IGNORE_INDEX
 
@@ -503,32 +503,43 @@ if __name__ == "__main__":
 
     parquet_dir = sys.argv[1]
     
-    ds = get_dataset(parquet_dir, tokenizer, model_config, train_config, split="test")
+    ds = get_dataset(
+        parquet_dir, 
+        tokenizer, 
+        model_config,
+        train_config,
+        split="test",
+        inference_mode=False
+        )
     print("Dataset size:", len(ds))
     
     # Use our memory-efficient data loader instead
     dataloader = DataLoader(
         ds,
-        batch_size=1,
+        batch_size=2,
         collate_fn=ds.data_collator,
         shuffle=False,
         num_workers=1,
     )
     # Iterate through the DataLoader   
-    sample = next(iter(dataloader))
-    
-    print("Input IDs:", sample["input_ids"].shape)  
-    if "labels" in sample:
-        print("Labels:", sample["labels"].shape)
-    print("Audio:", sample["audio"].shape)
-    print("Audio Chunk Mask:", sample["audio_chunk_mask"].shape)
-    print("Attention Mask:", sample["attention_mask"].shape)
-    
-    # Decode the input_ids
-    tokens = sample["input_ids"]
-    full = tokenizer.decode(tokens[tokens != -100], skip_special_tokens=False)
-    print("FULL:\n", full)
-    
-    if "labels" in sample:
-        labels = sample["labels"]
-        print("LABELS:\n", tokenizer.decode(labels[labels != -100], skip_special_tokens=False))
+    samples = next(iter(dataloader))
+    counter = 1
+    batch_size = samples["input_ids"].shape[0]
+    for i in range(batch_size):
+        print("#" * 40)
+        print(f"Sample #{i + 1}")
+        print("Input IDs:", samples["input_ids"][i].shape)
+
+        if "labels" in samples:
+            print("Labels:", samples["labels"][i].shape)
+        print("Audio:", samples["audio"][i].shape)
+        print("Audio Chunk Mask:", samples["audio_chunk_mask"][i].shape)
+        print("Attention Mask:", samples["attention_mask"][i].shape)
+
+        tokens = samples["input_ids"][i]
+        full = tokenizer.decode(tokens[tokens != -100], skip_special_tokens=False)
+        print("FULL:\n", full)
+
+        if "labels" in samples:
+            labels = samples["labels"][i]
+            print("LABELS:\n", tokenizer.decode(labels[labels != -100], skip_special_tokens=False))

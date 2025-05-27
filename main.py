@@ -14,19 +14,39 @@ from utils.env import auto_device
 
 import torch
 
-
 import argparse
 from utils.model_utils import freeze_component
 import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
-torch.manual_seed(1234)  # Ensure reproducibility
-def setup_logging(output_dir):
-    """Initialize logging to file and console."""
+logger = logging.getLogger(__name__)
+
+def setup_logging(output_dir: str) -> None:
+    """Configure logging to both file and console without duplicates"""
+    # Clear any existing handlers
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Create handlers
     formatter = logging.Formatter('[%(asctime)s][%(levelname)s] - %(message)s')
-    file_handler = logging.FileHandler(os.path.join(output_dir, "log.txt"), mode='w')
+    
+    file_handler = logging.FileHandler(os.path.join(output_dir, "training.log"))
     file_handler.setFormatter(formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    # Configure root logger
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    # Configure module logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False  # Prevent propagation to root logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     
 def parse_args() -> argparse.Namespace:
@@ -41,6 +61,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-l", "--load_checkpoint", type=str)
     parser.add_argument("-t", "--train_projector_only", action="store_true")
     parser.add_argument("-n", "--num_workers", type=int)
+    parser.add_argument("-lr","--learning_rate", type=float)
+    parser.add_argument("-f16","--use_fp16", action="store_true")
+    parser.add_argument("-g","--use_gradient_checkpointing", action="store_true")
     parser.add_argument("--gpus", type=int)
     return parser.parse_args()
 
@@ -59,23 +82,8 @@ def load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation
         shuffle=not is_validation,
         num_workers=0 if is_validation else model_config.num_workers,
         collate_fn=dataset.data_collator,
-        pin_memory=False   
+        pin_memory=False,persistent_workers=False,   
     ), dataset
-    
-def load_latest_checkpoint(model, pretrained_ckpt, restart_train = False):
-    """Load the latest model checkpoint if available."""
-    
-    logger.info(f'--> Latest checkpoint found: {pretrained_ckpt}')
-    model, start_epoch, start_step, train_config, model_config = load_model_checkpoint_peft(
-        model, pretrained_ckpt
-    )
-    
-    if restart_train:
-        logger.info("--> restart_train flag is True. Resetting start_epoch and start_step to 1, 0")
-        start_epoch, start_step = 1, 0  # or 0, 0
-
-    return model, start_epoch, start_step, train_config, model_config
-
     
 
 def compare_configs(old_config: Dict[str, Any], new_config: Dict[str, Any]) -> bool:
@@ -134,17 +142,32 @@ def update_config_from_args(config, args, mapping: Dict[str, str]):
 def main():
     args = parse_args()
     model_config, train_config = ModelConfig(), TrainConfig()
-
-    # Initialize directories and handle config updates
+    
+    # Initialize directories FIRST
     os.makedirs(args.output_dir, exist_ok=True)
-    setup_logging(args.output_dir)
     
-    if not os.path.exists(os.path.join(train_config.output_dir, "model_config.json")):
-        model_config_file = os.path.join(train_config.output_dir, "model_config.json")
-        model_config.save(model_config_file)
+    # Configure logging EARLY
+    setup_logging(args.output_dir)  # Moved this up
     
-    # Update configs if changed (only training config in your case)
-    update_train_config_if_changed(train_config, train_config.output_dir)
+    # Then proceed with other operations
+    TRAIN_ARG_MAPPING = {
+        "batch_size_train": "batch_size_training",
+        "batch_size_val": "batch_size_validation",
+        "validation_steps": "validation_step",
+        "num_epochs": "num_epochs",
+        "output_dir": "output_dir",
+        "restart_train": "restart_train",
+        "train_projector_only": "train_projector_only",
+        "learning_rate": "learning_rate",
+        "use_fp16": "use_fp16",
+        "use_gradient_checkpointing": "use_gradient_checkpointing",
+    } 
+    update_config_from_args(
+        train_config,
+        args,
+        mapping=TRAIN_ARG_MAPPING
+    )
+    update_train_config_if_changed(train_config, args.output_dir)
     
     # Load model and tokenizer
     model, tokenizer = model_factory(train_config, model_config, metric="acc")
@@ -155,26 +178,26 @@ def main():
     # Handle checkpoint loading
     start_epoch, start_step = 1, 0
     if args.load_checkpoint:
-        model, start_epoch, start_step, train_config, model_config = load_latest_checkpoint(model, args.load_checkpoint, args.restart_train)
-    else:
-        logger.info("No checkpoint found. Training from scratch.")
-    
-    update_config_from_args(
+        logger.info(f'--> Latest checkpoint found: {args.load_checkpoint}')
+        model, start_epoch, start_step, train_config, model_config = load_model_checkpoint_peft(
+            model, args.load_checkpoint
+        )
+        update_config_from_args(
             train_config,
             args,
-            mapping={
-                    "batch_size_train": "batch_size_training",
-                    "batch_size_val": "batch_size_validation",
-                    "validation_steps": "validation_step",
-                    "num_epochs": "num_epochs",
-                    "output_dir": "output_dir",
-                    "restart_train": "restart_train",  # handled same way
-                    "train_projector_only" : "train_projector_only"
-                }
-            )  
+            mapping=TRAIN_ARG_MAPPING
+            )
+
+    if args.restart_train:
+        logger.info("Resetting training progress")
+        start_epoch = 0
+        start_step = 0
     
+    if not os.path.exists(os.path.join(train_config.output_dir, "model_config.json")):
+        model_config_file = os.path.join(train_config.output_dir, "model_config.json")
+        model_config.save(model_config_file)
+        
     if args.train_projector_only or train_config.train_projector_only:
-        train_config.train_projector_only = args.train_projector_only
         model.train_projector_only()          
           
     # Data loading
@@ -188,9 +211,10 @@ def main():
     logger.info(f"--> Training Set Length = {len(dataset_train)}")
     logger.info(f"--> Validation Set Length = {len(dataset_val) if validate_loader else 0}")
 
+    # Optimizer 
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=train_config.learning_rate) # , weight_decay=train_config.weight_decay
             
-    num_steps = train_config.num_epochs * len(train_loader)    
+    num_steps = args.num_epochs * len(train_loader)    
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
         lr_lambda=lambda step: (step / train_config.warmup_step if step < train_config.warmup_step
@@ -202,7 +226,7 @@ def main():
     if args.load_checkpoint and os.path.isdir(train_config.output_dir):
         optimizer, scheduler, scaler = load_optimizer_scheduler_scaler(optimizer, scheduler, scaler, train_config.output_dir, device)
     
-    # Model configuration
+    # enable gradient checkpointing if it's True
     enable_gradient_checkpointing(model, train_config)
     
     if model_config.using_llm_type == "unsloth":

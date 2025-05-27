@@ -117,7 +117,7 @@ def load_llm_standard(
     llm = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map="auto",
+        device_map="cuda",
         torch_dtype=torch.bfloat16,
     )
     

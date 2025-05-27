@@ -136,7 +136,7 @@ def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, sca
                     logger.error(f"Error in backward pass at step {step_count}: {str(e)}")
                     raise
 
-                del loss, outputs, rest
+                del loss, outputs, rest, acc
                 torch.cuda.empty_cache()
 
 
@@ -167,7 +167,7 @@ def train(model, train_dataloader, eval_dataloader, optimizer, lr_scheduler, sca
                         if train_config.save_model:
                             save_model_checkpoint_peft(model, optimizer, lr_scheduler, scaler, train_config, epoch, step_count)
                             logger.info(f"Model checkpoint saved at step {step_count}")
-                        torch.cuda.reset_peak_memory_stats()
+                            torch.cuda.empty_cache()
 
 
                     val_metrics["loss"].append(eval_loss)

@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import functools
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -345,50 +346,33 @@ class LucAS(nn.Module):
             labels=labels,
             use_cache=False
         )
-        loss = outputs.loss.requires_grad_(True)
-        
-        # logits = outputs.logits
-            
-        # # Shift labels and logits for next-token prediction
-        # shift_logits = logits[:, :-1, :].contiguous()
-        # shift_labels = labels[:, 1:].contiguous()
-        
-        # # Flatten for loss calculation
-        # vocab_size = shift_logits.size(-1)
-        # shift_logits = shift_logits.view(-1, vocab_size)
-        # shift_labels = shift_labels.view(-1)
-        
-        # # Create loss mask (ignore -100 labels)
-        # loss_mask = shift_labels != -100
-        
-        # # Filter valid positions
-        # valid_logits = shift_logits[loss_mask]
-        # valid_labels = shift_labels[loss_mask]
-        
-        # # Compute loss - ensure it requires grad
-        # import torch.nn.functional as F
-        # loss = F.cross_entropy(valid_logits, valid_labels)
-        
-        # # Ensure loss requires gradients
-        # if not loss.requires_grad:
-        #     loss = loss.requires_grad_(True)
-        
-        # # Compute accuracy
-        # preds = torch.argmax(valid_logits, dim=-1)
-        # acc = (preds == valid_labels).float().mean()
-        
-        # # Create a new outputs object with our computed loss
-        # from types import SimpleNamespace
-        # new_outputs = SimpleNamespace(logits=logits, loss=loss)
         
         # === Compute accuracy if labels provided ===
         acc = None
+        decoded_preds, decoded_labels = None, None
         if labels is not None:
             logits = outputs.logits
             preds = torch.argmax(logits, dim=-1)
-            # Shift predictions and labels for next-token prediction
+
+            # Shift for next-token prediction
             acc = compute_accuracy(preds[:, :-1], labels[:, 1:], ignore_label=-100)
 
+            # Decode predictions and labels (cleaned from -100)
+            decoded_preds = self.tokenizer.batch_decode(
+                [p[l != -100] for p, l in zip(preds[:, :-1], labels[:, 1:])],
+                skip_special_tokens=True
+            )
+            decoded_labels = self.tokenizer.batch_decode(
+                [l[l != -100] for l in labels[:, 1:]],
+                skip_special_tokens=True
+            )
+
+            # Save predictions
+            out_path = os.path.join(self.train_config.output_dir, 'train_predictions.txt')
+            with open(out_path, 'a', encoding='utf-8') as f:
+                for pred, label in zip(decoded_preds, decoded_labels):
+                    f.write(f"Pred : {pred.strip()}\nLabel: {label.strip()}\n---\n")
+                    f.flush()
         return outputs, acc
 
     @torch.no_grad()
