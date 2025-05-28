@@ -2,6 +2,8 @@ import os
 import json
 import torch
 import logging
+import tempfile
+import shutil
 from dataclasses import is_dataclass, asdict
 from functools import lru_cache
 from typing import Tuple, Dict, Any, Optional, Union
@@ -20,11 +22,73 @@ logger.setLevel(logging.INFO)
 
 @lru_cache(maxsize=2)
 def set_tokenizer(model_name: str) -> AutoTokenizer:
+    """
+    - Add special tokens for start/end of audio to the tokenizer, using reserved tokens.
+    - Define the chat template for the tokenizer.
+    - Configure padding behavior.
+    """
+    tokens_to_add = [
+        "<|start_of_audio|>",
+        "<|end_of_audio|>",
+    ]
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tmp_dir = tempfile.mkdtemp()
+    tokenizer.save_pretrained(tmp_dir)
+
+    # Replace unused tokens with new ones
+    with open(f"{tmp_dir}/tokenizer.json", "r") as f:
+        dict_tokenizer = json.load(f)
+    with open(f"{tmp_dir}/tokenizer_config.json", "r") as f:
+        dict_tokenizer_config = json.load(f)
+    model_vocab = dict_tokenizer["model"]["vocab"]
+    added_tokens = dict_tokenizer["added_tokens"]
+    unused_tokens = []
+    for k, v in model_vocab.items():
+        if k.startswith("<") and k.endswith(">") and (
+            "unused" in k or "reserved" in k
+        ):
+            unused_tokens.append((k, v))
+
+    assert len(unused_tokens) >= len(tokens_to_add), f"Found only {len(unused_tokens)} unused tokens."
+
+    for (old_k, id), content in zip(unused_tokens, tokens_to_add):
+        model_vocab[content] = id
+        del model_vocab[old_k]
+        token_dict = {
+            "content": content,
+            "single_word": False,
+            "lstrip": False,
+            "rstrip": False,
+            "normalized": False,
+            "special": True
+        }
+        added_tokens.append({"id": id} | token_dict)
+        dict_tokenizer_config["added_tokens_decoder"][str(id)] = token_dict
+
+    # Re-order model vocab
+    model_vocab = dict(sorted(model_vocab.items(), key=lambda item: item[1]))
+
+    # Dump everything back
+    dict_tokenizer["model"]["vocab"] = model_vocab
+    dict_tokenizer["added_tokens"] = added_tokens
+    # Dump tokenizer and reload
+    with open(f"{tmp_dir}/tokenizer.json", "w") as f:
+        json.dump(dict_tokenizer, f, indent=2)
+    with open(f"{tmp_dir}/tokenizer_config.json", "w") as f:
+        json.dump(dict_tokenizer_config, f, indent=2)
+    tokenizer = AutoTokenizer.from_pretrained(tmp_dir)
+    shutil.rmtree(tmp_dir)
+    
+    # Padding
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
-    tokenizer.add_tokens(["<|start_of_audio|>", "<|end_of_audio|>"], special_tokens=True)
+
+    # Chat template
+    tokenizer.chat_template = None # TODO
+
     return tokenizer
+
+def new_set_tokenizer(model_name: str) -> AutoTokenizer:
 
 def set_peft_config(train_config: Any, save_path: str = None) -> Any:
     peft_configs = {
