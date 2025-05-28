@@ -88,8 +88,6 @@ def set_tokenizer(model_name: str) -> AutoTokenizer:
 
     return tokenizer
 
-def new_set_tokenizer(model_name: str) -> AutoTokenizer:
-
 def set_peft_config(train_config: Any, save_path: str = None) -> Any:
     peft_configs = {
         "lora": LoraConfig,
