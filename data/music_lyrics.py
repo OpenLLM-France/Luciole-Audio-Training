@@ -153,7 +153,7 @@ def make_data_instruct(
     transcript = transcribe_with_cache(debug_folder, music_clip).strip()
 
     # Remove all non word characters
-    transcript_norm = re.sub(r"[^\w\s']", "", transcript).strip().lower()
+    transcript_norm = re.sub(r"[^\w\s'\-]", "", transcript).strip().lower()
 
     num_words = len(transcript_norm.split())
     num_lines = len(transcript_norm.split("\n"))
@@ -164,12 +164,12 @@ def make_data_instruct(
             "we'll be right back",
             "music", "música", "muzica",
             "outro music", "music playing",
-            "guitar solo", "the end",
+            "the end", "to be continued",
             "let's go",
         ] or (num_words < 10 and any([
             # example: "thank you [very/so much] [for joigning us/listening]",
             transcript_norm.startswith(start)
-            for start in ["thank you", "this is a production", "welcome to", "music by"]
+            for start in ["thank you", "this is a production", "welcome to", "music by", "subtitle", "sous-titr", "piano ", "guitar "]
         ]))
     )
 
@@ -184,7 +184,7 @@ def make_data_instruct(
             or any([
                 # example: "thank you [very/so much] [for joigning us/listening]",
                 transcript_norm.startswith(start)
-                for start in ["thank you", "this is a production", "welcome to", "music by"]
+                for start in ["thank you", "this is a production", "welcome to", "music by", "bye"]
             ])
         )
         if whisper_hallu or whisper_maybe_hallu:
