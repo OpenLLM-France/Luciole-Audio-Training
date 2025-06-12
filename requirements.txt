@@ -1,5 +1,6 @@
 audiomentations==0.34.1
 AudioSegment
+bitsandbytes
 ctranslate2==4.0.0
 datasets
 dask

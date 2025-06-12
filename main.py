@@ -79,7 +79,7 @@ def load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=train_config.batch_size_training,
-        shuffle=not is_validation,
+        shuffle=False,
         num_workers=0 if is_validation else model_config.num_workers,
         collate_fn=dataset.data_collator,
         pin_memory=False,persistent_workers=False,   
@@ -208,18 +208,19 @@ def main():
     validate_loader, dataset_val = (load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation=True)
                                   if train_config.run_validation else (None, None))
     
-    logger.info(f"--> Training Set Length = {len(dataset_train)}")
-    logger.info(f"--> Validation Set Length = {len(dataset_val) if validate_loader else 0}")
+    # logger.info(f"--> Training Set Length = {len(dataset_train)}")
+    # logger.info(f"--> Validation Set Length = {len(dataset_val) if validate_loader else 0}")
 
     # Optimizer 
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=train_config.learning_rate) # , weight_decay=train_config.weight_decay
             
-    num_steps = args.num_epochs * len(train_loader)    
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer,
-        lr_lambda=lambda step: (step / train_config.warmup_step if step < train_config.warmup_step
-                              else max(0.0, 1 - (step - train_config.warmup_step) / max(1, num_steps - train_config.warmup_step)))
-    )
+    # num_steps = args.num_epochs * len(train_loader)    
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(
+    #     optimizer,
+    #     lr_lambda=lambda step: (step / train_config.warmup_step if step < train_config.warmup_step
+    #                           else max(0.0, 1 - (step - train_config.warmup_step) / max(1, num_steps - train_config.warmup_step)))
+    # )
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1000, gamma=0.95)
     scaler = torch.amp.GradScaler() if train_config.use_fp16 else None
     
     # Load optimizer state if available
@@ -256,7 +257,7 @@ def main():
     try:
         logger.info("Starting training...")
         results = train(
-            model, train_loader, validate_loader, optimizer, scheduler, 
+            model, tokenizer, train_loader, validate_loader, optimizer, scheduler, 
             scaler, train_config, start_epoch, start_step,  device
         )
         # Log final results
