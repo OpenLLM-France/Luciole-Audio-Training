@@ -26,7 +26,7 @@ def limit_checkpoints(checkpoint_dir, max_checkpoints=3):
             shutil.rmtree(old_checkpoint_path)
             logger.info(f"Deleted checkpoint: {old_checkpoint_path}")
 
-def save_model_checkpoint_peft(model, optimizer, scheduler, scaler, train_config, epoch, step_count, merge_lora=False):
+def save_model_checkpoint_peft(model, tokenizer, optimizer, scheduler, scaler, train_config, epoch, step_count, merge_lora=False):
     logger.info("--> Saving PEFT model checkpoint ...")
     save_dir = train_config.output_dir
     os.makedirs(save_dir, exist_ok=True)
@@ -55,6 +55,16 @@ def save_model_checkpoint_peft(model, optimizer, scheduler, scaler, train_config
         'scaler': scaler.state_dict() if scaler else None
     }, training_state_path)
 
+    # save tokenizer
+    if tokenizer is not None:
+        tokenizer.save_pretrained(save_dir)
+        logger.info(f"Tokenizer and vocab saved to {save_dir}")
+    
+    # save LLM Configs
+    if hasattr(model.llm, "config"):
+        model.llm.config.save_pretrained(save_dir)
+        logger.info(f"Model config saved to {save_dir}")
+        
     logger.info(f"Model weights saved to {checkpoint_path}")
     logger.info(f"Training states saved to {training_state_path}")
 
