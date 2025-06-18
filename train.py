@@ -2,7 +2,7 @@ import gc
 import os
 import json
 import numpy as np
-
+import math
 import torch
 from torch.utils.checkpoint import checkpoint_sequential
 from torch.utils.data import DataLoader
@@ -12,6 +12,8 @@ from utils.metrics_utils import save_metrics_to_json
 
 from tqdm import tqdm
 from contextlib import nullcontext
+from collections import defaultdict
+
 from torch.amp import autocast
 import logging
 from torch.utils.tensorboard import SummaryWriter
@@ -64,39 +66,73 @@ def is_iterable_dataset(dataloader):
     except TypeError:
         return True
 
-def train(model, tokenizer, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config, start_epoch=1, start_step=0, device=None):
+def move_to_device(batch, device):
+    return {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
 
+def run_validation(model, eval_dataloader, train_config, step_count, writer, device):
+    model.eval()
+    with torch.no_grad():
+        eval_ppl, eval_loss, eval_acc = evaluation(model, device, train_config, eval_dataloader)
+    writer.add_scalar("Val/Loss", eval_loss, step_count)
+    writer.add_scalar("Val/Accuracy", eval_acc, step_count)
+    writer.add_scalar("Val/Perplexity", eval_ppl, step_count)
+    return eval_loss, eval_acc, eval_ppl
+
+def save_checkpoint(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count, loss, acc, val_metrics=None):
+    if train_config.save_model:
+        save_model_checkpoint_peft(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count)
+        logger.info(f"Model checkpoint saved at step {step_count}")
+    log_dict = {
+        "epoch": epoch,
+        "step": step_count,
+        "train_loss": loss,
+        "train_acc": acc,
+        "train_ppl": math.exp(loss),
+    }
+    if val_metrics:
+        log_dict.update({
+            "val_loss": val_metrics[0],
+            "val_acc": val_metrics[1],
+            "val_ppl": val_metrics[2],
+            "best_val_loss": val_metrics[0],
+        })
+    else:
+        log_dict.update({"val_loss": None, "val_acc": None, "val_ppl": None, "best_val_loss": None})
+
+    save_metrics_to_json(log_dict, filepath=os.path.join(train_config.output_dir, "train_log.json"))
+
+
+def train(model, tokenizer, train_dataloader, eval_dataloader, optimizer, lr_scheduler, scaler, train_config, start_epoch=1, start_step=0, device=None):
     writer = SummaryWriter(log_dir=os.path.join(train_config.output_dir, "runs"))
     use_fp16 = train_config.use_fp16
     autocast_context = autocast(device_type=device.type, enabled=use_fp16) if use_fp16 else nullcontext()
 
     model.to(device)
     model.train()
-
-    train_metrics = {"loss": [], "acc": [], "ppl": []}
-    val_metrics = {"loss": [], "acc": [], "ppl": []}
+    
+    train_metrics = defaultdict(list)
+    val_metrics = defaultdict(list)
 
     best_val_loss = float("inf")
     best_val_acc = 0.0
+    best_training_loss = float("inf")
+    best_training_acc = 0.0
 
     if not any(p.requires_grad for p in model.encoder_projector.parameters()):
         logger.error("No projector parameters require gradients!")
         raise RuntimeError("Projector parameters are frozen")
 
     early_stopping = EarlyStopper(train_config.patience) if train_config.patience else None
-
     step_count = start_step
-    
-    # Handle iterable datasets - we can't know total batches in advance
     is_iterable = is_iterable_dataset(train_dataloader)
+
     if is_iterable:
-        logger.info("Using IterableDataset - progress bar will show current progress without total")
-        # Create progress bar without total for iterable datasets
+        logger.info("Using IterableDataset - no total in progress bar")
         pbar = tqdm(desc="Training", dynamic_ncols=True, colour='blue')
     else:
         total_batches = (train_config.num_epochs - start_epoch + 1) * len(train_dataloader)
-        pbar = tqdm(total=total_batches, initial=(start_epoch - 1) * len(train_dataloader) + start_step, 
-                   desc="Training", dynamic_ncols=True, colour='blue')
+        pbar = tqdm(total=total_batches, initial=(start_epoch - 1) * len(train_dataloader) + start_step,
+                    desc="Training", dynamic_ncols=True, colour='blue')
 
     try:
         for epoch in range(start_epoch, train_config.num_epochs + 1):
@@ -106,43 +142,31 @@ def train(model, tokenizer, train_dataloader, eval_dataloader, optimizer, lr_sch
             model.train()
             epoch_loss, epoch_acc, steps_this_epoch = 0.0, 0.0, 0
             optimizer.zero_grad()
-
-            # For iterable datasets, we can't skip to start_step easily
-            # Instead, we'll track and skip steps at the beginning
             batch_iterator = enumerate(train_dataloader)
-            
+
             for step, batch in batch_iterator:
                 if epoch == start_epoch and step < start_step:
                     continue
 
                 step_count += 1
                 steps_this_epoch += 1
-
-                batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+                batch = move_to_device(batch, device)
 
                 try:
                     with autocast_context:
                         outputs, *rest = model(**batch)
-                    loss = outputs.loss / train_config.gradient_accumulation_steps
-                    acc = rest[0] / train_config.gradient_accumulation_steps if rest else 0.0
+                        loss = outputs.loss / train_config.gradient_accumulation_steps
+                        acc = rest[0] / train_config.gradient_accumulation_steps if rest else 0.0
 
                     epoch_loss += loss.item()
                     epoch_acc += acc
 
-                except Exception as e:
-                    logger.error(f"Error in forward pass at step {step_count}: {str(e)}")
-                    raise
-
-                try:
                     if use_fp16 and scaler:
                         scaler.scale(loss).backward()
                     else:
                         loss.backward()
 
-                    # For iterable datasets, we need to be more careful about when to step
-                    should_step = (step + 1) % train_config.gradient_accumulation_steps == 0
-                    
-                    if should_step:
+                    if (step + 1) % train_config.gradient_accumulation_steps == 0:
                         params = model.encoder_projector.parameters() if train_config.train_projector_only else model.parameters()
                         if use_fp16 and scaler:
                             scaler.unscale_(optimizer)
@@ -152,129 +176,59 @@ def train(model, tokenizer, train_dataloader, eval_dataloader, optimizer, lr_sch
                         else:
                             torch.nn.utils.clip_grad_norm_(params, train_config.gradient_clip_val)
                             optimizer.step()
-
                         optimizer.zero_grad()
                         if lr_scheduler:
                             lr_scheduler.step()
 
                 except Exception as e:
-                    logger.error(f"Error in backward pass at step {step_count}: {str(e)}")
+                    logger.error(f"Training error at step {step_count}: {e}")
                     raise
 
-                del loss, outputs, rest, acc
-                torch.cuda.empty_cache()
-
                 avg_loss = epoch_loss / steps_this_epoch
-                avg_acc = epoch_acc / steps_this_epoch if steps_this_epoch else 0.0
-                
-                # save on TensorBoard
+                avg_acc = epoch_acc / steps_this_epoch
                 writer.add_scalar("Train/Loss", avg_loss, step_count)
                 writer.add_scalar("Train/Accuracy", avg_acc, step_count)
-                
+
                 pbar.set_description(f"Epoch {epoch}/{train_config.num_epochs} | Step {step_count} | Loss: {avg_loss:.4f} | Acc: {avg_acc:.4f}")
                 pbar.set_postfix({'mem': f"{torch.cuda.max_memory_allocated() / 1e9:.2f}GB"})
                 pbar.update(1)
 
-                # Run validation
-                if step_count % train_config.validation_step == 0:
-                    model.eval()
-                    with torch.no_grad():
-                        eval_ppl, eval_loss, eval_acc = evaluation(model, device, train_config, eval_dataloader)
+                # Validation or checkpointing
+                if step_count % train_config.runing_steps == 0:
+                    if train_config.run_validation and eval_dataloader:
+                        eval_loss, eval_acc, eval_ppl = run_validation(model, eval_dataloader, train_config, step_count, writer, device)
+                        if eval_loss < best_val_loss:
+                            best_val_loss = eval_loss
+                            best_val_acc = max(best_val_acc, eval_acc)
+                            save_checkpoint(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count, avg_loss, avg_acc, (eval_loss, eval_acc, eval_ppl))
+                        val_metrics["loss"].append(eval_loss)
+                        val_metrics["acc"].append(eval_acc)
+                        val_metrics["ppl"].append(eval_ppl)
                         
-                    writer.add_scalar("Val/Loss", eval_loss, step_count)
-                    writer.add_scalar("Val/Accuracy", eval_acc, step_count)
-                    writer.add_scalar("Val/Perplexity", eval_ppl, step_count)
-                        
-                    if eval_loss < best_val_loss:
-                        best_val_loss = eval_loss
-                        best_val_acc = max(best_val_acc, eval_acc)
-                        if train_config.save_model:
-                            save_model_checkpoint_peft(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count)
-                            logger.info(f"Model checkpoint saved at step {step_count}")
-                            torch.cuda.empty_cache()
+                        if early_stopping and early_stopping(eval_loss):
+                            logger.info(f"Early stopping triggered at epoch {epoch}")
+                            return summarize_results(train_metrics, val_metrics)
+                    else:
+                        save_checkpoint(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count, avg_loss, avg_acc)
 
-                    val_metrics["loss"].append(eval_loss)
-                    val_metrics["acc"].append(eval_acc)
-                    val_metrics["ppl"].append(eval_ppl)
-
-                    save_metrics_to_json({
-                        "epoch": epoch,
-                        "step": step_count,
-                        "train_loss": avg_loss if steps_this_epoch else None,
-                        "train_acc": avg_acc if steps_this_epoch else None,
-                        "train_ppl": avg_loss if steps_this_epoch else None,
-                        "val_loss": eval_loss,
-                        "val_acc": eval_acc,
-                        "val_ppl": eval_ppl,
-                        "best_val_loss": best_val_loss
-                    }, filepath=os.path.join(train_config.output_dir, "train_log.json"))
-
-                    if early_stopping and early_stopping(eval_loss):
-                        logger.info(f"Early stopping triggered at epoch {epoch}")
-                        pbar.close()
-                        return summarize_results(train_metrics, val_metrics)
-                    
-                    model.train()  # Return to training mode
-
-                # Check if we've reached the maximum number of steps per epoch (if specified)
                 if hasattr(train_config, 'max_steps_per_epoch') and steps_this_epoch >= train_config.max_steps_per_epoch:
                     logger.info(f"Reached max steps per epoch ({train_config.max_steps_per_epoch}) at epoch {epoch}")
                     break
 
-            del batch
-            torch.cuda.empty_cache()
-            
-            # End of epoch
             if steps_this_epoch > 0:
                 train_metrics["loss"].append(avg_loss)
                 train_metrics["acc"].append(avg_acc)
-                train_metrics["ppl"].append(avg_loss)
-                
-                # Run validation at end of epoch if not already done
-                if step_count % train_config.validation_step != 0:
-                    model.eval()
-                    with torch.no_grad():
-                        eval_ppl, eval_loss, eval_acc = evaluation(model, device, train_config, eval_dataloader)
-                        
-                    writer.add_scalar("Val/Loss", eval_loss, step_count)
-                    writer.add_scalar("Val/Accuracy", eval_acc, step_count)
-                    writer.add_scalar("Val/Perplexity", eval_ppl, step_count)
-                        
-                    if eval_loss < best_val_loss:
-                        best_val_loss = eval_loss
-                        best_val_acc = max(best_val_acc, eval_acc)
-                        if train_config.save_model:
-                            save_model_checkpoint_peft(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count)
-                            logger.info(f"Model checkpoint saved at step {step_count}")
-                            torch.cuda.empty_cache()
-
-                    val_metrics["loss"].append(eval_loss)
-                    val_metrics["acc"].append(eval_acc)
-                    val_metrics["ppl"].append(eval_ppl)
-
-                    save_metrics_to_json({
-                        "epoch": epoch,
-                        "step": step_count,
-                        "train_loss": avg_loss if steps_this_epoch else None,
-                        "train_acc": avg_acc if steps_this_epoch else None,
-                        "train_ppl": avg_loss if steps_this_epoch else None,
-                        "val_loss": eval_loss,
-                        "val_acc": eval_acc,
-                        "val_ppl": eval_ppl,
-                        "best_val_loss": best_val_loss
-                    }, filepath=os.path.join(train_config.output_dir, "train_log.json"))
-
-                    if early_stopping and early_stopping(eval_loss):
-                        logger.info(f"Early stopping triggered at epoch {epoch}")
-                        pbar.close()
-                        return summarize_results(train_metrics, val_metrics)
+                train_metrics["ppl"].append(math.exp(avg_loss))
+                writer.add_scalar("Train/EpochLoss", avg_loss, epoch)
+                writer.add_scalar("Train/EpochAccuracy", avg_acc, epoch)
+                save_checkpoint(model, tokenizer, optimizer, lr_scheduler, scaler, train_config, epoch, step_count, avg_loss, avg_acc)
             else:
-                logger.warning(f"Epoch {epoch} had no training steps, skipping metric logging.")
-    
+                logger.warning(f"No steps run in epoch {epoch}, skipping logging.")
+
     finally:
         pbar.close()
-        
-    writer.close()        
+        writer.close()
+
     return summarize_results(train_metrics, val_metrics)
 
 

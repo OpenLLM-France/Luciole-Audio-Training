@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-d","--dataset_dirs", nargs="+", required=True)
     parser.add_argument("-bst", "--batch_size_train", type=int)
     parser.add_argument("-bsv", "--batch_size_val", type=int)
-    parser.add_argument("-vs", "--validation_steps", type=int)
+    parser.add_argument("-s", "--runing_steps", type=int)
     parser.add_argument("-e", "--num_epochs", type=int)
     parser.add_argument("-r", "--restart_train", action="store_true")
     parser.add_argument("-o", "--output_dir", type=str)
@@ -153,7 +153,7 @@ def main():
     TRAIN_ARG_MAPPING = {
         "batch_size_train": "batch_size_training",
         "batch_size_val": "batch_size_validation",
-        "validation_steps": "validation_step",
+        "runing_steps": "runing_steps",
         "num_epochs": "num_epochs",
         "output_dir": "output_dir",
         "restart_train": "restart_train",
