@@ -77,8 +77,8 @@ class TrainConfig:
     num_epochs: int = 3
     restart_train: bool = False
     warmup_step: int = 500
-    validation_step: int = 100
-    run_validation: bool = True
+    runing_steps: int = 100 # runing_steps
+    run_validation: bool = False
     learning_rate: float = 1e-3
     weight_decay: float = 1e-2
     gamma: float = 0.86
