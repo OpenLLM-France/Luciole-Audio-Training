@@ -121,12 +121,18 @@ def load_model_checkpoint_peft(model, load_dir):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
         model.encoder.load_state_dict(checkpoint["encoder"], strict=False)
         model.encoder_projector.load_state_dict(checkpoint["projector"], strict=False)
+        
+        ckpt_vocab_size = checkpoint["llm"]["model.embed_tokens.weight"].shape[0]
+        model.llm.resize_token_embeddings(ckpt_vocab_size)
         model.llm.load_state_dict(checkpoint["llm"], strict=False)
+        
         epoch = checkpoint.get("epoch", 0)
         step = checkpoint.get("step", 0)
         logger.info(f"Loaded model weights from {checkpoint_path}")
     except Exception as e:
-        raise FileNotFoundError(f"Error loading model checkpoint: {e}")
+        raise RuntimeError(
+            f"Error loading model checkpoint from {checkpoint_path}: {str(e)}"
+        ) from e
 
     # Load PEFT adapter if available
     adapter_save_dir = os.path.join(load_dir, "peft_adapter")
