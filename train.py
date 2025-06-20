@@ -180,9 +180,14 @@ def train(model, tokenizer, train_dataloader, eval_dataloader, optimizer, lr_sch
                         if lr_scheduler:
                             lr_scheduler.step()
 
-                except Exception as e:
-                    logger.error(f"Training error at step {step_count}: {e}")
-                    raise
+                except RuntimeError as e:
+                    if "out of memory" in str(e).lower():
+                        logger.warning("CUDA out of memory. Skipping batch.")
+                        optimizer.zero_grad()
+                        torch.cuda.empty_cache()
+                        continue
+                    else:
+                        raise e
 
                 avg_loss = epoch_loss / steps_this_epoch
                 avg_acc = epoch_acc / steps_this_epoch

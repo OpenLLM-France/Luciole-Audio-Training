@@ -27,7 +27,7 @@ def limit_checkpoints(checkpoint_dir, max_checkpoints=3):
             logger.info(f"Deleted checkpoint: {old_checkpoint_path}")
 
 def save_model_checkpoint_peft(model, tokenizer, optimizer, scheduler, scaler, train_config, epoch, step_count, merge_lora=False):
-    logger.info("--> Saving PEFT model checkpoint ...")
+    logger.info("--> Saving model checkpoint ...")
     save_dir = train_config.output_dir
     os.makedirs(save_dir, exist_ok=True)
 
