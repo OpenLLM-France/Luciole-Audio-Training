@@ -82,12 +82,15 @@ def music_lyrics_instruct_data_iterator(
 
             yield repo + "--" + split
 
-            ds = datasets.load_dataset(
-                repo,
-                streaming=streaming,
-                split=split,
-                **kwargs
-            )
+            try:
+                ds = datasets.load_dataset(
+                    repo,
+                    streaming=streaming,
+                    split=split,
+                    **kwargs
+                )
+            except Exception as e:
+                raise RuntimeError(f"Could not load dataset {repo} split {split}") from e
             for sample in ds:
                 vocal = random.random() < proba_vocal
                 instruction = random.choice(instructions_written) if not vocal else random.choice(instructions_spoken)
