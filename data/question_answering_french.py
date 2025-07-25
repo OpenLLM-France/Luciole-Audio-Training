@@ -14,6 +14,12 @@ def question_answering_data_iterator(debug_folder=None, max_question_len=300):
 
     REPOS = [
         (
+            ("CohereLabs/aya_collection", "aya_dataset"),
+            "inputs",
+            "targets",
+            lambda x: x["language"] == "fra",
+        ),
+        (
             ("jpacifico/French-Alpaca-dataset-Instruct-55K", "default"),
             "instruction",
             "output",
@@ -25,30 +31,25 @@ def question_answering_data_iterator(debug_folder=None, max_question_len=300):
             "answer",
             None,
         ),
-        (
-            ("RDTvlokip/InfiniQA", "default"),
-            "question",
-            "answer",
-            None,
-        ),
-        (
-            ("CohereLabs/aya_collection", "aya_dataset"),
-            "inputs",
-            "targets",
-            lambda x: x["language"] == "fra",
-        ),
-        (
-            ("CohereLabs/aya_collection_language_split", "french"),
-            "inputs",
-            "targets",
-            None,
-        ),
-        (
-            ("json", {"data_files": glob.glob("vigogne/data/instruct/*_fr_*.jsonl")}),
-            lambda x: x["instruction"] + " : " + x["input"] if "input" in x else x["instruction"],
-            "output",
-            None,
-        ),
+
+        # (
+        #     ("RDTvlokip/InfiniQA", "default"),
+        #     "question",
+        #     "answer",
+        #     None,
+        # ),
+        # (
+        #     ("CohereLabs/aya_collection_language_split", "french"),
+        #     "inputs",
+        #     "targets",
+        #     None,
+        # ),
+        # (
+        #     ("json", {"data_files": glob.glob("vigogne/data/instruct/*_fr_*.jsonl")}),
+        #     lambda x: x["instruction"] + " : " + x["input"] if "input" in x else x["instruction"],
+        #     "output",
+        #     None,
+        # ),
     ]
 
     for repo, question_key, answer_key, filtering in REPOS:

@@ -1,90 +1,70 @@
 import random
 
-import nltk
 import torch
 import torchaudio
-import transformers
-from nltk.tokenize import sent_tokenize
+import numpy as np
 
-from ssak.utils.text import format_text
+# from ssak.utils.text import format_text
 
-# Download NLTK's punkt tokenizer data if not already downloaded
-global _nltk_initialized
-_nltk_initialized = False
+global tts_model, tts_voices
+tts_model = None
+tts_voices = None
 
-# Function to split text into chunks using sentence tokenization
-def nltk_chunk_text(text):
-    global _nltk_initialized
-    if not _nltk_initialized:
-        nltk.download('punkt')
-        _nltk_initialized = True
-    return sent_tokenize(text)
-
-_tts_speaker_prompts = {
-    "en": [
-        "A female speaker delivers an expressive and animated speech with a very high-pitch voice. "
-        "The recording is slightly noisy but of good quality, as her voice comes across as very close-sounding.",
-        "A female speaker delivers her speech with a slightly expressive and animated tone, "
-        "her voice ringing clearly and undistorted in the recording. "
-        "The pitch of her voice is very high, adding a sense of urgency and excitement.",
-        "A female speaks with a slightly expressive and animated tone in a recording that sounds quite clear and close up. "
-        "There is only a mild amount of background noise present, and her voice has a moderate pitch. "
-        "Her speech pace is steady, neither slow nor particularly fast.",
-        "A female speaker delivers her speech in a recording that sounds clear and close up. "
-        "Her voice is slightly expressive and animated, with a moderate pitch. "
-        "The recording has a mild amount of background noise, but her voice is still easily understood.",
-        "In a somewhat confined space, a female speaker delivers a talk that is slightly expressive and animated, "
-        "despite some background noise. "
-        "Her voice has a low-pitch tone.",
-        "A male voice speaks in a monotone tone with a slightly low-pitch, delivering his words at a moderate speed. "
-        "The recording offers almost no noise, resulting in a very clear and high-quality listen. "
-        "The close-up microphone captures every detail of his speech.",
-        "A man speaks with a monotone tone and a slightly low-pitch, delivering his words at a moderate speed. "
-        "The recording captures his speech very clearly and distinctly, with little to no background noise. "
-        "The listener feels as if they're almost sharing the same space with the speaker.",
-        "A male speaker delivers his words with a very monotone and slightly faster than average pace. "
-        "His voice is very clear, making every word distinct, while it also has a slightly low-pitch tone. "
-        "The recording quality is excellent, with no apparent reverberation or background noise.",
-        "A male speaker delivers his words in a very monotone and slightly low-pitched voice, "
-        "maintaining a moderate speed. The recording is of very high quality, with minimum noise "
-        "and a very close-sounding reverberation that suggests a quiet and enclosed environment.",
-    ],
-    "fr": [
-        "Une femme pose une question en Français.",
-        "Un homme pose une question en Français.",
-        "Une femme donne une instruction en Français.",
-        "Un homme donne une instruction en Français.",
-    ],
-    "ar": [
-        "امرأة تتحدث باللغة العربية.",
-        "رجل يتحدث باللغة العربية.",
-        "امرأة تعطي تعليمات باللغة العربية.",
-        "رجل يعطي تعليمات باللغة العربية.",
-    ],
-}
-
-
-global _tts_models
-_tts_models = {}
 
 
 def text_to_speech(
     text,
     prompt=None,
     device=None,
-    model_name="parler-tts/parler-tts-mini-multilingual-v1.1",
+    voice=None,
+    repo_id="kyutai/tts-1.6b-en_fr", # from moshi.models.tts import DEFAULT_DSM_TTS_REPO
+    language="fr",
+    model_sampling_rate=20_000,
     sampling_rate=16_000,
-    language="en",
 ):
-    import parler_tts
-    global _tts_models
+    from moshi.models.loaders import CheckpointInfo
+    from moshi.models.tts import DEFAULT_DSM_TTS_VOICE_REPO, TTSModel
+    global tts_voices
 
-    # Check if there are numbers in the text and format them
-    if any(char.isdigit() for char in text):
-        if language is None:
-            raise ValueError("Language must be specified when text contains numbers")
-        text = format_text(text, language=language, lower_case=False, keep_punc=True)
-        print(f"Formatted text: {text}")
+    # # Check if there are numbers in the text and format them
+    # if any(char.isdigit() for char in text):
+    #     if language is None:
+    #         raise ValueError("Language must be specified when text contains numbers")
+    #     text = format_text(text, language=language, lower_case=False, keep_punc=True)
+    #     print(f"Formatted text: {text}")
+
+
+    # Load processor and model from Hugging Face, with caching in (V)RAM
+    tts_model = get_tts_model(device=device, repo_id=repo_id)
+    if voice is None:
+        voice = random.choice(get_tts_voices())
+
+    entries = tts_model.prepare_script([text], padding_between=1)
+    voice_path = tts_model.get_voice_path(voice)
+    condition_attributes = tts_model.make_condition_attributes(
+        [voice_path], cfg_coef=2.0
+    )
+
+    result = tts_model.generate([entries], [condition_attributes])
+    with tts_model.mimi.streaming(1), torch.no_grad():
+        pcms = []
+        for frame in result.frames[tts_model.delay_steps :]:
+            pcm = tts_model.mimi.decode(frame[:, 1:, :]).cpu().numpy()
+            pcms.append(np.clip(pcm[0, 0], -1, 1))
+        audio_tensor = np.concatenate(pcms, axis=-1)
+
+    if sampling_rate != model_sampling_rate:
+        audio_tensor = torch.from_numpy(audio_tensor)
+        audio_tensor = torchaudio.transforms.Resample(model_sampling_rate, sampling_rate)(audio_tensor)
+        audio_tensor = audio_tensor.numpy()
+
+    return audio_tensor
+
+
+def get_tts_model(device=None, repo_id="kyutai/tts-1.6b-en_fr"):
+    from moshi.models.loaders import CheckpointInfo
+    from moshi.models.tts import TTSModel
+    global tts_model
 
     # Set up device
     if device is None:
@@ -92,43 +72,25 @@ def text_to_speech(
     elif isinstance(device, str):
         device = torch.device(device)
 
-    if prompt is None:
-        prompt = random.choice(_tts_speaker_prompts[language])
-    elif isinstance(prompt, list):
-        prompt = random.choice(prompt)
-    elif isinstance(prompt, str):
-        pass
-    else:
-        raise ValueError("Prompt must be a string or a list of strings")
+    if tts_model is None:
+        print("Loading TTS model...")
+        checkpoint_info = CheckpointInfo.from_hf_repo(repo_id)
+        tts_model = TTSModel.from_checkpoint_info(
+            checkpoint_info, n_q=32, temp=0.6, device=device
+        )
+    return tts_model
 
-    # Load processor and model from Hugging Face, with caching in (V)RAM
-    if model_name not in _tts_models:
+def get_tts_voices(repo_id="kyutai/tts-voices"):
+    global tts_voices
+    if tts_voices is None:
+        print("Loading TTS voices...")
+        from huggingface_hub import list_repo_files
+        tts_voices = [f for f in list_repo_files(repo_id) if f.endswith(".wav")]
+    return tts_voices
 
-        model = parler_tts.ParlerTTSForConditionalGeneration.from_pretrained(model_name).to(device)
-        tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-        description_tokenizer = transformers.AutoTokenizer.from_pretrained(model.config.text_encoder._name_or_path)
-        model_sampling_rate = model.config.sampling_rate
-
-        _tts_models[model_name] = (model, tokenizer, description_tokenizer, model_sampling_rate)
-
-    (model, tokenizer, description_tokenizer, model_sampling_rate) = _tts_models[model_name]
-    model = model.to(device)
-
-    text_tokens = tokenizer(text, return_tensors="pt").input_ids.to(device)
-    speaker_type_prompt_tokens = description_tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-    audio_tensor = model.generate(input_ids=speaker_type_prompt_tokens, prompt_input_ids=text_tokens)
-
-    if len(audio_tensor.shape) == 2 and audio_tensor.shape[0] == 1:
-        audio_tensor = audio_tensor[0]
-
-    audio_tensor = audio_tensor.to("cpu")
-
-    if sampling_rate != model_sampling_rate:
-        audio_tensor = torchaudio.transforms.Resample(model_sampling_rate, sampling_rate)(audio_tensor)
-
-    audio_tensor = audio_tensor.numpy()
-
-    return audio_tensor
+def preload_all_voices():
+    for voice in get_tts_voices():
+        get_tts_model().get_voice_path(voice)
 
 if __name__ == "__main__":
 
@@ -140,19 +102,18 @@ if __name__ == "__main__":
     parser.add_argument("words", type=str, nargs="+", help="Text to convert to speech")
     parser.add_argument("--device", type=str, default=None, help="Device to use for inference")
     parser.add_argument("--language", type=str, default="fr", help="Language of the text, e.g. 'fr' for French, 'en' for English, etc. ")
-    parser.add_argument("--model_name", type=str, default="parler-tts/parler-tts-mini-multilingual-v1.1",
-        help="Model name or path")
     parser.add_argument("--output", type=str, default="out", help="Output folder name")
     parser.add_argument("--num", type=int, default=10, help="Number of generations")
+    parser.add_argument("--preload", action="store_true", help="Preload all voices")
     args = parser.parse_args()
 
     text = " ".join(args.words)
 
+    if args.preload:
+        preload_all_voices()
+
     for i in range(args.num):
-        prompt = random.choice(_tts_speaker_prompts[args.language])
-        audio_tensor = text_to_speech(text, prompt, model_name=args.model_name, device=args.device, language=args.language)
+        audio_tensor = text_to_speech(text, device=args.device)
         os.makedirs(args.output, exist_ok=True)
-        with open(os.path.join(args.output, f"audio_{i:03d}_prompt.txt"), "w") as f:
-            f.write(prompt)
         save_audio(os.path.join(args.output, f"audio_{i:03d}.wav"), audio_tensor)
 

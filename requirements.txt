@@ -7,7 +7,9 @@ dask
 dask[dataframe]
 faster_whisper
 librosa
+moshi==0.2.11
 nltk
+numpy<2.0.0
 parler_tts
 peft
 pydub
@@ -15,6 +17,7 @@ python-slugify
 pytorch_lightning
 soxbindings
 soundfile
+sphn<0.2
 tensorboard
 tokenizers==0.20.3
 torch
