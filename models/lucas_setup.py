@@ -178,10 +178,14 @@ def load_llm_with_unsloth(
 
 def load_llm_standard(
     model_name: str, 
-    train_config: Any
+    train_config: Any,
 ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
     """
-    Load a model with standard HuggingFace approach.
+    Load a model with support for:
+    - Quantization (4-bit/8-bit)
+    - DDP training
+    - PEFT adapters
+    - Safe device placement
     
     Args:
         model_name: HuggingFace model name
@@ -190,37 +194,53 @@ def load_llm_standard(
     Returns:
         Tuple of (model, tokenizer)
     """
-    # Configure quantization
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16
-    )
-    
-    # Load model with quantization 
-    llm = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=quantization_config,
-        device_map="cuda",
-        torch_dtype=torch.bfloat16,
-    )
-    
-    # Get tokenizer
-    tokenizer = set_tokenizer(model_name)
-    llm.resize_token_embeddings(len(tokenizer))
-    # Apply PEFT adapter if requested
-    if getattr(train_config, "use_peft", False) and getattr(train_config, "peft_config", None) is not None:
-        if isinstance(llm, PeftModel):
-            logger.warning("Model already has a PEFT adapter. Skipping re-initialization.")
-        else:
-            peft_config = set_peft_config(train_config, save_path=None)
-            llm = prepare_model_for_kbit_training(llm)
-            llm = get_peft_model(llm, peft_config)
-            logger.info("Applied PEFT model configuration:")
-            llm.print_trainable_parameters()
+    # Configure device mapping for DDP
 
-    return llm, tokenizer
+    # Configure quantization if enabled
+    quantization_config = None
+    if getattr(train_config, "quantization", False):
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+    else:
+        logger.info(f"Loading full-precision model {model_name} without quantization.")
+
+    try:
+        # Load model with automatic device placement
+        llm = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            low_cpu_mem_usage=True,
+            quantization_config=quantization_config,
+            device_map="cuda",
+            torch_dtype=torch.bfloat16,
+        )
+        
+        # Get tokenizer (shared across all ranks)
+        tokenizer = set_tokenizer(model_name)
+        
+        # Resize embeddings if needed
+        if len(tokenizer) != llm.get_input_embeddings().weight.shape[0]:
+            logger.info(f"Resizing embeddings from {llm.get_input_embeddings().weight.shape[0]} to {len(tokenizer)}")
+            llm.resize_token_embeddings(len(tokenizer))
+
+        # Apply PEFT if configured
+        if getattr(train_config, "use_peft", False):
+            peft_config = getattr(train_config, "peft_config", None)
+            if peft_config:
+                if isinstance(llm, PeftModel):
+                    logger.warning("Model already has PEFT adapter - skipping re-init")
+                else:
+                    llm = prepare_model_for_kbit_training(llm)
+                    llm = get_peft_model(llm, peft_config)
+                    llm.print_trainable_parameters()
+            
+        return llm, tokenizer
+
+    except Exception as e:
+        raise
 
 def set_llm(
     model_conf: Any, 
