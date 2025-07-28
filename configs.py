@@ -76,7 +76,8 @@ class TrainConfig:
     gradient_accumulation_steps: int = 1
     num_epochs: int = 3
     restart_train: bool = False
-    warmup_step: int = 500
+    warmup_steps: int = 500
+    max_steps: int = 11000
     runing_steps: int = 100 # runing_steps
     run_validation: bool = False
     learning_rate: float = 1e-3
@@ -93,7 +94,7 @@ class TrainConfig:
     freeze_encoder: bool = True
     train_projector_only: bool = False
     num_freeze_layers: int = 1
-    quantization: bool = True
+    quantization: bool = False
     log_interval: int = 5
     log_file: Optional[str] = None
     run_test_during_validation: bool = False
@@ -109,8 +110,10 @@ class TrainConfig:
     
     # Audio specifications:
     chunk_duration_per_s: int = 30
-    min_segment_duration: float = 0.1
+    min_segment_duration: float = 0.3
     max_segment_duration: float = 30.0
+    max_duration: int = 60,  # 60s maximum
+    min_duration: float = 0.3  # New minimum duration parameter
     silence_thresh: int = -40
     min_silence_len: int = 400
     keep_silence: int = 300
