@@ -207,25 +207,15 @@ def main():
     train_loader, dataset_train = load_data(dataset_dirs, model_config, train_config, tokenizer)
     validate_loader, dataset_val = (load_data(dataset_dirs, model_config, train_config, tokenizer, is_validation=True)
                                   if train_config.run_validation else (None, None))
-    
-    # logger.info(f"--> Training Set Length = {len(dataset_train)}")
-    # logger.info(f"--> Validation Set Length = {len(dataset_val) if validate_loader else 0}")
-
     # Optimizer 
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=train_config.learning_rate) # , weight_decay=train_config.weight_decay
             
-    # num_steps = args.num_epochs * len(train_loader)    
-    # scheduler = torch.optim.lr_scheduler.LambdaLR(
-    #     optimizer,
-    #     lr_lambda=lambda step: (step / train_config.warmup_step if step < train_config.warmup_step
-    #                           else max(0.0, 1 - (step - train_config.warmup_step) / max(1, num_steps - train_config.warmup_step)))
-    # )
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1000, gamma=0.95)
     scaler = torch.amp.GradScaler() if train_config.use_fp16 else None
     
     # Load optimizer state if available
-    if args.load_checkpoint and os.path.isdir(train_config.output_dir):
-        optimizer, scheduler, scaler = load_optimizer_scheduler_scaler(optimizer, scheduler, scaler, train_config.output_dir, device)
+    if args.load_checkpoint and os.path.isdir(args.output_dir):
+        optimizer, scheduler, scaler = load_optimizer_scheduler_scaler(optimizer, scheduler, scaler, args.output_dir, device)
     
     # enable gradient checkpointing if it's True
     enable_gradient_checkpointing(model, train_config)
