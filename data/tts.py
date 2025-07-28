@@ -4,34 +4,31 @@ import torch
 import torchaudio
 import numpy as np
 
-# from ssak.utils.text import format_text
+from audio import SpeechAugment
 
-global tts_model, tts_voices
-tts_model = None
-tts_voices = None
+from ssak.utils.text import numbers_and_symbols_to_letters
 
+global _noiser
+_noiser = None
 
 
 def text_to_speech(
     text,
-    prompt=None,
     device=None,
     voice=None,
-    repo_id="kyutai/tts-1.6b-en_fr", # from moshi.models.tts import DEFAULT_DSM_TTS_REPO
+    repo_id="kyutai/tts-1.6b-en_fr",
     language="fr",
-    model_sampling_rate=20_000,
+    model_sampling_rate=24_000,
     sampling_rate=16_000,
+    add_noise=False,
 ):
-    from moshi.models.loaders import CheckpointInfo
-    from moshi.models.tts import DEFAULT_DSM_TTS_VOICE_REPO, TTSModel
-    global tts_voices
 
     # # Check if there are numbers in the text and format them
-    # if any(char.isdigit() for char in text):
-    #     if language is None:
-    #         raise ValueError("Language must be specified when text contains numbers")
-    #     text = format_text(text, language=language, lower_case=False, keep_punc=True)
-    #     print(f"Formatted text: {text}")
+    if any(char.isdigit() for char in text):
+        if language is None:
+            raise ValueError("Language must be specified when text contains numbers")
+        text = numbers_and_symbols_to_letters(text, lang=language)
+        print(f"Formatted text: {text}")
 
 
     # Load processor and model from Hugging Face, with caching in (V)RAM
@@ -58,8 +55,17 @@ def text_to_speech(
         audio_tensor = torchaudio.transforms.Resample(model_sampling_rate, sampling_rate)(audio_tensor)
         audio_tensor = audio_tensor.numpy()
 
+    if add_noise:
+        global _noiser
+        if _noiser is None:
+            _noiser = SpeechAugment()
+        audio_tensor = _noiser(audio_tensor, sampling_rate)
+
     return audio_tensor
 
+global tts_model, tts_voices
+tts_model = None
+tts_voices = None
 
 def get_tts_model(device=None, repo_id="kyutai/tts-1.6b-en_fr"):
     from moshi.models.loaders import CheckpointInfo
@@ -107,13 +113,17 @@ if __name__ == "__main__":
     parser.add_argument("--preload", action="store_true", help="Preload all voices")
     args = parser.parse_args()
 
-    text = " ".join(args.words)
+    if len(args.words) == 1 and os.path.isfile(args.words[0]):
+        with open(args.words[0], "r") as f:
+            text = f.read().strip()
+    else:
+        text = " ".join(args.words)
 
     if args.preload:
         preload_all_voices()
 
     for i in range(args.num):
-        audio_tensor = text_to_speech(text, device=args.device)
+        audio_tensor = text_to_speech(text, device=args.device, add_noise=True)
         os.makedirs(args.output, exist_ok=True)
         save_audio(os.path.join(args.output, f"audio_{i:03d}.wav"), audio_tensor)
 

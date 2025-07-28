@@ -17,6 +17,17 @@ import soxbindings as sox
 import torch
 import torch.nn.functional as F
 import torchaudio
+from audiomentations import (
+    AddBackgroundNoise,
+    AddGaussianNoise,
+    BandStopFilter,  # FrequencyMask,
+    ClippingDistortion,
+    Gain,
+    PitchShift,
+    TimeStretch,
+    Compose,
+    OneOf,
+)
 from audiomentations.core.audio_loading_utils import load_sound_file
 from audiomentations.core.transforms_interface import (
     BaseWaveformTransform,
@@ -663,23 +674,9 @@ class Reverberation(BaseWaveformTransform):
 global _augmenter8k, _augmenter16k
 _augmenter8k = _augmenter16k = None
 
-_default_rir_path = os.environ.get("RIR_PATH")
-if _default_rir_path is None:
-    for rir_path in [
-        "/data-server/datasets/audio/noise",
-        "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise",
-    ]:
-        if os.path.isdir(rir_path):
-            _default_rir_path = rir_path
-            break
-    if _default_rir_path is None:
-        raise RuntimeError(
-            "Could not find RIR_PATH. Set the RIR_PATH environment variable to the directory containing the RIR files."
-        )
-
 
 def reverberation_factory(
-    path_parent: str= _default_rir_path,
+    path_parent: str= None,
     path_dir_16k: str= "simulated_rirs_16k",
     path_dir_8k: str= "simulated_rirs_8k",
     rir_lists: list= ["smallroom/rir_list", "mediumroom/rir_list", "largeroom/rir_list"],
@@ -688,6 +685,20 @@ def reverberation_factory(
     **kwargs
     ):
     global _augmenter8k, _augmenter16k
+    if path_parent is None:
+        path_parent = os.environ.get("RIR_PATH")
+        if path_parent is None:
+            for rir_path in [
+                "/data-server/datasets/audio/noise",
+                "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise",
+            ]:
+                if os.path.isdir(rir_path):
+                    path_parent = rir_path
+                    break
+            if path_parent is None:
+                raise RuntimeError(
+                    "Could not find RIR_PATH. Set the RIR_PATH environment variable to the directory containing the RIR files."
+                )
     if sampling_rate <= 10_000:
         if _augmenter8k is None:
             if verbose:
@@ -702,6 +713,56 @@ def reverberation_factory(
             rir_lists = [os.path.join(path_dir_16k, rir_list) for rir_list in rir_lists]
             _augmenter16k = Reverberation(path_parent, rir_lists, **kwargs)
         return _augmenter16k
+
+
+class SpeechAugment:
+    def __init__(
+        self,
+        noise_dir=None,
+        rir_dir=None,
+        rir_lists=["smallroom/rir_list", "mediumroom/rir_list", "largeroom/rir_list"],
+    ):
+        if noise_dir is None:
+            noise_dir = os.environ.get("NOISE_PATH")
+            if noise_dir is None:
+                for noise_path in [
+                    "/data-server/datasets/audio/noise/distant_noises",
+                    "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise/distant_noises",
+                ]:
+                    if os.path.isdir(noise_path):
+                        noise_dir = noise_path
+                        break
+                if noise_dir is None:
+                    raise RuntimeError(
+                        "Could not find NOISE_PATH. Set the NOISE_PATH environment variable to the directory containing the noise files."
+                    )
+
+        self.transforms = Compose([
+            OneOf([
+                AddGaussianNoise(min_amplitude=0.0001, max_amplitude=0.0015, p=1.0),
+                ClippingDistortion(min_percentile_threshold=5, max_percentile_threshold=15, p=1.0),
+            ], p=0.5),
+            BandStopFilter(min_bandwidth_fraction=0.05, max_bandwidth_fraction=0.2, p=0.5),
+            OneOf([
+                TimeStretch(min_rate=0.97, max_rate=1.03, leave_length_unchanged=False, p=1.0),
+                PitchShift(min_semitones=-1, max_semitones=1, p=1.0),
+            ], p=0.5),  # Reduces overprocessing from using both together
+            AddBackgroundNoise(
+                sounds_path=noise_dir, 
+                min_snr_in_db=10, max_snr_in_db=40, p=0.5  # Lower SNRs simulate tougher environments
+            ),
+            reverberation_factory(path_parent=rir_dir, rir_lists=rir_lists,
+                rir_scale_factor = (0.5, 1.0),
+                gain_scaling_factor = (-20, 6),
+                p=0.5
+            ),
+            Gain(min_gain_in_db=-6, max_gain_in_db=6, p=0.3),  # Mild gain changes only occasionally
+        ])
+
+
+    def __call__(self, input_values, sample_rate):
+        return self.transforms(input_values, sample_rate)
+
 
 
 class CombineAudios(BaseWaveformTransform):
@@ -720,7 +781,7 @@ class CombineAudios(BaseWaveformTransform):
 
     def __init__(
         self,
-        min_snr_db: float = 0.85,
+        min_snr_db: float = 1.5,
         max_snr_db: float = 2.5,
         music_transform: Optional[
             Callable[[NDArray[np.float32], int], NDArray[np.float32]]
@@ -880,3 +941,22 @@ def cut_audio(waveform, sampling_rate, duration):
     waveform = waveform[sample_start:sample_end]
     return waveform
 
+if __name__ == "__main__":
+    import argparse
+    import random
+
+    random.seed(42)
+
+    parser = argparse.ArgumentParser(description="Test audio processing functions")
+    parser.add_argument("path", type=str, help="Path to the audio file")
+    parser.add_argument("--output", type=str, default="out", help="Output folder name")
+    parser.add_argument("--num", type=int, default=10, help="Number of generations")
+    args = parser.parse_args()
+
+    audio = load_audio(args.path, sampling_rate=16_000, return_format="array")
+    noiser = SpeechAugment()
+
+    for i in range(args.num):
+        audio_tensor = noiser(audio, 16_000)
+        os.makedirs(args.output, exist_ok=True)
+        save_audio(os.path.join(args.output, f"audio_{i:03d}.wav"), audio_tensor)

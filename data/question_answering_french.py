@@ -73,6 +73,8 @@ def question_answering_data_iterator(debug_folder=None, max_question_len=300):
                 question = question_key(row)
             if len(question) > max_question_len:
                 continue
+            if "_" in question:
+                continue
             answer = row[answer_key]
             irow += 1
             print(f"Processing {repo}: {question} -> {answer}")
@@ -85,13 +87,7 @@ def question_answering_data_iterator(debug_folder=None, max_question_len=300):
             #     break # NOCOMMIT
 
 def make_data_instruct(question, answer, debug_folder=None, sampling_rate=16_000):
-    tts_description = random.choice([
-        "Une femme pose une question en Français.",
-        "Un homme pose une question en Français.",
-        "Une femme donne une instruction en Français.",
-        "Un homme donne une instruction en Français.",
-    ])
-    audio_instruction = text_to_speech(question, tts_description, sampling_rate=sampling_rate, language="fr")
+    audio_instruction = text_to_speech(question, sampling_rate=sampling_rate, add_noise=True)
     
     audio_data = {"type": "audio", "array": audio_instruction, "sampling_rate": sampling_rate}
 
