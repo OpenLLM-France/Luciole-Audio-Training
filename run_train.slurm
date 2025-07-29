@@ -35,6 +35,7 @@ export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_HOME="$HOME/.cache/huggingface"
 export XDG_CACHE_HOME="$HOME/.cache"
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # -------------------- Define Paths ------------------------
 code_dir=$LOCAL_FOLDER
@@ -42,14 +43,20 @@ data_dir="/path/to/your/dataset"
 output_dir="/path/to/output"
 
 # -------------------- Launch Training ---------------------
-# MASTER_ADDR=$(scontrol show hostname $SLURM_NODELIST | head -n 1)
-# MASTER_PORT=29500
+MASTER_ADDR=$(scontrol show hostname $SLURM_NODELIST | head -n 1)
+MASTER_PORT=29500
 GPUS_PER_NODE=4
-export OMP_NUM_THREADS=$GPUS_PER_NODE
 
-torchrun \
-  --nproc_per_node=$GPUS_PER_NODE \
-  $code_dir/lightning_training.py \
+DISTRIBUTED_ARGS=" \
+       --nproc_per_node $SLURM_GPUS_ON_NODE \
+       --nnodes $SLURM_NNODES \
+       --node_rank $SLURM_NODEID \
+       --rdzv_endpoint $MASTER_ADDR:$MASTER_PORT \
+       --rdzv_backend c10d \
+       --max_restarts 0 \
+       "
+
+torchrun $DISTRIBUTED_ARGS $code_dir/lightning_training.py \
     --dataset_dirs $data_dir \
     --batch_size 2 \
     --learning_rate 5e-5 \
@@ -57,7 +64,7 @@ torchrun \
     --precision bf16-mixed \
     --epochs 20 \
     --num_workers 7 \
-    --devices $GPUS_PER_NODE \
+    --devices -1 \
     --num_nodes 1 \
     --accelerator gpu \
     --strategy ddp \
