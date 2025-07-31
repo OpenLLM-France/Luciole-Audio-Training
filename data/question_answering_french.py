@@ -21,7 +21,7 @@ def question_answering_data_iterator(debug_folder=None, max_question_len=300):
         ),
         (
             ("jpacifico/French-Alpaca-dataset-Instruct-55K", "default"),
-            "instruction",
+            lambda x: x["instruction"] if not x["input"] else x["instruction"] + " " + x["input"],
             "output",
             None,
         ),
