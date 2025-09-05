@@ -1,0 +1,4 @@
+- input_cfg:
+  - manifest_filepath: path/to/validation.jsonl
+    type: nemo
+  type: group
