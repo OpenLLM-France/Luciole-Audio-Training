@@ -5,7 +5,7 @@ description = "Scripts to train Audio Adapter models"
 authors = []
 license = "GPL-3.0"
 readme = "README.md"
-packages = []
+packages = [{ include = "adapter_training" }]
 
 
 [tool.poetry.dependencies]

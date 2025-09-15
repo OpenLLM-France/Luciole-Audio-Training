@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=NemoSpeechLLM-MemOpt
-#SBATCH --nodes=4
+#SBATCH --job-name=Test_SpeechLM
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -16,13 +16,12 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.3.1
-mkdir -p log
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
 EXPERIMENT_FOLDER="$SCRATCH/speechlm/nemo_experiments"
 
-export NUM_WORKERS=30
+export NUM_WORKERS=16
 export BATCH_SIZE=2
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export HYDRA_FULL_ERROR=1
@@ -44,8 +43,9 @@ DP=$(( TOTAL_GPUS / (TP * PP * CP) ))
 GLOBAL_BATCH=$(( TOTAL_GPUS * BATCH_SIZE ))
 MICRO_BATCH=$(( GLOBAL_BATCH / DP ))
 
-EXPERIMENT_NAME="Whisper_qwen-2.5-32B-${TOTAL_GPUS}gpu-${GLOBAL_BATCH}gbs"
+EXPERIMENT_NAME="test"
 OUTPUT_DIR=$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/preds
+rm -rf "$EXPERIMENT_FOLDER/$EXPERIMENT_NAME"
 mkdir -p "$OUTPUT_DIR"
 
 # =====================================================
@@ -103,7 +103,7 @@ srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_train.py \
     data.validation_ds.input_cfg=$INPUT_CFG_VAL \
     strategy.tensor_model_parallel_size=$TP \
     strategy.context_parallel_size=$CP \
-    trainer.max_steps=15 \
+    trainer.max_steps=3 \
     trainer.num_nodes=$SLURM_NNODES \
     name=$EXPERIMENT_NAME \
     max_time_per_run="00:00:30:00" \
