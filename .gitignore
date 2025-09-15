@@ -11,3 +11,8 @@ batch_infer.py
 new_infer_old.py
 inferance.py
 run_lucas_h100.slurm
+*.egg-info/
+out/
+local/
+*.tmp
+tmp/
