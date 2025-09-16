@@ -148,7 +148,7 @@ model:
       _target_: adapter_training.nemo.lucie_config.LucieConfig7B
 
   speech_encoder:
-    pretrained_model: /lustre/fsn1/projects/rech/qgz/uxn76rc/speechlm/models/canary-1b-v2.nemo
+    pretrained_model: ${oc.env:SPEECH_ENCODER_MODEL}
     target_module: "encoder"
     sample_rate: ${data.common.sample_rate}
     spec_augment_config:
