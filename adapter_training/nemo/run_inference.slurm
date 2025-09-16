@@ -28,9 +28,6 @@ export HF_DATASETS_OFFLINE=1
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
-# export PYTHONUNBUFFERED=1   # Uncomment for real-time logs
-# export NEMO_DEBUG=1         # Uncomment for extra debugging
-
 # =====================================================
 # Parallelism Setup
 # =====================================================
@@ -51,8 +48,11 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 EXPERIMENT_NAME="Whisper_Llama-3.2-1B-model"
 
 CONFIG_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/run_0"
+#CONFIG_PATH="$LOCAL_FOLDER/conf"
 CONFIG_NAME="config.yaml"
+
 INPUT_CFG_INFER="$LOCAL_FOLDER/conf/input_cfg_infer.yaml"
+
 CKPT_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/checkpoints/last/"
 
 OUTPUT_DIR="$EXPERIMENT_FOLDER/outputs"
@@ -83,19 +83,20 @@ srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_validate.py \
     ~data.train_ds \
     data.common.global_batch_size=$GLOBAL_BATCH \
     data.common.micro_batch_size=$MICRO_BATCH \
-    data.validation_ds.input_cfg=$INPUT_CFG_INFER \
-    data.validation_ds.global_batch_size=$GLOBAL_BATCH \
-    data.validation_ds.micro_batch_size=$MICRO_BATCH \
-    data.validation_ds.num_workers=0 \
-    data.validation_ds.pin_memory=true \
+    data.common.prompt_format='llama3' \
+    ++data.validation_ds.input_cfg=$INPUT_CFG_INFER \
+    ++data.validation_ds.global_batch_size=$GLOBAL_BATCH \
+    ++data.validation_ds.micro_batch_size=$MICRO_BATCH \
+    ++data.validation_ds.batch_size=$MICRO_BATCH \
+    data.validation_ds.num_workers=30 \
+    data.validation_ds.pin_memory=True \
     data.validation_ds.defer_setup=true \
     data.validation_ds.use_lhotse=true \
     data.validation_ds.metric.name='bleu' \
-    data.validation_ds.write_predictions_to_file=true \
-    data.validation_ds.tokens_to_generate=128 \
+    ++data.validation_ds.write_predictions_to_file=true \
     ++data.validation_ds.output_dir=$OUTPUT_DIR \
-    data.common.prompt_format='llama3' \
+    trainer.limit_val_batches=1\
+    ++trainer.val_check_interval=1\
     trainer.devices=-1 \
     trainer.num_nodes=$SLURM_NNODES \
-    resume.resume_if_exists=true
-    # ++resume.resume_from_path=$CKPT_PATH  # Uncomment to force load a checkpoint
+    ++resume.resume_from_path=$CKPT_PATH 

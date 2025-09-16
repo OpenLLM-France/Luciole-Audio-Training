@@ -55,7 +55,6 @@ DISTRIBUTED_ARGS=" \
        --rdzv_backend c10d \
        --max_restarts 0 \
        "
-
 torchrun $DISTRIBUTED_ARGS $code_dir/lightning_training.py \
     --dataset_dirs $data_dir \
     --batch_size 2 \
