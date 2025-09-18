@@ -5,6 +5,8 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
 import multiprocessing
+import hashlib
+import pickle
 
 import numpy as np
 import pyarrow.parquet as pq
@@ -136,7 +138,7 @@ def process_single_parquet_file(args):
             
             audio_array = audio_obj["array"]
             sampling_rate = int(audio_obj.get("sampling_rate", 16000))
-            audio_filename = f"{prefix}--{uuid.uuid4()}.wav"
+            audio_filename = f"{prefix}--{hashmd5(audio_array)}.wav"
             audio_filepath = audio_dir / audio_filename
             
             # Write audio file
@@ -295,7 +297,7 @@ def process_parquet_folder_batch(parquet_dir, output_jsonl, audio_dir, batch_siz
                     
                     audio_array = audio_obj["array"]
                     sampling_rate = int(audio_obj.get("sampling_rate", 16000))
-                    audio_filename = f"{uuid.uuid4()}.wav"
+                    audio_filename = f"{prefix}--{hashmd5(audio_array)}.wav"
                     audio_filepath = audio_dir / audio_filename
                     
                     sf.write(audio_filepath, audio_array, sampling_rate)
@@ -336,6 +338,14 @@ def process_parquet_folder_batch(parquet_dir, output_jsonl, audio_dir, batch_siz
     
     print(f"\n✅ Finished: {total_entries} JSONL entries written to {output_jsonl}")
     print(f"🎵 Saved {total_audio} audio files to {audio_dir}")
+
+
+def hashmd5(obj):
+    """
+    Hash an object into a deterministic string
+    """
+    return hashlib.md5(pickle.dumps(obj)).hexdigest()
+
 
 
 if __name__ == "__main__":
