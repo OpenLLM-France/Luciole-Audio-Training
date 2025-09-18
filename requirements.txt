@@ -9,7 +9,8 @@ faster_whisper
 librosa
 moshi==0.2.11
 nltk
-numpy<2.0.0
+# <2.0.0
+numpy==1.26.4
 parler_tts
 peft
 pydub
@@ -19,11 +20,12 @@ soxbindings
 soundfile
 sphn<0.2
 tensorboard
-tokenizers==0.20.3
-torch
-torchaudio
-torchvision
-transformers
+tokenizers==0.19.1
+torch==2.5.1
+torchaudio==2.5.1
+torchvision==0.20.1
+transformers==4.43.4
+TTS==0.22.0
 git+https://github.com/openai/whisper.git
 py3nvml
 unsloth

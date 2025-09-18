@@ -17,7 +17,7 @@ from audio import (
     reverberation_factory,
     save_audio,
 )
-from tts import text_to_speech
+from tts_coqui import text_to_speech
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
 # - https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
@@ -74,6 +74,8 @@ def music_genre_instruct_data_iterator(
             yield repo + "--" + split
 
             for sample in ds:
+                if "unknown" in sample[label].lower():
+                    continue
                 yield make_data_instruct(repo,
                     sample["instruction"],
                     sample[label],
@@ -231,7 +233,7 @@ def make_data_instruct(
             ],
         }[language]
         description = random.choice(description)
-        audio_instruction = text_to_speech(instruction, description)
+        audio_instruction = text_to_speech(instruction) # , description)
         music_clip = cut_audio(
             music_clip,
             sampling_rate=sampling_rate,

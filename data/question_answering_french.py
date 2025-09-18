@@ -5,7 +5,7 @@ import pandas
 import slugify
 import glob
 
-from tts import text_to_speech
+from tts_coqui import text_to_speech
 from audio import save_audio
 
 
@@ -13,24 +13,44 @@ from audio import save_audio
 def question_answering_data_iterator(debug_folder=None, max_question_len=300):
 
     REPOS = [
+
+        # (
+        #     ("CohereLabs/aya_collection", "aya_dataset"),
+        #     "inputs",
+        #     "targets",
+        #     lambda x: x["language"] == "fra",
+        # ),
+        # (
+        #     ("parquet", {"data_files": "comparia.parquet"}),
+        #     "question",
+        #     "answer",
+        #     None,
+        # ),
+
+        # Downloaded from https://github.com/bofenghuang/vigogne/blob/main/data/instruct/alpaca_data_cleaned_fr_52k.jsonl
         (
-            ("CohereLabs/aya_collection", "aya_dataset"),
-            "inputs",
-            "targets",
-            lambda x: x["language"] == "fra",
-        ),
-        (
-            ("jpacifico/French-Alpaca-dataset-Instruct-55K", "default"),
+            ("json", {"data_files": "alpaca_data_cleaned_fr_52k.jsonl"}),
             lambda x: x["instruction"] if not x["input"] else x["instruction"] + " " + x["input"],
             "output",
             None,
         ),
-        (
-            ("PaDaS-Lab/webfaq", "fra", {"split": "default"}),
-            "question",
-            "answer",
-            None,
-        ),
+
+
+        # (
+        #     ("jpacifico/French-Alpaca-dataset-Instruct-55K", "default"),
+        #     lambda x: x["instruction"] if not x["input"] else x["instruction"] + " " + x["input"],
+        #     "output",
+        #     None,
+        # ),
+
+
+
+        # (
+        #     ("PaDaS-Lab/webfaq", "fra", {"split": "default"}),
+        #     "question",
+        #     "answer",
+        #     None,
+        # ),
 
         # (
         #     ("RDTvlokip/InfiniQA", "default"),
