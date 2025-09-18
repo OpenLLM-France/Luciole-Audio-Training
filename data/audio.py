@@ -741,22 +741,22 @@ class SpeechAugment:
             OneOf([
                 AddGaussianNoise(min_amplitude=0.0001, max_amplitude=0.0015, p=1.0),
                 ClippingDistortion(min_percentile_threshold=5, max_percentile_threshold=15, p=1.0),
-            ], p=0.5),
-            BandStopFilter(min_bandwidth_fraction=0.05, max_bandwidth_fraction=0.2, p=0.5),
+            ], p=0.1),
+            BandStopFilter(min_bandwidth_fraction=0.05, max_bandwidth_fraction=0.2, p=0.1),
             OneOf([
                 TimeStretch(min_rate=0.97, max_rate=1.03, leave_length_unchanged=False, p=1.0),
                 PitchShift(min_semitones=-1, max_semitones=1, p=1.0),
-            ], p=0.5),  # Reduces overprocessing from using both together
+            ], p=0.1),  # Reduces overprocessing from using both together
             AddBackgroundNoise(
                 sounds_path=noise_dir, 
-                min_snr_in_db=10, max_snr_in_db=40, p=0.5  # Lower SNRs simulate tougher environments
+                min_snr_in_db=10, max_snr_in_db=40, p=0.1  # Lower SNRs simulate tougher environments
             ),
             reverberation_factory(path_parent=rir_dir, rir_lists=rir_lists,
                 rir_scale_factor = (0.5, 1.0),
                 gain_scaling_factor = (-20, 6),
-                p=0.5
+                p=0.1
             ),
-            Gain(min_gain_in_db=-6, max_gain_in_db=6, p=0.3),  # Mild gain changes only occasionally
+            Gain(min_gain_in_db=-6, max_gain_in_db=6, p=0.1),  # Mild gain changes only occasionally
         ])
 
 
