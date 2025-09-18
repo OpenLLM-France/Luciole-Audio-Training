@@ -104,7 +104,7 @@ def convert_parquet_messages_optimized(parquet_file):
 
 def process_single_parquet_file(args):
     """Process a single parquet file - designed for multiprocessing."""
-    parquet_file, audio_dir, temp_dir = args
+    parquet_file, audio_dir, temp_dir, prefix = args
     
     # Set resource limits in worker process
     set_resource_limits()
@@ -136,7 +136,7 @@ def process_single_parquet_file(args):
             
             audio_array = audio_obj["array"]
             sampling_rate = int(audio_obj.get("sampling_rate", 16000))
-            audio_filename = f"{uuid.uuid4()}.wav"
+            audio_filename = f"{prefix}--{uuid.uuid4()}.wav"
             audio_filepath = audio_dir / audio_filename
             
             # Write audio file
@@ -163,7 +163,7 @@ def process_single_parquet_file(args):
     return entries, audio_count, errors
 
 
-def process_parquet_folder_parallel(parquet_dir, output_jsonl, audio_dir, max_workers=None, pretty_json=False):
+def process_parquet_folder_parallel(parquet_dir, output_jsonl, audio_dir, max_workers=None, prefix:str=None, pretty_json=False):
     """Parallel processing version with improved resource management."""
     # Set thread limits in main process
     set_resource_limits()
@@ -194,7 +194,7 @@ def process_parquet_folder_parallel(parquet_dir, output_jsonl, audio_dir, max_wo
     all_errors = []
     
     # Prepare arguments for parallel processing
-    process_args = [(pf, audio_dir, temp_dir) for pf in parquet_files]
+    process_args = [(pf, audio_dir, temp_dir, prefix) for pf in parquet_files]
     
     # Use context manager to ensure proper cleanup
     with open(output_jsonl, "w", encoding="utf-8") as out_file:
@@ -251,7 +251,7 @@ def process_parquet_folder_parallel(parquet_dir, output_jsonl, audio_dir, max_wo
                 print(f"     - {error}")
 
 
-def process_parquet_folder_batch(parquet_dir, output_jsonl, audio_dir, batch_size=1000, pretty_json=False):
+def process_parquet_folder_batch(parquet_dir, output_jsonl, audio_dir, batch_size=1000, prefix:str=None, pretty_json=False):
     """Memory-efficient batch processing version - recommended for resource-constrained environments."""
     # Set thread limits
     set_resource_limits()
@@ -355,6 +355,7 @@ if __name__ == "__main__":
     parser.add_argument("--input-dir", required=True, help="Directory containing .parquet files")
     parser.add_argument("--output-jsonl", required=True, help="Output path for the resulting .jsonl file")
     parser.add_argument("--audio-dir", required=True, help="Directory where extracted audio files will be saved")
+    parser.add_argument("--prefix", type=str, default=None, help="Optional prefix for audio filenames")
     parser.add_argument("--mode", choices=["parallel", "batch", "original"], default="batch", help="Processing mode: parallel (faster but resource-intensive), batch (memory-efficient, RECOMMENDED), or original")
     parser.add_argument("--workers", type=int, default=None, help="Number of parallel workers (default: conservative limit)")
     parser.add_argument("--batch-size", type=int, default=1000, help="Batch size for batch processing mode")
@@ -363,16 +364,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     print("🔧 Setting resource limits to prevent thread exhaustion...")
-    
+    prefix = args.prefix
+    path = args.input_dir
+    if prefix is not None:
+        print(f"   - Using prefix: {prefix}")
+    else:
+        print("   - No prefix specified for audio filenames so we will derive one from the input directory name")
+        last_parts = path.strip("/").split("/")[-2:]
+        if last_parts[-1] == 'train' or last_parts[-1] == 'validation' or last_parts[-1] == 'test' or last_parts[-1] == 'dev':
+            last_parts = "--".join(last_parts)
+        else:
+            last_parts = last_parts[-1]
+        prefix = last_parts
+    print(f"   - Derived prefix: {prefix}")
+        
     if args.mode == "parallel":
         print("⚠️  WARNING: Parallel mode may cause resource exhaustion on some systems.")
         print("   Consider using --mode batch if you encounter issues.")
-        process_parquet_folder_parallel(args.input_dir, args.output_jsonl, args.audio_dir, args.workers, args.pretty_json)
+        process_parquet_folder_parallel(path, args.output_jsonl, args.audio_dir, args.workers, prefix, args.pretty_json)
     elif args.mode == "batch":
         print("✅ Using batch mode (recommended for stability)")
-        process_parquet_folder_batch(args.input_dir, args.output_jsonl, args.audio_dir, args.batch_size, args.pretty_json)
+        process_parquet_folder_batch(path, args.output_jsonl, args.audio_dir, args.batch_size, prefix, args.pretty_json)
     else:
         # Original function for comparison
         print("⚠️  Using original mode - may have resource issues")
         from original_code import process_parquet_folder
-        process_parquet_folder(args.input_dir, args.output_jsonl, args.audio_dir)
+        process_parquet_folder(path, args.output_jsonl, args.audio_dir)
