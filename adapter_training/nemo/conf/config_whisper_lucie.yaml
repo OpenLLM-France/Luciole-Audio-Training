@@ -1,0 +1,261 @@
+name: megatron_audio_gpt_whisper_encoder
+
+############ Data ############
+data:
+  common:
+    global_batch_size: 2  # Set via environment variable
+    micro_batch_size: 2   # Set via environment variable
+    max_seq_length: 4096
+    min_seq_length: 1
+    sample_rate: 16000
+    end_string: null
+    context_key: 'context'
+    answer_key: 'answer'
+    text_field: 'answer'
+    prompt_format: 'llama3'
+    tokens_to_generate: 128
+    add_boa_eoa: true
+    audio_locator: null
+    prompt_template: "Q: {context}\nA: {answer}"
+    separate_prompt_and_response_with_newline: False
+    truncation_field: "context" # Options: ['context', 'answer']
+    add_eos: true
+    add_sep: false
+    add_bos: false
+
+  train_ds:
+    # Lhotse configuration
+    manifest_filepath: null
+    input_cfg: null  # Path to your Lhotse input config
+    defer_setup: true
+    use_lhotse: true
+    
+    # Basic configuration
+    batch_size: ${data.common.micro_batch_size}
+    num_workers: 2
+    pin_memory: true
+    
+    # Sequence configuration
+    max_seq_length: ${data.common.max_seq_length}
+    min_seq_length: ${data.common.min_seq_length}
+    drop_last: true
+    
+    # Audio configuration
+    sample_rate: ${data.common.sample_rate}
+    max_duration: 120
+    min_duration: 0.1
+    
+    # Lhotse-specific parameters
+    is_tarred: false
+    use_bucketing: false
+    quadratic_duration: null
+    batch_duration: null
+    bucket_duration_bins: null
+    
+    # Shuffling and sampling
+    shuffle: false
+    shuffle_buffer_size: 10000
+    seed: 10
+    shard_seed: "randomized"
+    force_iterable_dataset: true
+    
+    # Text processing
+    context_key: ${data.common.context_key}
+    answer_key: ${data.common.answer_key}
+    text_field: ${data.common.text_field}
+    end_string: ${data.common.end_string}
+    add_eos: ${data.common.add_eos}
+    add_sep: ${data.common.add_sep}
+    add_bos: ${data.common.add_bos}
+    separate_prompt_and_response_with_newline: ${data.common.separate_prompt_and_response_with_newline}
+    truncation_field: ${data.common.truncation_field}
+    prompt_template: ${data.common.prompt_template}
+    audio_locator: ${data.common.audio_locator}
+    prompt_format: ${data.common.prompt_format}
+    
+    # Additional configuration
+    concat_sampling_probabilities: null
+    is_concat: false
+
+  validation_ds:  # TODO: Remove validation if possible or at least the maximum of arguments as possible
+    # Lhotse configuration
+    manifest_filepath: null
+    input_cfg: null  # Path to your Lhotse input config
+    defer_setup: true
+    use_lhotse: true
+    
+    # Basic configuration
+    batch_size: ${data.common.micro_batch_size}
+    num_workers: 1
+    pin_memory: false
+    
+    # Sequence configuration
+    max_seq_length: ${data.common.max_seq_length}
+    min_seq_length: ${data.common.min_seq_length}
+    drop_last: true
+    
+    # Audio configuration
+    sample_rate: ${data.common.sample_rate}
+    
+    # Lhotse-specific parameters
+    is_tarred: false
+    use_bucketing: false
+    quadratic_duration: null
+    batch_duration: null
+    bucket_duration_bins: null
+    
+    # Shuffling and sampling
+    shuffle: false
+    shuffle_buffer_size: 10000
+    seed: 10
+    shard_seed: "randomized"
+    force_iterable_dataset: true
+    
+    # Text processing
+    context_key: ${data.common.context_key}
+    answer_key: ${data.common.answer_key}
+    text_field: ${data.common.text_field}
+    add_eos: ${data.common.add_eos}
+    end_string: ${data.common.end_string}
+    add_sep: ${data.common.add_sep}
+    add_bos: ${data.common.add_bos}
+    separate_prompt_and_response_with_newline: ${data.common.separate_prompt_and_response_with_newline}
+    output_file_path_prefix: null
+    truncation_field: ${data.common.truncation_field}
+    index_mapping_dir: null
+    prompt_template: ${data.common.prompt_template}
+    tokens_to_generate: ${data.common.tokens_to_generate}
+    write_predictions_to_file: false
+    audio_locator: ${data.common.audio_locator}
+    prompt_format: ${data.common.prompt_format}
+
+    metric:
+      name: "loss"
+      average: null
+      num_classes: null
+
+############ Model ############
+model:
+  freeze_language_model: true
+  freeze_speech_model: true
+  freeze_modality_adapter: false
+  
+  # LLM configuration
+  llm:
+    pretrained_model: "OpenLLM-France/Lucie-7B"
+    _target_: nemo.collections.llm.LlamaModel
+    config: 
+      _target_: adapter_training.nemo.lucie_config.LucieConfig7B
+    
+  # Whisper Speech Encoder configuration
+  speech_encoder:
+    use_hf_auto_model: true
+    hf_trust_remote_code: false
+    hf_load_pretrained_weights: true
+    sample_rate: ${data.common.sample_rate}
+    pretrained_model: "openai/whisper-large-v3-turbo"
+    target_module: "model.encoder"
+    spec_augment_config:
+      _target_: nemo.collections.asr.modules.SpectrogramAugmentation
+      freq_masks: 0 # set to zero to disable it
+      time_masks: 0 # set to zero to disable it
+      freq_width: 27
+      time_width: 0.05
+
+  # Modality adapter configuration
+  modality_adapter:
+    input_key_from: "config.d_model"  # attribute of model dim in the speech model
+    input_key_to: "feat_in"  # attribute of input dim in the modality adapter
+    output_key: "num_classes"  # attrubuite of output dim in the modality adapter
+    config:
+      _target_: nemo.collections.asr.modules.ConvASRDecoder
+      feat_in: -1  # auto-set
+      num_classes: -1  # auto-set
+      add_blank: false  # don't add blank class
+      
+  # Optional PEFT configuration (uncomment to use LoRA)
+  # peft:
+  #   _target_: nemo.collections.llm.peft.LoRA
+  #   dim: 32
+
+############ Optimizer ############
+optim:
+  _target_: nemo.lightning.MegatronOptimizerModule
+  config:
+    _target_: megatron.core.optimizer.OptimizerConfig
+    optimizer: adam
+    lr: 1e-4
+    clip_grad: 1.0
+    weight_decay: 0.0001
+  lr_scheduler:
+    _target_: nemo.lightning.pytorch.optim.CosineAnnealingScheduler
+    max_steps: ${trainer.max_steps}
+    warmup_steps: 250
+    constant_steps: 10000
+    min_lr: 5e-5
+
+############ Trainer ############
+max_time_per_run: "00:20:00:00"
+create_tensorboard_logger: true
+create_checkpoint_callback: true
+create_wandb_logger: false
+
+trainer:
+  devices: -1
+  num_nodes: 1
+  max_epochs: -1 
+  max_steps: 10
+  limit_train_batches: 20  # number of steps in 1 epoch bc no epoch in lhotse
+  accumulate_grad_batches: 1
+  accelerator: gpu
+  log_every_n_steps: 10
+  limit_val_batches: 0.0
+  val_check_interval: ${trainer.limit_train_batches}
+  num_sanity_val_steps: 1
+  sync_batchnorm: true
+  logger: false
+  use_distributed_sampler: false
+
+############ Strategy ############
+strategy:
+  _target_: nemo.collections.speechlm.strategies.SpeechLMMegatronStrategy
+  tensor_model_parallel_size: 1
+  pipeline_model_parallel_size: 1
+  context_parallel_size: 1
+  ckpt_async_save: false
+
+############ Callbacks ############
+callbacks:
+  checkpoint:
+    _target_: nemo.lightning.pytorch.callbacks.ModelCheckpoint
+    filename: '${name}--{${callbacks.checkpoint.monitor}:.5f}-{step}'
+    monitor: "reduced_train_loss"
+    mode: "min"
+    save_last: true
+    save_top_k: 2
+    save_weights_only: false
+    always_save_context: true
+    every_n_epochs: null
+    every_n_train_steps: ${trainer.limit_train_batches}
+
+############ Plugins ############
+plugins:
+  _target_: nemo.lightning.MegatronMixedPrecision
+  precision: "bf16-mixed"
+  autocast_enabled: null
+
+############ AutoResume ############
+resume:
+  _target_: nemo.collections.speechlm.utils.resume.SpeechLMAutoResume
+  resume_from_directory: null
+  resume_from_path: null
+  adapter_path: null
+  resume_if_exists: true
+  resume_past_end: false
+  resume_ignore_no_checkpoint: true
+
+############ Logging ############
+logger:
+  log_dir: null
+  _target_: nemo.lightning.NeMoLogger
+  name: "${name}"
