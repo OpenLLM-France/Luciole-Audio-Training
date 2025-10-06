@@ -5,9 +5,45 @@ C'est quoi le genre musical ?
 C'est quoi comme style de musique ?
 C'est quoi le style de musique ?
 C'est quoi le genre de musique ?
+C'est quoi le genre musical ?
 C'est quoi le style de zik ?
 C'est quoi le style de cette chanson ?
 Quel est le style de cette chanson ?
 Quel est le genre de musique ?
 Quel est le style musical de cette chanson ?
 Quel est le genre de musique de cette chanson ?
+Quel est le genre musical ?
+Donne moi le genre de cette chanson.
+Donne moi le style de cette chanson.
+Donne moi le style musical de cette chanson.
+Donne moi le genre musical de cette chanson.
+Dis moi le genre de cette chanson.
+Dis moi le style de cette chanson.
+Dis moi le style musical.
+Dis moi le genre musical.
+Tu peux me dire le genre de cette chanson ?
+Tu peux me dire le style de cette chanson ?
+Tu peux me dire le style musical ?
+Tu peux me dire le genre musical ?
+C'est quel genre ?
+C'est quoi comme genre ?
+C'est quoi comme genre de zik ?
+C'est quoi comme type de musique ?
+C'est quoi comme style sonore ?
+Tu connais le style de ce morceau ?
+Tu sais quel est le style ?
+Tu sais quel genre de musique c'est ?
+Tu peux m'indiquer le genre de ce titre ?
+Tu peux m'indiquer le style musical ?
+Tu peux me donner le style de ce morceau ?
+Tu peux me donner le genre musical de ce morceau ?
+Dis-moi c'est quel style musical.
+Dis-moi c'est quel genre.
+Donne-moi le type de musique.
+Quel style tu reconnais ici ?
+Quel genre tu entends là ?
+Tu dirais que c'est quoi comme musique ?
+Tu dirais que ça appartient à quel style ?
+Ça correspond à quel genre musical ?
+Ce morceau, c'est classé dans quel genre ?
+Ce son, il est de quel style ?

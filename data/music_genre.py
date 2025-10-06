@@ -37,20 +37,20 @@ def music_genre_instruct_data_iterator(
     instruction_file = os.path.join(
         os.path.dirname(__file__),
         "assets",
-        f"instruction_music_genre_{language}_written.txt"
-    )
-    assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
-    with open(instruction_file) as f:
-        instructions_written = [line.strip() for line in f.read().split("\n") if line.strip()]
-
-    instruction_file = os.path.join(
-        os.path.dirname(__file__),
-        "assets",
         f"instruction_music_genre_{language}_spoken.txt"
     )
     assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
     with open(instruction_file) as f:
         instructions_spoken = [line.strip() for line in f.read().split("\n") if line.strip()]
+
+    instruction_file = os.path.join(
+        os.path.dirname(__file__),
+        "assets",
+        f"instruction_music_genre_{language}_written.txt"
+    )
+    assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
+    with open(instruction_file) as f:
+        instructions_written = [line.strip() for line in f.read().split("\n") if line.strip()]
 
     REPOS_INSTRUCTS = {
         "en": [
@@ -87,10 +87,10 @@ def music_genre_instruct_data_iterator(
                )
 
     REPOS_CLASSIFICATION_TASK = [
-        (
-            "lewtun/music_genres",
-            ["train", "test"], "genre", None
-        ),
+        # (
+        #     "lewtun/music_genres",
+        #     ["train", "test"], "genre", None
+        # ),
         (
             "mteb/music-genre",
             ["test"], "label", {
@@ -134,6 +134,8 @@ def music_genre_instruct_data_iterator(
             for sample in ds:
                 vocal = random.random() < proba_vocal
                 instruction = random.choice(instructions_written) if not vocal else random.choice(instructions_spoken)
+                if isinstance(sample[label], str) and "unknown" in sample[label].lower():
+                    continue
                 yield make_data_instruct(repo,
                     instruction,
                     sample[label],
@@ -233,7 +235,7 @@ def make_data_instruct(
             ],
         }[language]
         description = random.choice(description)
-        audio_instruction = text_to_speech(instruction) # , description)
+        audio_instruction = text_to_speech(instruction, language=language) # , description)
         music_clip = cut_audio(
             music_clip,
             sampling_rate=sampling_rate,

@@ -1,26 +1,41 @@
-What's the music genre of that song?
+What style is this?
+What's the style?
+What's the musical style?
+What's the genre?
+What style of music is this?
+What's the style of music?
+What's the music genre?
+What's the genre of this track?
+What's the style of this song?
 What's the genre of this song?
-What genre is this song?
-What genre is that song?
-What's the music genre of this song?
-What's the music genre of that song?
-This song is of what genre?
-That song is of what genre?
-What's this genre
-What's that genre
-What genre is this?
-What genre is that?
-This is what genre?
-That is what genre?
-What's this musical genre
-What's that musical genre
-What musical genre is this?
-What musical genre is that?
-This is what musical genre?
-That is what musical genre?
-What's this music genre
-What's that music genre
-What music genre is this?
-What music genre is that?
-This is what music genre?
-That is what music genre?
+What's the musical style of this song?
+What kind of music is this?
+Can you tell me the genre of this song?
+Can you tell me the style of this song?
+Can you tell me the musical style?
+Can you tell me the genre?
+What genre does this belong to?
+What style does this belong to?
+Which genre is this track in?
+Which style do you recognize here?
+Which genre do you hear here?
+What type of music is this?
+What kind of sound is this?
+Do you know the style of this track?
+Do you know what genre this is?
+Do you know what style this is?
+Could you give me the genre of this track?
+Could you give me the musical style of this song?
+Tell me what genre this is.
+Tell me what style this is.
+Tell me the musical style.
+Tell me the genre.
+This track, what style is it?
+This song, what genre is it?
+This piece, what music style is it?
+You'd say this is what kind of music?
+You'd say this belongs to what genre?
+What genre would you put this in?
+What style would you classify this as?
+This song fits into what genre?
+This sound, what's the style?

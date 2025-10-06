@@ -1,27 +1,70 @@
 What genre is this song?
 Can you identify the genre of this track?
-What style of music is this?
-What kind of music is this?
-What category does this song fall into?
-Can you classify this song by genre?
+What is the musical style of this song?
+What type of music is this?
+In which category would you place this song?
+Could you classify this song by genre?
 Tell me the genre of this audio.
-What is the musical style of this track?
-What's the music genre of this clip?
-What music genre does this belong to?
-Could you please tell me the genre of this song?
-Would you mind identifying this music genre?
+What is the style of this track?
+What is the musical genre of this excerpt?
+Which genre does this music belong to?
+Could you tell me the genre of this song?
+Could you identify the musical genre of this piece?
 May I ask you to classify this track by genre?
 If possible, can you determine the genre of this audio?
 Could you analyze this song and tell me its genre?
-Would you be able to detect the music style of this track?
+Would you be able to detect the musical style of this track?
 I'd appreciate it if you could categorize this song.
 Please let me know the genre of this music.
-Can you kindly determine the music genre of this clip?
-Could you help me find the musical category of this track?
+Can you kindly determine the musical genre of this excerpt?
+Could you help me find the musical category of this piece?
 What genre is this music?
-What genre is this song?
-What genre is this track?
-What genre is this audio?
-What genre is this clip?
-What genre is this sound?
-What genre is this tune?
+What's the genre of this song?
+What's the genre of this track?
+What's the genre of this audio?
+What's the genre of this excerpt?
+What's the genre of this sound?
+What's the genre of this melody?
+Can you tell me the genre of this song?
+Could you identify the genre of this track?
+What's the style of this song?
+Do you know what type of music this is?
+In which category would you put this song?
+Can you classify this song by genre?
+Tell me the genre of this audio.
+What's the musical style of this track?
+Could you point out the musical genre of this excerpt?
+Which musical genre does this music belong to?
+Tell me what genre this song is.
+Can you identify the musical genre of this piece?
+Can you classify this track by genre?
+If you can, determine the genre of this audio.
+Analyze this song and tell me its genre.
+Can you detect the musical style of this track?
+I'd like you to categorize this song.
+Tell me the genre of this music.
+Could you determine the musical genre of this excerpt?
+Help me find the musical category of this piece.
+What kind of music is this?
+What kind of song is this?
+What kind of track is this?
+What kind of sound is this?
+What kind of melody is this?
+What genre would you say this is?
+Do you know what style this falls into?
+In your opinion, what type of music is this?
+Just tell me straight—what's the style of this track?
+What genre do you think this belongs to?
+Can you quickly tell me the genre of this tune?
+This song—what category would you put it in?
+What style of music does this sound like to you?
+What genre would you say it resembles?
+What style does it come close to, in your opinion?
+Could you tell me which genre this song belongs to?
+Could you point out the musical style of this track?
+Could you analyze this sound and tell me its genre?
+If possible, could you determine the genre of this excerpt?
+I'd like you to tell me which musical category this belongs to.
+Can you help me identify the musical style of this song?
+Could you classify this audio by genre?
+Can you specify the musical genre of this track?
