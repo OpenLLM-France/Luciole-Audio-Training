@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=31
-#SBATCH --time=01:00:00
+#SBATCH --time=00:20:00
 #SBATCH --output=log/infer_log.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-dev
@@ -23,11 +23,14 @@ LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
 EXPERIMENT_FOLDER="$SCRATCH/speechlm/nemo_experiments"
 
+export TMPDIR=$JOBSCRATCH
 export HYDRA_FULL_ERROR=1
 export HF_DATASETS_OFFLINE=1
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
+export SPEECH_ENCODER_MODEL="$NEMO_MODELS_CACHE/nvidia/canary-1b-v2/canary-1b-v2.nemo"
+
 # =====================================================
 # Parallelism Setup
 # =====================================================
@@ -38,24 +41,24 @@ PP=1   # Pipeline Parallelism
 CP=1   # Context Parallelism
 DP=$(( TOTAL_GPUS / (TP * PP * CP) ))
 
-export GLOBAL_BATCH=1   # Small batch to avoid OOM
+export GLOBAL_BATCH=3   # Small batch to avoid OOM
 export MICRO_BATCH=$(( GLOBAL_BATCH / DP ))
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # =====================================================
 # Configs & Paths
 # =====================================================
-EXPERIMENT_NAME="Whisper_Llama-3.2-1B-model"
-
-CONFIG_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/run_0"
-#CONFIG_PATH="$LOCAL_FOLDER/conf"
-CONFIG_NAME="config.yaml"
+#EXPERIMENT_NAME="Whisper_Llama-3.2-1B-4gpu-32gbs--ASR-CV-only-peft"
+EXPERIMENT_NAME="<Model Name>"
+#CONFIG_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/run_0"
+CONFIG_PATH="$LOCAL_FOLDER/conf"
+CONFIG_NAME="config_canary-1b-v2_linear.yaml"
 
 INPUT_CFG_INFER="$LOCAL_FOLDER/conf/input_cfg_infer.yaml"
 
-CKPT_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/checkpoints/last/"
+CKPT_PATH="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/checkpoints/<Checkpoint>/"
 
-OUTPUT_DIR="$EXPERIMENT_FOLDER/outputs"
+OUTPUT_DIR="$EXPERIMENT_FOLDER/$EXPERIMENT_NAME/outputs"
 mkdir -p "$OUTPUT_DIR"
 
 # =====================================================

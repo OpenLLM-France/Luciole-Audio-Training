@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=NemoSpeechLM
-#SBATCH --nodes=4
+#SBATCH --nodes=5
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=96
 #SBATCH --time=20:00:00
-#SBATCH --output=log/log-test.out
+#SBATCH --output=log/log-asr.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-t3
 #SBATCH --account=wuh@h100
@@ -23,7 +23,7 @@ TMP_CACHE="$SCRATCH/speechlm/.cache"
 EXPERIMENT_FOLDER="$SCRATCH/speechlm/nemo_experiments"
 
 export NUM_WORKERS=16
-export BATCH_SIZE=2          # batch per GPU
+export BATCH_SIZE=8          # batch per GPU
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export HYDRA_FULL_ERROR=1
@@ -45,13 +45,13 @@ DP=$(( TOTAL_GPUS / (TP * PP * CP) ))
 GLOBAL_BATCH=$(( TOTAL_GPUS * BATCH_SIZE ))
 MICRO_BATCH=$(( GLOBAL_BATCH / DP ))
 
-EXPERIMENT_NAME="Whisper_Llama-3.2-1B-${TOTAL_GPUS}gpu-${GLOBAL_BATCH}gbs-conformer"
-
+EXPERIMENT_NAME="Whisper_Llama-3.2-1B-${TOTAL_GPUS}gpu-${GLOBAL_BATCH}gbs--ASR-CV-only"
+#EXPERIMENT_NAME=test_conformer
 # =====================================================
 # Dataset Info (adjust as needed)
 # =====================================================
-NUM_SAMPLES=21361234         # total number of training samples
-FRACTION_EPOCH=2.0          # fraction of epoch for max_steps
+NUM_SAMPLES=565638 #21361234         # total number of training samples
+FRACTION_EPOCH=20.0          # fraction of epoch for max_steps
 
 # Compute max_steps and limit_train_batches
 STEPS_PER_EPOCH=$(python3 -c "import math; print(math.ceil($NUM_SAMPLES / $GLOBAL_BATCH))")
@@ -86,7 +86,7 @@ DISTRIBUTED_ARGS="
 # =====================================================
 srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_train.py \
     --config-path=$LOCAL_FOLDER/conf \
-    --config-name=config_conformer.yaml \
+    --config-name=config.yaml \
     data.common.global_batch_size=$GLOBAL_BATCH \
     data.common.micro_batch_size=$MICRO_BATCH \
     data.train_ds.input_cfg=$LOCAL_FOLDER/conf/input_cfg_train.yaml \
@@ -94,19 +94,20 @@ srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_train.py \
     data.train_ds.shuffle=true \
     data.train_ds.seed=42 \
     data.train_ds.pin_memory=false \
-    data.train_ds.max_duration=120 \
+    data.train_ds.max_duration=30 \
     data.train_ds.min_duration=0.1 \
     data.validation_ds.input_cfg=$LOCAL_FOLDER/conf/input_cfg_val.yaml \
     strategy.tensor_model_parallel_size=$TP \
     strategy.context_parallel_size=$CP \
     ++trainer.max_steps=$MAX_STEPS \
     ++trainer.limit_train_batches=$LIMIT_TRAIN_BATCHES \
-    ++callbacks.checkpoint.every_n_train_steps=6000 \
+    ++callbacks.checkpoint.every_n_train_steps=5000 \
     trainer.num_nodes=$SLURM_NNODES \
     name=$EXPERIMENT_NAME \
     max_time_per_run="00:20:00:00" \
     logger.log_dir=$EXPERIMENT_FOLDER \
-    resume.resume_if_exists=true
+    resume.resume_if_exists=true \ 
+    ~model.peft # to not use peft 
 
 # Notes:
 # - For validation during training, add:
