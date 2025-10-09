@@ -9,7 +9,7 @@ os.makedirs(ASSETS_DIR, exist_ok=True)  # Ensure folder exists
 
 # Load CSV (expand ~ manually)
 data_path = os.path.join(ASSETS_DIR, "datasets_metadata.csv")
-df = pd.read_csv(data_path, sep=r'\s*,\s*')
+df = pd.read_csv(data_path, sep=r'\s*,\s*', engine='python')
 
 for split in "train", "test":
 
