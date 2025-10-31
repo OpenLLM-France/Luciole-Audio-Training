@@ -41,8 +41,8 @@ class ToAudio(torch.utils.data.Dataset):
 @dataclass
 class SalmEvalConfig:
     pretrained_name: Optional[str] = None
-    ckpt_path: Optional[str] = None
-    ckpt_config: Optional[str] = None
+    ckpt: Optional[str] = None
+    ckpt_xp_path: Optional[str] = None
     ckpt_class: Optional[str] = None
     inputs: Any = None
     batch_size: int = 64
@@ -55,7 +55,7 @@ class SalmEvalConfig:
     num_workers: int = 4
     extra_eos_tokens: Optional[list[str]] = None
     system_prompt: Optional[str] = None
-    user_prompt: Optional[str] = "transcribe the audio"
+    user_prompt: Optional[str] = None
 
 
 @hydra_runner(config_path="conf", config_name="eval", schema=SalmEvalConfig)
@@ -64,8 +64,17 @@ def main(cfg: SalmEvalConfig):
 
     with torch.device(cfg.device):
         torch.set_default_dtype(torch.bfloat16)
-        if cfg.ckpt_path:
-            model = load_model(ckpt_path=cfg.ckpt_path, ckpt_class=cfg.ckpt_class, ckpt_config=cfg.ckpt_config)
+        if cfg.ckpt_xp_path is not None:
+            xp_config = Path(cfg.ckpt_xp_path) / "exp_config.yaml"
+            if cfg.ckpt is not None:
+                ckpt_path = Path(cfg.ckpt_xp_path) / "checkpoints" / cfg.ckpt
+            else:
+                checkpoints_dir = Path(cfg.ckpt_xp_path) / "checkpoints"
+                ckpt_candidates = list(checkpoints_dir.glob("*-last*"))
+                if not ckpt_candidates:
+                    raise FileNotFoundError(f"No checkpoint with '-last' found in {checkpoints_dir}")
+                ckpt_path = ckpt_candidates[0]
+            model = load_model(ckpt_path=ckpt_path, ckpt_class=cfg.ckpt_class, ckpt_config=xp_config)
         else:
             model = SALM.from_pretrained(cfg.pretrained_name)
         model = model.eval().to(torch.bfloat16).to(cfg.device)
@@ -168,6 +177,8 @@ def main(cfg: SalmEvalConfig):
         results[name] = dict(wer=wer*100, rtfx=rtfx, nins=nins*100, ndel=ndel*100, nsub=nsub*100)
         if cfg.output_manifest is not None:
             output_folder = Path(cfg.output_folder)
+            if cfg.ckpt_xp_path is not None:
+                output_folder = output_folder / Path(cfg.ckpt_xp_path).name
             output_manifest = cfg.output_manifest
             if len(cfg.inputs)>1:
                 output_manifest = output_manifest.replace(".jsonl", f"_{name}.jsonl")

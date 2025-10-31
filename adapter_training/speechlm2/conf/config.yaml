@@ -17,17 +17,7 @@ model:
   audio_locator_tag: "<|audio|>"
   lora:
     task_type: CAUSAL_LM
-    r: 8
-    lora_alpha: 32
-    lora_dropout: 0.1
-
-  # lora:
-  #   task_type: CAUSAL_LM
-  #   r: 128  # LoRA rank
-  #   lora_alpha: 256  # LoRA alpha scaling
-  #   lora_dropout: 0.01
-  #   target_modules: ["q_proj", "v_proj"]
-  #   inference_mode: false  # Training mode
+    r: 128
 
   perception:
      target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
@@ -63,14 +53,14 @@ model:
 
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 1e-5
+    lr: 3e-4
     betas: [0.9, 0.98]
     weight_decay: 1e-3
     foreach: true # set to false if having issues with tensor-parallelism
 
   lr_scheduler:
     _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
-    warmup_steps: 1000
+    warmup_steps: 250
     min_lr: 1e-6
     max_steps: ${trainer.max_steps}
     
@@ -81,8 +71,8 @@ trainer:
   precision: bf16-true
   max_epochs: -1 
   # max_steps: 20
-  limit_train_batches: 10_000  # number of steps in 1 epoch bc no epoch in lhotse
-  accumulate_grad_batches: 2
+  limit_train_batches: 50_000  # number of steps in 1 epoch bc no epoch in lhotse
+  accumulate_grad_batches: 1
   limit_val_batches: 0.0
   val_check_interval: 5000
   num_sanity_val_steps: 1
@@ -121,9 +111,8 @@ exp_manager:
     filename: "{step:06.0f}"
     monitor: step
     mode: max
-    every_n_train_steps: 2500
+    every_n_train_steps: 5000
     every_n_epochs: null
-    # every_n_epochs: 1
     save_top_k: -1
     always_save_nemo: false
     save_nemo_on_train_end: false
@@ -137,12 +126,27 @@ data:
     input_cfg:
       - type: group
         tags:
+          lang: fr
+          pnc: yes
+          task: asr
+        input_cfg:
+          - type: multimodal_conversation
+            manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/manifest_Multilingual_LibriSpeech_recasepunc_train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/single-turn/asr/fr/CommonVoice/train_multi_turn.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+      - type: group
+        tags:
           lang: en
           pnc: yes
           task: asr
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
+            manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
     seed: 42
     shuffle: true
@@ -150,26 +154,14 @@ data:
     text_field: 'answer'
     use_lhotse: true
     num_workers: 4
-    # batch_duration: 480
-    # batch_size: 32
-    max_duration: 40
-    # min_duration: 0.1
-    # max_tokens: 1024
-    min_tokens: 3
 
-    # Optional bucketing:
-    batch_size: null
-    use_bucketing: true
+    max_duration: 90
+    min_tokens: 3
+    use_bucketing: false
     use_multimodal_sampling: true
     measure_total_length: true
-    # Note: `batch_tokens`, `bucket_duration_bins`, and `max_tokens` all represent tokens as
-    #  the sum of input audio frames and output text tokens. Number of audio frames is
-    #  calculated using `token_equivalent_duration`.
-    batch_tokens: 3072
-    max_tokens: 1024
-    bucket_duration_bins: [64, 128, 256, 512, 1024]
-    num_buckets: 5
-    bucket_buffer_size: 5000
+    batch_tokens: 12288
+    max_tokens: 2048
 
 
   validation_ds:
