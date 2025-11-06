@@ -15,6 +15,7 @@ model:
 
   prompt_format: llama3
   audio_locator_tag: "<|audio|>"
+  token_equivalent_duration: 0.08
   lora:
     task_type: CAUSAL_LM
     r: 128
@@ -98,8 +99,8 @@ exp_manager:
   create_tensorboard_logger: true
   create_checkpoint_callback: true
   use_datetime_version: false
-  max_time_per_run: 00:01:45:00
-  # max_time_per_run: 00:19:45:00
+  # max_time_per_run: 00:01:45:00
+  max_time_per_run: 00:19:45:00
 
   resume_from_checkpoint: null # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
   # you need to set these two to True to continue the training
@@ -122,7 +123,7 @@ data:
   train_ds:
     sample_rate: 16000
     prompt_format: ${model.prompt_format}
-    token_equivalent_duration: 0.08
+    token_equivalent_duration: ${model.token_equivalent_duration}
     input_cfg:
       - type: group
         tags:
@@ -166,7 +167,7 @@ data:
 
   validation_ds:
     prompt_format: ${model.prompt_format}
-    token_equivalent_duration: 0.08
+    token_equivalent_duration: ${model.token_equivalent_duration}
     datasets:
       CommonVoice_FR:  # rename to your dataset name, add more as needed
         input_cfg:

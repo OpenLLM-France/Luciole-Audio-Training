@@ -20,6 +20,7 @@ import lhotse.dataset
 import torch
 from lhotse import CutSet
 from lhotse.serialization import SequentialJsonlWriter
+from lhotse.dataset import IterableDatasetWrapper
 from omegaconf import OmegaConf
 import omegaconf
 from transformers import GenerationConfig
@@ -27,7 +28,7 @@ from whisper_normalizer.english import EnglishTextNormalizer
 
 from nemo.collections.asr.metrics.wer import word_error_rate_detail
 from nemo.collections.common.data.lhotse.cutset import guess_parse_cutset
-from nemo.collections.speechlm2 import SALM
+from nemo.collections.speechlm2 import SALM, SALMDataset
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from to_hf import load_model
@@ -56,6 +57,8 @@ class SalmEvalConfig:
     extra_eos_tokens: Optional[list[str]] = None
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
+    metric: str = "wer"
+    show_examples: int = 0
 
 
 @hydra_runner(config_path="conf", config_name="eval", schema=SalmEvalConfig)
@@ -85,18 +88,29 @@ def main(cfg: SalmEvalConfig):
             manifest_path = dataset
             batch_size = cfg.batch_size
             name = str(i)
+            dataset_prompt = cfg.user_prompt
+            limit_val_batches = -1
+            metric = cfg.metric
+            verbose= cgf.verbose
+            show_examples = cfg.show_examples
         else:
             manifest_path = dataset['manifest']
             batch_size = dataset.get("batch_size", cfg.batch_size)
             name = dataset.get("name", str(i))
+            dataset_prompt = dataset.get("user_prompt", cfg.user_prompt)
+            limit_val_batches = dataset.get("limit_val_batches", -1)
+            metric = dataset.get("metric", cfg.metric)
+            verbose = dataset.get("verbose", cfg.verbose)
+            show_examples = dataset.get("show_examples", cfg.show_examples)
+        print()
+        print(f"Evaluating dataset {name}")
         cuts = guess_parse_cutset(manifest_path).sort_by_duration()
         dloader = torch.utils.data.DataLoader(
             dataset=ToAudio(),
             sampler=lhotse.dataset.DynamicCutSampler(cuts, max_cuts=batch_size),
-            num_workers=cfg.num_workers,
+            num_workers=1,
             batch_size=None,
         )
-
         if cfg.use_normalizer:
             normalizer = EnglishTextNormalizer()
         else:
@@ -117,8 +131,8 @@ def main(cfg: SalmEvalConfig):
         # Otherwise:
         # * if user prompt already has audio placeholder, add it as-is,
         # * if not, append audio placeholder at the end of user prompt
-        if cfg.user_prompt is not None:
-            content = cfg.user_prompt
+        if dataset_prompt is not None:
+            content = dataset_prompt
             if model.audio_locator_tag not in content:
                 content = f"{content} {model.audio_locator_tag}"
         prompt.append({"role": "user", "content": content})
@@ -126,21 +140,13 @@ def main(cfg: SalmEvalConfig):
         hyps = []
         input_durations = []
         infer_durations = []
+        prompts = []
         for batch_idx, batch in enumerate(dloader):
             ts = perf_counter()
-            # prompts = []
-            # for cut in batch["cuts"]:
-                # sup = cut.supervisions[0]
-                # context = sup.custom.get("context", "")
-                # user_prompt = {
-                #     "role": "user",
-                #     "content": f"{context} {model.audio_locator_tag}"
-                # }
-                # prompts.append(system_prompt + [user_prompt])
+            batch_prompt = [prompt] * len(batch["cuts"])
+            prompts.extend(batch_prompt)
             answer_ids = model.generate(
-                # prompts=prompts,
-                prompts=[prompt] * len(batch["cuts"]),
-                # prompt_format="llama3",
+                prompts=batch_prompt,
                 audios=batch["audios"].to(model.device, non_blocking=True),
                 audio_lens=batch["audio_lens"].to(model.device, non_blocking=True),
                 generation_config=GenerationConfig(
@@ -158,7 +164,7 @@ def main(cfg: SalmEvalConfig):
             batch_hyps = [
                 normalizer(model.tokenizer.ids_to_text(parse_hyp(ans, eos_tokens)).strip()) for ans in answer_ids
             ]
-            if cfg.verbose:
+            if verbose:
                 batch_wer, _, nins, ndel, nsub = word_error_rate_detail(batch_hyps, batch_refs)
                 batch_rtfx = batch_duration / batch_infer_duration
                 logging.info(
@@ -169,12 +175,17 @@ def main(cfg: SalmEvalConfig):
             hyps.extend(batch_hyps)
             input_durations.append(batch_duration)
             infer_durations.append(batch_infer_duration)
-
-        wer, _, nins, ndel, nsub = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)
+            if limit_val_batches>0 and batch_idx+1 >= limit_val_batches:
+                break
+            
+        results[name] = dict()
+        if metric == "wer":
+            wer, _, nins, ndel, nsub = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)
+            logging.info(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
+            results[name] = dict(wer=wer*100, nins=nins*100, ndel=ndel*100, nsub=nsub*100)
         rtfx = sum(input_durations) / sum(infer_durations)
-        logging.info(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
+        results[name]["rtfx"] = rtfx
         logging.info(f"RTFx: {rtfx:.1f}")
-        results[name] = dict(wer=wer*100, rtfx=rtfx, nins=nins*100, ndel=ndel*100, nsub=nsub*100)
         if cfg.output_manifest is not None:
             output_folder = Path(cfg.output_folder)
             if cfg.ckpt_xp_path is not None:
@@ -186,11 +197,18 @@ def main(cfg: SalmEvalConfig):
             output_path.parent.mkdir(parents=True, exist_ok=True)
             logging.info(f"Writing manifest to {output_path}")
             with SequentialJsonlWriter(output_path) as writer:
-                for cut, ref, hyp in zip(cuts, refs, hyps):
+                for cut, ref, hyp, prompt in zip(cuts, refs, hyps, prompts):
                     writer.write({"id": cut.id, "duration": cut.duration, "text": ref, "pred_text": hyp})
+        for i, (cut, ref, hyp, prompt) in enumerate(zip(cuts, refs, hyps, prompts)):
+            if i+1>show_examples:
+                break
+            print(f"\tDATA {cut.id} ({cut.duration})")
+            print(f"\t\tPrompt: {prompt}")
+            print(f"\t\tRef: {ref}")
+            print(f"\t\tPrediction: {hyp}")
+            print()
     for result in results:
         logging.info(f"{result}: {results[result]}")
-
 def parse_hyp(answer: torch.Tensor, eos_tokens: list[int]):
     end = (answer == torch.isin(answer, torch.tensor(eos_tokens))).nonzero(as_tuple=True)[0]
     if end.numel() == 0:
