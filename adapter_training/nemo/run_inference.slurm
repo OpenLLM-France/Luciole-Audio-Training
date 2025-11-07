@@ -18,6 +18,7 @@ set -e  # Exit immediately on error
 # =====================================================
 module purge
 module load arch/h100 nemo/2.3.1
+export PYTHONPATH="$PYTHONPATH:/Path/to/NeMo-toolkit"
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
@@ -80,26 +81,36 @@ DISTRIBUTED_ARGS="
 # =====================================================
 # Inference Launch
 # =====================================================
-srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_validate.py \
+srun torchrun $DISTRIBUTED_ARGS \
+  $LOCAL_FOLDER/speech_to_text_llm_validate.py \
     --config-path $CONFIG_PATH \
     --config-name $CONFIG_NAME \
     ~data.train_ds \
     data.common.global_batch_size=$GLOBAL_BATCH \
     data.common.micro_batch_size=$MICRO_BATCH \
     data.common.prompt_format='llama3' \
+    data.common.tokens_to_generate=256 \
     ++data.validation_ds.input_cfg=$INPUT_CFG_INFER \
     ++data.validation_ds.global_batch_size=$GLOBAL_BATCH \
     ++data.validation_ds.micro_batch_size=$MICRO_BATCH \
-    ++data.validation_ds.batch_size=$MICRO_BATCH \
     data.validation_ds.num_workers=30 \
-    data.validation_ds.pin_memory=True \
+    data.validation_ds.pin_memory=false \
     data.validation_ds.defer_setup=true \
     data.validation_ds.use_lhotse=true \
-    data.validation_ds.metric.name='bleu' \
+    data.validation_ds.metric.name='rouge' \
     ++data.validation_ds.write_predictions_to_file=true \
     ++data.validation_ds.output_dir=$OUTPUT_DIR \
-    trainer.limit_val_batches=1\
-    ++trainer.val_check_interval=1\
+    ++data.validation_ds.force_finite=true \
+    ++data.validation_ds.force_iterable_dataset=false \
+    ++data.validation_ds.force_map_dataset=true  \
+    ++model.inference_config.tokens_to_generate=64 \
+    ++model.inference_config.temperature=0.3 \
+    ++model.inference_config.top_k=20 \
+    ++model.inference_config.top_p=0.8 \
+    ++model.inference_config.greedy=false \
+    ++model.inference_config.repetition_penalty=1.2 \
     trainer.devices=-1 \
     trainer.num_nodes=$SLURM_NNODES \
-    ++resume.resume_from_path=$CKPT_PATH 
+    ++resume.resume_from_path=$CKPT_PATH \
+    name="${EXPERIMENT_NAME}_last_eval" \
+    ~logger.tensorboard
