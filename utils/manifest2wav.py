@@ -52,7 +52,14 @@ def extract_audio_paths_from_manifest(manifest_path):
                                     audio_paths.append(audio_path)
                                 elif audio_path:
                                     print(f"Warning: Audio file not found: {audio_path}")
-                    
+                    else:
+                        # Fallback to 'audio_filepath' key
+                        if 'audio_filepath' in data:
+                            audio_path = data['audio_filepath']
+                            if audio_path and Path(audio_path).exists():
+                                audio_paths.append(audio_path)
+                            elif audio_path:
+                                print(f"Warning: Audio file not found: {audio_path}")
                 except json.JSONDecodeError as e:
                     print(f"Warning: Invalid JSON on line {line_num}: {e}")
                     continue
