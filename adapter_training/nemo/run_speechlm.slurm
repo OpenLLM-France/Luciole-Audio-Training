@@ -18,6 +18,7 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.3.1
+export PYTHONPATH="$PYTHONPATH:/Path/to/NeMo-toolkit"
 
 mkdir -p log
 
@@ -27,7 +28,8 @@ EXPERIMENT_FOLDER="$SCRATCH/speechlm/nemo_experiments"
 
 export TMPDIR=$JOBSCRATCH
 export NUM_WORKERS=16
-export BATCH_SIZE=2                   # per GPU
+export BATCH_SIZE=2                  # per GPU
+export GRAD_ACCUMULATION=1
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export HYDRA_FULL_ERROR=1
 export HF_DATASETS_OFFLINE=1
@@ -35,6 +37,7 @@ export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
 export SPEECH_ENCODER_MODEL="$NEMO_MODELS_CACHE/nvidia/canary-1b-v2/canary-1b-v2.nemo"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # =====================================================
 # Parallelism Setup
@@ -97,25 +100,27 @@ srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/speech_to_text_llm_train.py \
     data.common.global_batch_size=$GLOBAL_BATCH \
     data.common.micro_batch_size=$MICRO_BATCH \
     data.train_ds.input_cfg=$LOCAL_FOLDER/conf/input_cfg_train.yaml \
+    data.validation_ds.input_cfg=$LOCAL_FOLDER/conf/input_cfg_val.yaml \
     data.train_ds.num_workers=$NUM_WORKERS \
-    ++data.train_ds.global_batch_size=$GLOBAL_BATCH \
-    ++data.train_ds.micro_batch_size=$MICRO_BATCH \
     data.train_ds.shuffle=true \
     data.train_ds.seed=10 \
     data.train_ds.pin_memory=false \
     data.train_ds.max_duration=120 \
     data.train_ds.min_duration=0.1 \
-    data.validation_ds.input_cfg=$LOCAL_FOLDER/conf/input_cfg_val.yaml \
     strategy.tensor_model_parallel_size=$TP \
     strategy.context_parallel_size=$CP \
     ++trainer.max_steps=$MAX_STEPS \
     ++trainer.limit_train_batches=$LIMIT_TRAIN_BATCHES \
     ++callbacks.checkpoint.every_n_train_steps=3000 \
+    ++trainer.limit_val_batches=250 \
+    trainer.val_check_interval=$LIMIT_TRAIN_BATCHES \
     trainer.num_nodes=$SLURM_NNODES \
+    trainer.accumulate_grad_batches=$GRAD_ACCUMULATION \
     name=$EXPERIMENT_NAME \
     max_time_per_run="00:20:00:00" \
     logger.log_dir=$EXPERIMENT_FOLDER \
     resume.resume_if_exists=true \
+    logger.tensorboard.save_dir="$EXPERIMENT_NAME/tensorboard-logs"
     # ~model.peft 
 
 # To run using peft lora just comment or remove ~model.peft
