@@ -1,0 +1,37 @@
+ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/train_multitask2
+# ckpt: step=010000.ckpt
+ckpt: step=006220-last.ckpt
+ckpt_class: nemo.collections.speechlm2.models.SALM
+inputs:
+- name: FLEURS_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/FLEURS/cuts_FLEURS_casepunc_dev.jsonl.gz
+  batch_size: 64
+  user_prompt: "Transcris ce fichier audio"
+  metric: "wer"
+- name: CommonVoice_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
+  batch_size: 64
+  limit_val_batches: 25
+  user_prompt: "Transcris ce fichier audio"
+  metric: "wer"
+- name: CommonVoice_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
+  batch_size: 64
+  limit_val_batches: 25
+  user_prompt: "Transcribe this audio file"
+  metric: "wer"
+- name: CoVoST_FR-EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/CoVoST/test.jsonl.gz
+  batch_size: 64
+  limit_val_batches: 25
+  user_prompt: "Traduit ce fichier audio en anglais"
+  metric: ["bleu", "wer"]
+- name: mTEDx_FR-EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/mTEDx/test.jsonl.gz
+  batch_size: 64
+  limit_val_batches: 25
+  user_prompt: "Traduit ce fichier audio en anglais"
+  metric: ["bleu", "wer"]
+batch_size: 64
+max_new_tokens: 192
+show_examples: 5

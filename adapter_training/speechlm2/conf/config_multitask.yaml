@@ -132,52 +132,52 @@ data:
           task: asr
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/manifest_Multilingual_LibriSpeech_recasepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/manifest_Multilingual_LibriSpeech_recasepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/ACSYNT/manifest_ACSYNT_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/ACSYNT/manifest_ACSYNT_casepunc.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/CFPB/manifest_CFPB_recasepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CFPB/manifest_CFPB_recasepunc.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/CFPP2000/manifest_CFPP2000_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CFPP2000/manifest_CFPP2000_recasepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/AfricanAccentedFrench/manifest_AfricanAccentedFrench_recasepunc_max30_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/AfricanAccentedFrench/manifest_AfricanAccentedFrench_recasepunc_max30_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFAR/manifest_LVL-Atril-CTFAR_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFAR/manifest_LVL-Atril-CTFAR_casepunc.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFNN1/manifest_LVL-Atril-CTFNN1_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFNN1/manifest_LVL-Atril-CTFNN1_casepunc.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/OFROM/manifest_OFROM_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/OFROM/manifest_OFROM_recasepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/PFC/manifest_PFC_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/PFC/manifest_PFC_casepunc.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/Multilingual_TEDx/manifest_Multilingual_TEDx_casepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_TEDx/manifest_Multilingual_TEDx_casepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/VoxPopuli/manifest_VoxPopuli_casepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/VoxPopuli/manifest_VoxPopuli_casepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/TCOF_Adultes/manifest_TCOF_Adultes_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/TCOF_Adultes/manifest_TCOF_Adultes_recasepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: commun/audio/nemo/multi-turn/asr/fr/context/TCOF_Enfants/manifest_TCOF_Enfants_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/TCOF_Enfants/manifest_TCOF_Enfants_recasepunc_train.jsonl
           #   audio_locator_tag: ${model.audio_locator_tag}
           # Missing youtube, PxSLU, SimSamu, Voxforge, Clapi, ESLO, Lesvocaux, linagora_meetings
         weight: 0.3
@@ -188,10 +188,10 @@ data:
           task: asr
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/asr/en/context/Yodas/manifest_Yodas.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/Yodas/manifest_Yodas.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.3
       - type: group
@@ -201,25 +201,25 @@ data:
           task: qa
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.1
       - type: group
@@ -229,16 +229,16 @@ data:
           task: qa
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.1
       - type: group
@@ -249,10 +249,10 @@ data:
           task: ast
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/ast/fr-en/CoVoST/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/CoVoST/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: commun/audio/nemo/multi-turn/ast/fr-en/mTEDx/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/mTEDx/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.2
     seed: 42

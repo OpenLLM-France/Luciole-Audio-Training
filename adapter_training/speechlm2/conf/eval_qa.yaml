@@ -1,0 +1,25 @@
+ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/train_multitask2
+# ckpt: step=010000.ckpt
+ckpt: step=006220-last.ckpt
+ckpt_class: nemo.collections.speechlm2.models.SALM
+inputs:
+- name: HeySQuAD_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/test.jsonl.gz
+  metric: ["bert", "bleu"]
+  limit_val_batches: 50
+- name: AudioLLMs_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/AudioLLMs--public_sg_speech_qa_test/test.jsonl.gz
+  metric: ["bert", "bleu"]
+  limit_val_batches: 50
+- name: UltraChat_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/test.jsonl.gz
+  metric: ["bert", "bleu"]
+  limit_val_batches: 50
+- name: VoxPopuli-QA_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/test.jsonl.gz
+  metric: ["bert", "bleu"]
+  lang: fr
+  limit_val_batches: 50
+batch_size: 1
+max_new_tokens: 192
+show_examples: 2
