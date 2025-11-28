@@ -15,8 +15,10 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Optional, Any
 import random
+import os
 import json
 from pathlib import Path
+from tqdm import tqdm
 
 import lhotse.dataset
 import torch
@@ -33,12 +35,104 @@ from nemo.collections.common.data.lhotse.cutset import guess_parse_cutset
 from nemo.collections.speechlm2 import SALM, SALMDataset
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
-from to_hf import load_model
+from to_hf import load_model as load_checkpoint
+
+from nemo.utils import logging as nemo_logging
+nemo_logging.set_verbosity(nemo_logging.ERROR)
+
+
 
 class ToAudio(torch.utils.data.Dataset):
     def __getitem__(self, cuts: CutSet):
         audios, audio_lens = cuts.load_audio(collate=True)
         return {"cuts": cuts, "audios": audios, "audio_lens": audio_lens}
+
+@dataclass
+class SalmEvalConfig:
+    pretrained_name: Optional[str] = None
+    ckpt: Optional[str] = None
+    ckpt_xp_path: Optional[str] = None
+    ckpt_class: Optional[str] = None
+    ckpt_every_n_steps: Optional[int] = None
+    inputs: Any = None
+    batch_size: int = 64
+    max_new_tokens: int = 128
+    output_folder: Optional[str] = "evaluations"
+    output_manifest: Optional[str] = "generations.jsonl"
+    verbose: bool = False
+    use_normalizer: bool = True
+    device: str = "cuda"
+    num_workers: int = 4
+    extra_eos_tokens: Optional[list[str]] = None
+    system_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None
+    metric: str = "wer"
+    show_examples: int = 0
+    lang: str = "en"
+
+@dataclass
+class SalmDatasetInfer:
+    manifest_path: str
+    output_path: str
+    batch_size: int
+    name: str
+    dataset_prompt: str
+    limit_val_batches: int
+    metrics: Any
+    verbose: bool
+    show_examples: bool
+    lang: str
+
+    @classmethod
+    def from_config(cls, dataset: Any, cfg: Any, i: int):
+        """
+        Factory to construct SalmDatasetInfer from either:
+        - dataset: a string (manifest path)
+        - dataset: a dict with overrides
+        """
+
+        # Case 1: dataset is a string
+        if isinstance(dataset, str):
+            name = str(i)
+            manifest_path = dataset
+            batch_size = cfg.batch_size
+            dataset_prompt = cfg.user_prompt
+            limit_val_batches = -1
+            metrics = cfg.metric
+            verbose = cfg.verbose
+            show_examples = cfg.show_examples
+            lang = cfg.lang
+
+        # Case 2: dataset is a dict
+        else:
+            name = dataset.get("name", str(i))
+            manifest_path = dataset["manifest"]
+            batch_size = dataset.get("batch_size", cfg.batch_size)
+            dataset_prompt = dataset.get("user_prompt", cfg.user_prompt)
+            limit_val_batches = dataset.get("limit_val_batches", -1)
+            metrics = dataset.get("metric", cfg.metric)
+            verbose = dataset.get("verbose", cfg.verbose)
+            show_examples = dataset.get("show_examples", cfg.show_examples)
+            lang = dataset.get("lang", cfg.lang)
+
+        # Normalize metrics to a list
+        if isinstance(metrics, (list, tuple, omegaconf.listconfig.ListConfig)):
+            metrics = list(metrics)
+        else:
+            metrics = [metrics]
+        
+        return cls(
+            manifest_path=manifest_path,
+            output_path=get_output_manifest_path(cfg, name),
+            batch_size=batch_size,
+            name=name,
+            dataset_prompt=dataset_prompt,
+            limit_val_batches=limit_val_batches,
+            metrics=metrics,
+            verbose=verbose,
+            show_examples=show_examples,
+            lang=lang
+        )
 
 def get_output_manifest_path(cfg, name):
     if cfg.output_manifest is not None:
@@ -48,7 +142,7 @@ def get_output_manifest_path(cfg, name):
         output_manifest = cfg.output_manifest
         if len(cfg.inputs)>1:
             output_manifest = output_manifest.replace(".jsonl", f"_{name}.jsonl")
-        output_path = output_folder / Path(output_manifest)
+        output_path = output_folder / Path(cfg.ckpt).stem / Path(output_manifest)
         return output_path
     else: 
         return None
@@ -68,9 +162,9 @@ def evaluate(hyps, refs, dataset_config, results, name):
     if "bert" in dataset_config.metrics:
         from bert_score import score
         if dataset_config.lang=="en":
-            model = "~/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594"
+            model = f"{os.getenv('HOME')}/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594"
         elif dataset_config.lang=="fr":
-            model = "~/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/3f076fdb1ab68d5b2880cb87a0886f315b8146f8"
+            model = f"{os.getenv('HOME')}/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/3f076fdb1ab68d5b2880cb87a0886f315b8146f8"
         P, R, F1 = score(hyps, refs, 
                          lang=dataset_config.lang, 
                          model_type=model,
@@ -116,7 +210,11 @@ def infer(model, cfg, dataset_config):
     input_durations = []
     infer_durations = []
     prompts = []
-    for batch_idx, batch in enumerate(dloader):
+    if dataset_config.limit_val_batches>0:
+        pbar = tqdm(dloader, total=dataset_config.limit_val_batches-1)
+    else:
+        pbar=dloader
+    for batch_idx, batch in enumerate(pbar):
         ts = perf_counter()
         batch_prompt = []
         if dataset_config.batch_size==1:
@@ -189,151 +287,92 @@ def load_result(dataset_config):
     dataset_results = dict(hyps=hyps, refs=refs, prompts=prompts, ids=ids, durations=durations)
     return dataset_results
 
-@dataclass
-class SalmDatasetInfer:
-    manifest_path: str
-    output_path: str
-    batch_size: int
-    name: str
-    dataset_prompt: str
-    limit_val_batches: int
-    metrics: Any
-    verbose: bool
-    show_examples: bool
-    lang: str
-
-    @classmethod
-    def from_config(cls, dataset: Any, cfg: Any, i: int):
-        """
-        Factory to construct SalmDatasetInfer from either:
-        - dataset: a string (manifest path)
-        - dataset: a dict with overrides
-        """
-
-        # Case 1: dataset is a string
-        if isinstance(dataset, str):
-            name = str(i)
-            manifest_path = dataset
-            batch_size = cfg.batch_size
-            dataset_prompt = cfg.user_prompt
-            limit_val_batches = -1
-            metrics = cfg.metric
-            verbose = cfg.verbose
-            show_examples = cfg.show_examples
-            lang = cfg.lang
-
-        # Case 2: dataset is a dict
+def load_model(ckpt, device, ckpt_class=None, ckpt_xp_path=None):
+    with torch.device(device):
+        torch.set_default_dtype(torch.bfloat16)
+        if ckpt_class is not None:
+            ckpt = Path(ckpt_xp_path) / "checkpoints" / ckpt
+            model = load_checkpoint(ckpt_path=ckpt, ckpt_class=ckpt_class, ckpt_config=Path(ckpt_xp_path) / "exp_config.yaml")
         else:
-            name = dataset.get("name", str(i))
-            manifest_path = dataset["manifest"]
-            batch_size = dataset.get("batch_size", cfg.batch_size)
-            dataset_prompt = dataset.get("user_prompt", cfg.user_prompt)
-            limit_val_batches = dataset.get("limit_val_batches", -1)
-            metrics = dataset.get("metric", cfg.metric)
-            verbose = dataset.get("verbose", cfg.verbose)
-            show_examples = dataset.get("show_examples", cfg.show_examples)
-            lang = dataset.get("lang", cfg.lang)
-
-        # Normalize metrics to a list
-        if isinstance(metrics, (list, tuple, omegaconf.listconfig.ListConfig)):
-            metrics = list(metrics)
-        else:
-            metrics = [metrics]
-        
-        return cls(
-            manifest_path=manifest_path,
-            output_path=get_output_manifest_path(cfg, name),
-            batch_size=batch_size,
-            name=name,
-            dataset_prompt=dataset_prompt,
-            limit_val_batches=limit_val_batches,
-            metrics=metrics,
-            verbose=verbose,
-            show_examples=show_examples,
-            lang=lang
-        )
-
-@dataclass
-class SalmEvalConfig:
-    pretrained_name: Optional[str] = None
-    ckpt: Optional[str] = None
-    ckpt_xp_path: Optional[str] = None
-    ckpt_class: Optional[str] = None
-    inputs: Any = None
-    batch_size: int = 64
-    max_new_tokens: int = 128
-    output_folder: Optional[str] = "evaluations"
-    output_manifest: Optional[str] = "generations.jsonl"
-    verbose: bool = True
-    use_normalizer: bool = True
-    device: str = "cuda"
-    num_workers: int = 4
-    extra_eos_tokens: Optional[list[str]] = None
-    system_prompt: Optional[str] = None
-    user_prompt: Optional[str] = None
-    metric: str = "wer"
-    show_examples: int = 0
-    lang: str = "en"
-
+            model = SALM.from_pretrained(ckpt)
+        model = model.eval().to(torch.bfloat16).to(device)
+        torch.set_default_dtype(torch.float32)
+    return model
 
 @hydra_runner(config_path="conf", config_name="eval", schema=SalmEvalConfig)
 def main(cfg: SalmEvalConfig):
-    logging.info(f'Hydra config:\n{OmegaConf.to_yaml(cfg)}')
-
-    with torch.device(cfg.device):
-        torch.set_default_dtype(torch.bfloat16)
-        if cfg.ckpt_xp_path is not None:
-            xp_config = Path(cfg.ckpt_xp_path) / "exp_config.yaml"
-            if cfg.ckpt is not None:
-                ckpt_path = Path(cfg.ckpt_xp_path) / "checkpoints" / cfg.ckpt
-            else:
-                checkpoints_dir = Path(cfg.ckpt_xp_path) / "checkpoints"
-                ckpt_candidates = list(checkpoints_dir.glob("*-last*"))
-                if not ckpt_candidates:
-                    raise FileNotFoundError(f"No checkpoint with '-last' found in {checkpoints_dir}")
-                ckpt_path = ckpt_candidates[0]
-            model = load_model(ckpt_path=ckpt_path, ckpt_class=cfg.ckpt_class, ckpt_config=xp_config)
+    # logging.info(f'Hydra config:\n{OmegaConf.to_yaml(cfg)}')
+    if cfg.ckpt_xp_path is not None:
+        if cfg.ckpt is not None:
+            ckpts = [ckpt]
         else:
-            model = SALM.from_pretrained(cfg.pretrained_name)
-        model = model.eval().to(torch.bfloat16).to(cfg.device)
-        torch.set_default_dtype(torch.float32)
-    results = dict()
-    for i, dataset in enumerate(cfg.inputs):
-        dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
-        print()
-        print(f"Evaluating dataset {dataset_config.name}")
-        if dataset_config.output_path is not None and dataset_config.output_path.exists():
-            print(f"Loading dataset {dataset_config.name} results as output manifest already exists.")
-            dataset_results = load_result(dataset_config)
-        else:
-            dataset_results = infer(model, cfg, dataset_config)
-            
-        results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
-        # logging.info(f"RTFx: {rtfx:.1f}")
-        for i, (id, ref, hyp, prompt) in enumerate(zip(dataset_results["ids"], dataset_results["refs"], dataset_results["hyps"], dataset_results["prompts"])):
-            if i+1>dataset_config.show_examples:
-                break
-            print(f"\tDATA {id}")
-            print(f"\t\tPrompt: {prompt}")
-            print(f"\t\tRef: {ref}")
-            print(f"\t\tPrediction: {hyp}")
-            print()
-    for result in results:
-        logging.info(f"{result}: {results[result]}")
-    
-    output_result_path = dataset_config.output_path.parent / "results.json"
-    if output_result_path.exists():
-        with open(output_result_path, "r") as f:
-            try:
-                old_data = json.load(f)
-            except json.JSONDecodeError:
-                old_data = {}
+            checkpoints_dir = Path(cfg.ckpt_xp_path) / "checkpoints"
+            ckpt_paths = [i for i in checkpoints_dir.glob("*.ckpt") if "-last" not in i.name]
+            def extract_step(name):
+                return int(name.split("=")[1].split(".")[0])
+            ckpts = sorted(
+                (ckpt.name for ckpt in ckpt_paths),
+                key=extract_step,
+                reverse=True
+            )
+            if cfg.ckpt_every_n_steps is not None:
+                new_list = {ckpts[0], ckpts[-1]}
+                for ckpt in ckpts:
+                    if extract_step(ckpt) % cfg.ckpt_every_n_steps == 0:
+                        new_list.add(ckpt)
+                ckpts = list(new_list)
     else:
-        old_data = {}
-    merged = {**old_data, **results}
-    with open(output_result_path, "w") as f:
-        json.dump(merged, f, indent=4)
-    return results
+        ckpts = [cfg.pretrained_name]
+    results = dict()
+    width = 60
+    print(f"Evaluating {len(ckpts)} checkpoints")
+    for ckpt in ckpts:
+        cfg.ckpt = ckpt
+        print()
+        print(f" Evaluating checkpoint {ckpt} ".center(width, "="))
+        print(f"On {len(cfg.inputs)} datasets ".center(width))
+        print("=" * width)
+        print()
+        if cfg.ckpt_xp_path is not None:
+            model = load_model(ckpt, cfg.device, cfg.ckpt_class, cfg.ckpt_xp_path) 
+        else:
+            model = load_model(ckpt, cfg.device) 
+        for i, dataset in enumerate(cfg.inputs):
+            dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
+            print()
+            print("\t", f" Evaluating dataset {dataset_config.name} ".center(width-8, "-"))
+            print()
+            if dataset_config.output_path is not None and dataset_config.output_path.exists():
+                print(f"Loading dataset {dataset_config.name} results as output manifest already exists.")
+                dataset_results = load_result(dataset_config)
+            else:
+                dataset_results = infer(model, cfg, dataset_config)
+            print()
+            results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
+            # logging.info(f"RTFx: {rtfx:.1f}")
+            for i, (id, ref, hyp, prompt) in enumerate(zip(dataset_results["ids"], dataset_results["refs"], dataset_results["hyps"], dataset_results["prompts"])):
+                if i+1>dataset_config.show_examples:
+                    break
+                print(f"- DATA {id}")
+                print(f"----> Prompt: {prompt}")
+                print(f"----> Reference : {ref}")
+                print(f"----> Prediction: {hyp}")
+                print()
+        for result in results:
+            logging.info(f"{result}: {results[result]}")
+        
+        output_result_path = dataset_config.output_path.parent / "results.json"
+        if output_result_path.exists():
+            with open(output_result_path, "r") as f:
+                try:
+                    old_data = json.load(f)
+                except json.JSONDecodeError:
+                    old_data = {}
+        else:
+            old_data = {}
+        merged = {**old_data, **results}
+        with open(output_result_path, "w") as f:
+            json.dump(merged, f, indent=4)
     
 def parse_hyp(answer: torch.Tensor, eos_tokens: list[int]):
     end = (answer == torch.isin(answer, torch.tensor(eos_tokens))).nonzero(as_tuple=True)[0]
