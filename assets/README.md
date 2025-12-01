@@ -7,49 +7,41 @@
 # Dataset Summary & Key Metrics
 
 ## Overview Statistics
-
 | Metric | Value |
 |--------|--------|
 | **Total Datasets** | 82 unique dataset entries |
-| **Task Types** | 4 (ASR, AST, QA, AQA) |
-| **Languages** | 3 (English, French, French-English) |
-| **Total Audio Segments** | 15,247,539 segments |
-| **Total Duration** | ~1,167 hours (48.6 days) |
+| **Task Types** | 4 ( AQA      ,  ASR      ,  AST      ,  QA       ) |
+| **Languages** | 3 ( en      ,  fr      ,  fr-en   ) |
+| **Total Audio Segments** | 16,772,705 segments |
+| **Total Duration** | ~48,503 hours (2020.9 days) |
 
 ## Dataset Distribution by Task Type
-
 | Task Type | Description | Datasets | Audio Segments | Duration (Hours) |
 |-----------|-------------|----------|----------------|------------------|
-| **ASR** | Automatic Speech Recognition | 54 | 13,439,646 | ~1,087 hrs |
-| **QA** | Question Answering | 25 | 1,782,395 | ~76 hrs |
-| **AST** | Audio Speech Translation | 4 | 265,140 | ~3.6 hrs |
-| **AQA** | Audio Question Answering | 3 | 25,474 | ~0.4 hrs |
+| **AQA** | Audio Question Answering | 3 | 25,474 | ~159 hrs |
+| **ASR** | Automatic Speech Recognition | 48 | 14,522,560 | ~37,359 hrs |
+| **AST** | Audio Speech Translation | 4 | 265,140 | ~287 hrs |
+| **QA** | Question Answering | 27 | 1,959,531 | ~10,696 hrs |
 
 ## Dataset Distribution by Language
-
 | Language | Datasets | Audio Segments | Duration (Hours) |
 |----------|----------|----------------|------------------|
-| **French (fr)** | 56 | 11,945,052 | ~927 hrs |
-| **English (en)** | 22 | 3,037,347 | ~237 hrs |
-| **French-English (fr-en)** | 4 | 265,140 | ~3.6 hrs |
+| **en** | 26 | 10,477,900 | ~27,463 hrs |
+| **fr** | 52 | 6,029,665 | ~20,752 hrs |
+| **fr-en** | 4 | 265,140 | ~287 hrs |
 
 ## Key Dataset Characteristics
-
 | Characteristic | Value |
 |----------------|--------|
-| **Avg. Segment Duration** | 4.6 seconds |
+| **Avg. Segment Duration** | 10.41 seconds |
 | **Min Segment Duration** | 0.01 seconds |
 | **Max Segment Duration** | 788.64 seconds |
-| **Avg. Instruction Length** | 8.85 words |
-| **Avg. Response Length** | 42.8 words |
+| **Avg. Instruction Length** | 8.61 words |
+| **Avg. Response Length** | 31.20 words |
 
 ## Split Distribution
-
 | Split | Datasets | Percentage |
 |-------|----------|------------|
-| **Train** | 62 | 75.6% |
-| **Test** | 16 | 19.5% |
-| **Dev** | 4 | 4.9% |
-
----
-*Data compiled from 82 dataset configurations across multiple speech and language understanding tasks*
+| **Train** | 42 | 51.2% |
+| **Test** | 31 | 37.8% |
+| **Dev** | 9 | 11.0% |
