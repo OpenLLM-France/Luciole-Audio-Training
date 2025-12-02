@@ -12,19 +12,19 @@ import numpy as np
 import seaborn as sns
 from pathlib import Path
 import pandas as pd
+import argparse
 
 # Set style for better plots
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
 
-def load_results():
+def load_results(experiment_folder):
     """Load results from all checkpoint directories."""
-    checkpoints = {
-        5000: 'model2/evaluations_5000/test_speechlm2/results.json',
-        10000: 'model2/evaluations_10000/test_speechlm2/results.json', 
-        15000: 'model2/evaluations_15000/test_speechlm2/results.json', 
-        20000: 'model2/evaluations_20000/test_speechlm2/results.json'
-    }
+    
+    checkpoints_folder = Path(experiment_folder)
+    results_files = checkpoints_folder.rglob('results.json')
+    checkpoints = {int(p.parent.name.split('=')[1]): str(p) for p in results_files}
+    checkpoints = dict(sorted(checkpoints.items()))
     
     results = {}
     for checkpoint, path in checkpoints.items():
@@ -132,11 +132,16 @@ def analyze_trends(results):
                 change = abs(values[-1] - values[0])
                 print(f"  {metric}: {trend} ({values[0]:.3f} → {values[-1]:.3f}, Δ={change:.3f})")
 
-def create_curve_plots(results):
+def create_curve_plots(results, plot_folder="plots", plot_name="checkpoint_curves.png"):
     """Create comprehensive curve plots for all metrics."""
+
+    plot_folder = Path(plot_folder)
+    plot_folder.mkdir(exist_ok=True, parents=True)
+    if not plot_name.endswith(".png"):
+        plot_name = f"{plot_name}.png"
     
-    steps = [5000, 10000, 15000, 20000]
-    datasets = list(results[5000].keys())
+    steps = list(results.keys())
+    datasets = list(results[steps[0]].keys())
     
     # Group datasets by task type
     qa_datasets = []
@@ -144,7 +149,7 @@ def create_curve_plots(results):
     translation_datasets = []
     
     for dataset in datasets:
-        metrics = list(results[5000][dataset].keys())
+        metrics = list(results[steps[0]][dataset].keys())
         if 'bleu' in metrics and 'bert_p' in metrics:
             qa_datasets.append(dataset)
         elif 'wer' in metrics and 'bleu' not in metrics:
@@ -200,16 +205,31 @@ def create_curve_plots(results):
     plot_average_performance(results, steps, ax9)
     
     plt.tight_layout(pad=3.0)
-    plt.savefig('checkpoint_curves.png', dpi=300, bbox_inches='tight')
+    plt.savefig(plot_folder / Path(plot_name), dpi=300, bbox_inches='tight')
     plt.close()
 
 def main():
     """Main function."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "experiment_folder",
+        type=str,
+        help="Path to the experiment folder containing results from the evaluation script."
+    )
+    parser.add_argument(
+        "--plot_folder",
+        type=str,
+        default="plots",
+        help="Path to save the plots."
+    )
+    args = parser.parse_args()    
+
     print("Loading evaluation results for curve analysis...")
-    results = load_results()
+    results = load_results(experiment_folder=args.experiment_folder)
     
     print("Creating curve plots...")
-    create_curve_plots(results)
+    create_curve_plots(results, plot_folder=args.plot_folder, plot_name=str(Path(args.experiment_folder).name))
     
     print("Analyzing trends...")
     analyze_trends(results)
