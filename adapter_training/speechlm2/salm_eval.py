@@ -66,9 +66,11 @@ class SalmEvalConfig:
     extra_eos_tokens: Optional[list[str]] = None
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
-    metric: str = "wer"
+    metric: Any = "wer"
     show_examples: int = 0
     lang: str = "en"
+    force_compute_metrics: bool = False
+    limit_val_batches: int = 100
 
 @dataclass
 class SalmDatasetInfer:
@@ -97,7 +99,7 @@ class SalmDatasetInfer:
             manifest_path = dataset
             batch_size = cfg.batch_size
             dataset_prompt = cfg.user_prompt
-            limit_val_batches = -1
+            limit_val_batches = cfg.limit_val_batches
             metrics = cfg.metric
             verbose = cfg.verbose
             show_examples = cfg.show_examples
@@ -109,7 +111,7 @@ class SalmDatasetInfer:
             manifest_path = dataset["manifest"]
             batch_size = dataset.get("batch_size", cfg.batch_size)
             dataset_prompt = dataset.get("user_prompt", cfg.user_prompt)
-            limit_val_batches = dataset.get("limit_val_batches", -1)
+            limit_val_batches = dataset.get("limit_val_batches", cfg.limit_val_batches)
             metrics = dataset.get("metric", cfg.metric)
             verbose = dataset.get("verbose", cfg.verbose)
             show_examples = dataset.get("show_examples", cfg.show_examples)
@@ -151,14 +153,30 @@ def evaluate(hyps, refs, dataset_config, results, name):
     results[name] = dict()
     if "wer" in dataset_config.metrics:
         wer, _, nins, ndel, nsub = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)
-        logging.info(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
+        print(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
         results[name].update(dict(wer=wer*100, nins=nins*100, ndel=ndel*100, nsub=nsub*100))
     if "bleu" in dataset_config.metrics:
         from torchmetrics.text import BLEUScore
         bleu = BLEUScore()
         score = bleu(hyps, [[ref] for ref in refs]).item()*100
         results[name].update(dict(bleu=score))
-        logging.info(f"BLEU: {score:.3f}")
+        print(f"BLEU: {score:.3f}")
+    if "rouge" in dataset_config.metrics:
+        from torchmetrics.text.rouge import ROUGEScore
+        rouge = ROUGEScore()
+        scores = rouge(hyps, refs)
+
+        # Extract ROUGE-L (or whichever variants you want)
+        rouge_l = scores["rougeL_fmeasure"].item() * 100
+        rouge_1 = scores["rouge1_fmeasure"].item() * 100
+        rouge_2 = scores["rouge2_fmeasure"].item() * 100
+
+        # Choose which to store — here storing ROUGE-L by default:
+        results[name].update(dict(rougeL=rouge_l, rouge1=rouge_1, rouge2=rouge_2))
+
+        print(
+            f"ROUGE: R1={rouge_1:.3f}, R2={rouge_2:.3f}, RL={rouge_l:.3f}"
+        )
     if "bert" in dataset_config.metrics:
         from bert_score import score
         if dataset_config.lang=="en":
@@ -169,10 +187,15 @@ def evaluate(hyps, refs, dataset_config, results, name):
                          lang=dataset_config.lang, 
                          model_type=model,
                          num_layers=12)
-        results[name].update(dict(bert_p=P.mean().item(), bert_r=R.mean().item(), bert_f1=F1.mean().item()))
+        results[name].update(dict(bert_p=P.mean().item()*100, bert_r=R.mean().item()*100, bert_f1=F1.mean().item()*100))
     return results
 
 def infer(model, cfg, dataset_config):
+    if isinstance(model, str):
+        if cfg.ckpt_xp_path is not None:
+            model = load_model(model, cfg.device, cfg.ckpt_class, cfg.ckpt_xp_path) 
+        else:
+            model = load_model(model, cfg.device) 
     cuts = guess_parse_cutset(dataset_config.manifest_path)#.sort_by_duration()
     dloader = torch.utils.data.DataLoader(
         dataset=ToAudio(),
@@ -213,7 +236,7 @@ def infer(model, cfg, dataset_config):
     if dataset_config.limit_val_batches>0:
         pbar = tqdm(dloader, total=dataset_config.limit_val_batches-1)
     else:
-        pbar=dloader
+        pbar = tqdm(dloader)
     for batch_idx, batch in enumerate(pbar):
         ts = perf_counter()
         batch_prompt = []
@@ -263,14 +286,14 @@ def infer(model, cfg, dataset_config):
             break
     if dataset_config.output_path is not None:
         dataset_config.output_path.parent.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Writing manifest to {dataset_config.output_path}")
+        print(f"Writing manifest to {dataset_config.output_path}")
         with SequentialJsonlWriter(dataset_config.output_path) as writer:
             for cut, ref, hyp, prompt in zip(cuts, refs, hyps, prompts):
                 writer.write({"id": cut.id, "duration": cut.duration, "prompt": prompt, "text": ref, "pred_text": hyp})
     dataset_results = dict(hyps=hyps, refs=refs, durations=input_durations, infer_durations=infer_durations, prompts=prompts, ids=[cut.id for cut in cuts])
-    return dataset_results
+    return dataset_results, model
 
-def load_result(dataset_config):
+def load_predictions(dataset_config):
     with open(dataset_config.output_path, "r") as f:
         rows = [json.loads(line) for line in f]
     hyps = []
@@ -299,12 +322,33 @@ def load_model(ckpt, device, ckpt_class=None, ckpt_xp_path=None):
         torch.set_default_dtype(torch.float32)
     return model
 
+def load_results(result_file):
+    if result_file.exists():
+        with open(result_file, "r") as f:
+            try:
+                old_data = json.load(f)
+            except json.JSONDecodeError:
+                old_data = {}
+    else:
+        old_data = {}
+    return old_data
+
+def print_data(dataset_results, dataset_config):
+    for i, (id, ref, hyp, prompt) in enumerate(zip(dataset_results["ids"], dataset_results["refs"], dataset_results["hyps"], dataset_results["prompts"])):
+        if i+1>dataset_config.show_examples:
+            break
+        print(f"- DATA {id}")
+        print(f"----> Prompt: {prompt}")
+        print(f"----> Reference : {ref}")
+        print(f"----> Prediction: {hyp}")
+        print()
+
 @hydra_runner(config_path="conf", config_name="eval", schema=SalmEvalConfig)
 def main(cfg: SalmEvalConfig):
-    # logging.info(f'Hydra config:\n{OmegaConf.to_yaml(cfg)}')
+    # print(f'Hydra config:\n{OmegaConf.to_yaml(cfg)}')
     if cfg.ckpt_xp_path is not None:
         if cfg.ckpt is not None:
-            ckpts = [ckpt]
+            ckpts = [cfg.ckpt]
         else:
             checkpoints_dir = Path(cfg.ckpt_xp_path) / "checkpoints"
             ckpt_paths = [i for i in checkpoints_dir.glob("*.ckpt") if "-last" not in i.name]
@@ -323,56 +367,48 @@ def main(cfg: SalmEvalConfig):
                 ckpts = list(new_list)
     else:
         ckpts = [cfg.pretrained_name]
-    results = dict()
     width = 60
-    print(f"Evaluating {len(ckpts)} checkpoints")
-    for ckpt in ckpts:
-        cfg.ckpt = ckpt
+    print(f"Evaluating {len(ckpts)} checkpoints ({ckpts})")
+    for j, ckpt in enumerate(ckpts):
+        cfg.ckpt = model = ckpt
         print()
-        print(f" Evaluating checkpoint {ckpt} ".center(width, "="))
+        print(f" Evaluating checkpoint {ckpt} ({j+1}/{len(ckpts)}) ".center(width, "="))
         print(f"On {len(cfg.inputs)} datasets ".center(width))
         print("=" * width)
         print()
-        if cfg.ckpt_xp_path is not None:
-            model = load_model(ckpt, cfg.device, cfg.ckpt_class, cfg.ckpt_xp_path) 
+        output_result_path = get_output_manifest_path(cfg, ckpt).parent / "results.json"
+        if cfg.force_compute_metrics:
+            results = dict()
         else:
-            model = load_model(ckpt, cfg.device) 
+            results = load_results(output_result_path)
         for i, dataset in enumerate(cfg.inputs):
             dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
+            if dataset_config.name in results:
+                missing_metric = False
+                for metric in results[dataset_config.name]:
+                    if metric.startswith("bert"):
+                        metric = "bert"
+                    elif metric.startswith("rouge"):
+                        metric = "rouge"
+                    if metric not in dataset_config.metrics:
+                        missing_metric = True
+                        break
+                if not missing_metric:
+                    print(f"Skipping dataset {dataset_config.name} as it already exists in results.")
+                    continue
             print()
-            print("\t", f" Evaluating dataset {dataset_config.name} ".center(width-8, "-"))
+            print("\t", f" Evaluating dataset {dataset_config.name} ({i+1}/{len(cfg.inputs)}) ".center(width-8, "-"))
             print()
             if dataset_config.output_path is not None and dataset_config.output_path.exists():
                 print(f"Loading dataset {dataset_config.name} results as output manifest already exists.")
-                dataset_results = load_result(dataset_config)
+                dataset_results = load_predictions(dataset_config)
             else:
-                dataset_results = infer(model, cfg, dataset_config)
+                dataset_results, model = infer(model, cfg, dataset_config)
             print()
             results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
-            # logging.info(f"RTFx: {rtfx:.1f}")
-            for i, (id, ref, hyp, prompt) in enumerate(zip(dataset_results["ids"], dataset_results["refs"], dataset_results["hyps"], dataset_results["prompts"])):
-                if i+1>dataset_config.show_examples:
-                    break
-                print(f"- DATA {id}")
-                print(f"----> Prompt: {prompt}")
-                print(f"----> Reference : {ref}")
-                print(f"----> Prediction: {hyp}")
-                print()
-        for result in results:
-            logging.info(f"{result}: {results[result]}")
-        
-        output_result_path = dataset_config.output_path.parent / "results.json"
-        if output_result_path.exists():
-            with open(output_result_path, "r") as f:
-                try:
-                    old_data = json.load(f)
-                except json.JSONDecodeError:
-                    old_data = {}
-        else:
-            old_data = {}
-        merged = {**old_data, **results}
+            print_data(dataset_results, dataset_config)
         with open(output_result_path, "w") as f:
-            json.dump(merged, f, indent=4)
+            json.dump(results, f, indent=4)
     
 def parse_hyp(answer: torch.Tensor, eos_tokens: list[int]):
     end = (answer == torch.isin(answer, torch.tensor(eos_tokens))).nonzero(as_tuple=True)[0]
