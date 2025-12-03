@@ -21,40 +21,40 @@ model:
     r: 128
 
   perception:
-     target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
-     modality_adapter:
-       _target_: nemo.collections.asr.modules.ConformerEncoder
-       feat_in: 1024
-       feat_out: -1 # you may set it if you need different output size other than the default d_model
-       n_layers: 2
-       d_model: 1024
-       subsampling: dw_striding # vggnet, striding, stacking or stacking_norm, dw_striding
-       subsampling_factor: 1 # must be power of 2 for striding and vggnet
-       subsampling_conv_channels: 256 # set to -1 to make it equal to the d_model
-       causal_downsampling: false
-       ff_expansion_factor: 4
-       self_attention_model: rel_pos # rel_pos or abs_pos
-       n_heads: 8 # may need to be lower for smaller d_models
-       # [left, right] specifies the number of steps to be seen from left and right of each step in self-attention
-       att_context_size: [-1, -1]
-       att_context_style: regular # regular or chunked_limited
-       xscaling: true # scales up the input embeddings by sqrt(d_model)
-       untie_biases: true # unties the biases of the TransformerXL layers
-       pos_emb_max_len: 5000
-       conv_kernel_size: 9
-       conv_norm_type: batch_norm # batch_norm or layer_norm or groupnormN (N specifies the number of groups)
-       # conv_context_size can be"causal" or a list of two integers while conv_context_size[0]+conv_context_size[1]+1==conv_kernel_size
-       # null means [(kernel_size-1)//2, (kernel_size-1)//2], and 'causal' means [(kernel_size-1), 0]
-       conv_context_size: null
-       ### regularization
-       dropout: 0 # The dropout used in most of the Conformer Modules
-       dropout_pre_encoder: 0 # The dropout used before the encoder
-       dropout_emb: 0.0 # The dropout used for embeddings
-       dropout_att: 0 # The dropout for multi-headed attention modules
+    target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
+    modality_adapter:
+      _target_: nemo.collections.asr.modules.ConformerEncoder
+      feat_in: 1024
+      feat_out: -1 # you may set it if you need different output size other than the default d_model
+      n_layers: 2
+      d_model: 1024
+      subsampling: dw_striding # vggnet, striding, stacking or stacking_norm, dw_striding
+      subsampling_factor: 1 # must be power of 2 for striding and vggnet
+      subsampling_conv_channels: 256 # set to -1 to make it equal to the d_model
+      causal_downsampling: false
+      ff_expansion_factor: 4
+      self_attention_model: rel_pos # rel_pos or abs_pos
+      n_heads: 8 # may need to be lower for smaller d_models
+      # [left, right] specifies the number of steps to be seen from left and right of each step in self-attention
+      att_context_size: [-1, -1]
+      att_context_style: regular # regular or chunked_limited
+      xscaling: true # scales up the input embeddings by sqrt(d_model)
+      untie_biases: true # unties the biases of the TransformerXL layers
+      pos_emb_max_len: 5000
+      conv_kernel_size: 9
+      conv_norm_type: batch_norm # batch_norm or layer_norm or groupnormN (N specifies the number of groups)
+      # conv_context_size can be"causal" or a list of two integers while conv_context_size[0]+conv_context_size[1]+1==conv_kernel_size
+      # null means [(kernel_size-1)//2, (kernel_size-1)//2], and 'causal' means [(kernel_size-1), 0]
+      conv_context_size: null
+      ### regularization
+      dropout: 0 # The dropout used in most of the Conformer Modules
+      dropout_pre_encoder: 0 # The dropout used before the encoder
+      dropout_emb: 0.0 # The dropout used for embeddings
+      dropout_att: 0 # The dropout for multi-headed attention modules
 
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 3e-4
+    lr: 1e-4
     betas: [0.9, 0.98]
     weight_decay: 1e-3
     foreach: true # set to false if having issues with tensor-parallelism
@@ -62,7 +62,7 @@ model:
   lr_scheduler:
     _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
     warmup_steps: 250
-    min_lr: 1e-6
+    min_lr: 1e-5
     max_steps: ${trainer.max_steps}
     
 trainer:
@@ -72,8 +72,8 @@ trainer:
   precision: bf16-true
   max_epochs: -1 
   # max_steps: 20
-  limit_train_batches: 50_000  # number of steps in 1 epoch bc no epoch in lhotse
-  accumulate_grad_batches: 4
+  limit_train_batches: 250_000  # number of steps in 1 epoch bc no epoch in lhotse
+  accumulate_grad_batches: 10
   limit_val_batches: 0.0
   val_check_interval: 5000
   num_sanity_val_steps: 1
@@ -112,7 +112,7 @@ exp_manager:
     filename: "{step:06.0f}"
     monitor: step
     mode: max
-    every_n_train_steps: 5000
+    every_n_train_steps: 1000
     every_n_epochs: null
     save_top_k: -1
     always_save_nemo: false
@@ -140,44 +140,56 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-          # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/ACSYNT/manifest_ACSYNT_casepunc.jsonl
-          #   audio_locator_tag: ${model.audio_locator_tag}
-          # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CFPB/manifest_CFPB_recasepunc.jsonl
-          #   audio_locator_tag: ${model.audio_locator_tag}
-          # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CFPP2000/manifest_CFPP2000_recasepunc_train.jsonl
-          #   audio_locator_tag: ${model.audio_locator_tag}
-          # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/AfricanAccentedFrench/manifest_AfricanAccentedFrench_recasepunc_max30_train.jsonl
-          #   audio_locator_tag: ${model.audio_locator_tag}
-          # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFAR/manifest_LVL-Atril-CTFAR_casepunc.jsonl
-          #   audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LVL-Atril-CTFNN1/manifest_LVL-Atril-CTFNN1_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/ACSYNT/manifest_0.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/ACSYNT/audio_0.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/OFROM/manifest_OFROM_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/CFPB/manifest_0.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/CFPB/audio_0.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/PFC/manifest_PFC_casepunc.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/CFPP2000/manifest_{0..1}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/CFPP2000/audio_{0..1}.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_TEDx/manifest_Multilingual_TEDx_casepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/AfricanAccentedFrench/manifest_0.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/AfricanAccentedFrench/audio_0.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/VoxPopuli/manifest_VoxPopuli_casepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/LVL-Atril-CTFAR/manifest_{0..2}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/LVL-Atril-CTFAR/audio_{0..2}.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/TCOF_Adultes/manifest_TCOF_Adultes_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/LVL-Atril-CTFNN1/manifest_{0..2}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/LVL-Atril-CTFNN1/audio_{0..2}.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
-          #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/TCOF_Enfants/manifest_TCOF_Enfants_recasepunc_train.jsonl
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/OFROM/manifest_{0..4}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/OFROM/audio_{0..4}.tar
+          #   audio_locator_tag: ${model.audio_locator_tag}
+          # - type: multimodal_conversation
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/PFC/manifest_{0..2}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/PFC/audio_{0..2}.tar
+          #   audio_locator_tag: ${model.audio_locator_tag}
+          # - type: multimodal_conversation
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/Multilingual_TEDx/manifest_{0..2}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/Multilingual_TEDx/audio_{0..2}.tar
+          #   audio_locator_tag: ${model.audio_locator_tag}
+          # - type: multimodal_conversation
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/VoxPopuli/manifest_{0..1}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/VoxPopuli/audio_{0..1}.tar
+          #   audio_locator_tag: ${model.audio_locator_tag}
+          # - type: multimodal_conversation
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/TCOF_Adultes/manifest_{0..3}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/TCOF_Adultes/audio_{0..3}.tar
+          #   audio_locator_tag: ${model.audio_locator_tag}
+          # - type: multimodal_conversation
+          #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/TCOF_Enfants/manifest_{0..2}.jsonl
+          #   tarred_audio_filepaths: ${oc.env:DATA_FOLDER}/tarred/asr/fr/TCOF_Enfants/audio_{0..2}.tar
           #   audio_locator_tag: ${model.audio_locator_tag}
           # Missing youtube, PxSLU, SimSamu, Voxforge, Clapi, ESLO, Lesvocaux, linagora_meetings
         weight: 0.3
@@ -188,12 +200,31 @@ data:
           task: asr
         input_cfg:
           - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/FLEURS/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/Yodas/manifest_Yodas.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.3
+      - type: group
+        tags:
+          lang: multi
+          pnc: yes
+          task: asr
+        input_cfg:
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/FLEURS/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/FLEURS/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/FLEURS/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.1
       - type: group
         tags:
           lang: en
@@ -254,7 +285,7 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/mTEDx/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-        weight: 0.2
+        weight: 0.1
     seed: 42
     shuffle: true
     shard_seed: "randomized"
@@ -262,13 +293,13 @@ data:
     use_lhotse: true
     num_workers: 4
 
-    max_duration: 90
+    max_duration: 60
     min_tokens: 2
     use_bucketing: false
     use_multimodal_sampling: true
     measure_total_length: true
-    batch_tokens: 4096
-    max_tokens: 2048
+    batch_tokens: 3072
+    max_tokens: 1024
 
 
   validation_ds:
