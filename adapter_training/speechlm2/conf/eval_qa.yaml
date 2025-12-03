@@ -1,25 +1,35 @@
-ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/train_multitask2
-# ckpt: step=010000.ckpt
-ckpt: step=006220-last.ckpt
+ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/${oc.env:XP}
+ckpt: null
 ckpt_class: nemo.collections.speechlm2.models.SALM
+ckpt_every_n_steps: 5000
 inputs:
+- name: VoxPopuli-QA_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/test.jsonl.gz
+  lang: en
 - name: HeySQuAD_EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/test.jsonl.gz
-  metric: ["bert", "bleu"]
-  limit_val_batches: 50
-- name: AudioLLMs_EN
+  lang: en
+- name: Public_sg_speech_qa_EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/AudioLLMs--public_sg_speech_qa_test/test.jsonl.gz
-  metric: ["bert", "bleu"]
-  limit_val_batches: 50
+  lang: en
 - name: UltraChat_EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/test.jsonl.gz
-  metric: ["bert", "bleu"]
-  limit_val_batches: 50
+  lang: en
 - name: VoxPopuli-QA_FR
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/test.jsonl.gz
-  metric: ["bert", "bleu"]
   lang: fr
-  limit_val_batches: 50
+- name: CohereLabs--aya_collection_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/test.jsonl.gz
+  lang: fr
+- name: Vigogne--Alpaca_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/test.jsonl.gz
+  lang: fr
+- name: ComparIA_FR
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/fr/ComparIA/test.jsonl.gz
+  lang: fr
+metric: ["bert", "bleu", "rouge"]
+data_type: qa
 batch_size: 1
-max_new_tokens: 192
+max_new_tokens: 256
 show_examples: 2
+limit_val_batches: 100

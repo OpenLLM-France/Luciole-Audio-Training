@@ -1,37 +1,60 @@
-ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/train_multitask2
-# ckpt: step=010000.ckpt
-ckpt: step=006220-last.ckpt
+ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/${oc.env:XP}
+ckpt: null
 ckpt_class: nemo.collections.speechlm2.models.SALM
+ckpt_every_n_steps: 5000
 inputs:
 - name: FLEURS_FR
-  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/FLEURS/cuts_FLEURS_casepunc_dev.jsonl.gz
-  batch_size: 64
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/FLEURS/cuts_FLEURS_casepunc_test.jsonl.gz
   user_prompt: "Transcris ce fichier audio"
   metric: "wer"
+  lang: fr
+- name: FLEURS_EN
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/FLEURS/test.jsonl.gz
+  user_prompt: "Transcribe this audio file"
+  metric: "wer"
+- name: FLEURS_DE
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/de/FLEURS/test.jsonl.gz
+  user_prompt: "Schreibe alles auf, was im Audio gesagt wird."
+  metric: "wer"
+  lang: de
+- name: FLEURS_IT
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/it/FLEURS/test.jsonl.gz
+  user_prompt: "Scrivi tutto ciò che si dice nell'audio."
+  metric: "wer"
+  lang: it
+- name: FLEURS_ES
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/es/FLEURS/test.jsonl.gz
+  user_prompt: "Escribe todo lo que se dice en el audio."
+  metric: "wer"
+  lang: es
 - name: CommonVoice_FR
-  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
-  batch_size: 64
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_test.jsonl.gz
   limit_val_batches: 25
   user_prompt: "Transcris ce fichier audio"
   metric: "wer"
+  lang: fr
 - name: CommonVoice_EN
-  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
-  batch_size: 64
+  manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/CommonVoice/cuts_CommonVoice_casepunc_test.jsonl.gz
   limit_val_batches: 25
   user_prompt: "Transcribe this audio file"
   metric: "wer"
 - name: CoVoST_FR-EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/CoVoST/test.jsonl.gz
-  batch_size: 64
   limit_val_batches: 25
   user_prompt: "Traduit ce fichier audio en anglais"
   metric: ["bleu", "wer"]
+  show_examples: 2
+  data_type: ast
+  lang: fr-en
 - name: mTEDx_FR-EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/mTEDx/test.jsonl.gz
-  batch_size: 64
   limit_val_batches: 25
   user_prompt: "Traduit ce fichier audio en anglais"
   metric: ["bleu", "wer"]
+  show_examples: 2
+  data_type: ast
+  lang: fr-en
 batch_size: 64
-max_new_tokens: 192
-show_examples: 5
+data_type: asr
+max_new_tokens: 128
+show_examples: 1
