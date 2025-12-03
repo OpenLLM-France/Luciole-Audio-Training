@@ -71,6 +71,7 @@ class SalmEvalConfig:
     lang: str = "en"
     force_compute_metrics: bool = False
     limit_val_batches: int = 100
+    data_type: str = "asr"
 
 @dataclass
 class SalmDatasetInfer:
@@ -84,6 +85,7 @@ class SalmDatasetInfer:
     verbose: bool
     show_examples: bool
     lang: str
+    data_type: str
 
     @classmethod
     def from_config(cls, dataset: Any, cfg: Any, i: int):
@@ -104,6 +106,7 @@ class SalmDatasetInfer:
             verbose = cfg.verbose
             show_examples = cfg.show_examples
             lang = cfg.lang
+            data_type = cfg.data_type
 
         # Case 2: dataset is a dict
         else:
@@ -116,6 +119,7 @@ class SalmDatasetInfer:
             verbose = dataset.get("verbose", cfg.verbose)
             show_examples = dataset.get("show_examples", cfg.show_examples)
             lang = dataset.get("lang", cfg.lang)
+            data_type = dataset.get("data_type", cfg.data_type)
 
         # Normalize metrics to a list
         if isinstance(metrics, (list, tuple, omegaconf.listconfig.ListConfig)):
@@ -133,7 +137,8 @@ class SalmDatasetInfer:
             metrics=metrics,
             verbose=verbose,
             show_examples=show_examples,
-            lang=lang
+            lang=lang,
+            data_type=data_type
         )
 
 def get_output_manifest_path(cfg, name):
@@ -377,20 +382,18 @@ def main(cfg: SalmEvalConfig):
         print("=" * width)
         print()
         output_result_path = get_output_manifest_path(cfg, ckpt).parent / "results.json"
-        if cfg.force_compute_metrics:
-            results = dict()
-        else:
-            results = load_results(output_result_path)
+        results = load_results(output_result_path)
         for i, dataset in enumerate(cfg.inputs):
             dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
-            if dataset_config.name in results:
+            results[dataset_config.name].update(dict(data_type=dataset_config.data_type, lang=dataset_config.lang))
+            if dataset_config.name in results and not cfg.force_compute_metrics:
                 missing_metric = False
-                for metric in results[dataset_config.name]:
+                for metric in dataset_config.metrics:
                     if metric.startswith("bert"):
-                        metric = "bert"
+                        metric = "bert_f1"
                     elif metric.startswith("rouge"):
-                        metric = "rouge"
-                    if metric not in dataset_config.metrics:
+                        metric = "rougeL"
+                    if metric not in results[dataset_config.name]:
                         missing_metric = True
                         break
                 if not missing_metric:
@@ -400,13 +403,14 @@ def main(cfg: SalmEvalConfig):
             print("\t", f" Evaluating dataset {dataset_config.name} ({i+1}/{len(cfg.inputs)}) ".center(width-8, "-"))
             print()
             if dataset_config.output_path is not None and dataset_config.output_path.exists():
-                print(f"Loading dataset {dataset_config.name} results as output manifest already exists.")
+                print(f"Loading dataset {dataset_config.name} predictions as output manifest already exists.")
                 dataset_results = load_predictions(dataset_config)
             else:
                 dataset_results, model = infer(model, cfg, dataset_config)
             print()
             results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
             print_data(dataset_results, dataset_config)
+        print(f"Writing results to {output_result_path}")
         with open(output_result_path, "w") as f:
             json.dump(results, f, indent=4)
     
