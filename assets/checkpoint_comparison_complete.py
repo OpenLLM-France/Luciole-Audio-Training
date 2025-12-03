@@ -81,10 +81,10 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
     
     # Calculate average performance for each checkpoint
     metrics_summary = {
-        'Avg BLEU': [],
         'Avg BERT F1': [],
-        'Avg WER': [],
-        'Avg ROUGE': []
+        'Avg ROUGE': [],
+        'Avg BLEU': [],
+        'Avg WER': []
     }
     
     for ckpt in checkpoints:
@@ -122,10 +122,14 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
 
 def select_data(results, data_type=None, lang=None):
     """Select data based on metric type."""
+    if data_type is not None and isinstance(data_type, str):
+        data_type = [data_type]
+    if lang is not None and isinstance(lang, str):
+        lang = [lang]
     data = {}
     for ckpt, datasets in results.items():
         for dataset, metrics in datasets.items():
-            if metrics["data_type"] == data_type:
+            if (data_type is None or metrics["data_type"] in data_type) and (lang is None or metrics["lang"] in lang):
                 if not ckpt in data:
                     data[ckpt] = dict()
                 data[ckpt][dataset] = metrics
@@ -145,6 +149,7 @@ def create_simple_comparison(results):
     ast_data = select_data(results, "ast")
     qa_data = select_data(results, "qa")
     asr_data = select_data(results, "asr")
+    summary_data = select_data(results, lang=["en", "fr", "fr-en"])
     
     # 2. BERT F1 Scores Comparison (Top Right)
     plot_comparison(qa_data, colors, axes[0, 0], "bert_f1", "BERT F1")
@@ -158,7 +163,7 @@ def create_simple_comparison(results):
     plot_comparison(asr_data, colors, axes[2, 0], "wer")
     
     # 4. Overall Performance Summary (Bottom Right)
-    plot_summary_comparison(results, checkpoints, colors, axes[2, 1], ylim=(0, 80))
+    plot_summary_comparison(summary_data, checkpoints, colors, axes[2, 1], ylim=(0, 80))
     
     plt.tight_layout()
     plt.savefig('simple_checkpoint_comparison.png', dpi=300, bbox_inches='tight')
