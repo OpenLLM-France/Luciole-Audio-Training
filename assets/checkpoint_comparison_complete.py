@@ -28,24 +28,58 @@ def load_results(yaml_path):
     
     return results
 
-def add_bars(plot_data, checkpoints, datasets, ax, colors):
+def add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=True):
     x = np.arange(len(datasets))
     width = 1 / (len(checkpoints) + 1)
+
+    if "Avg WER" in datasets:
+        best_idx = {}
+        for d in datasets:
+            vals = plot_data[d]
+            if d == datasets[-1]:
+                best_idx[d] = int(np.argmin(vals))
+            else:
+                best_idx[d] = int(np.argmax(vals))
+    else:
+        if higher_better:
+            func = np.argmax
+        else:
+            func = np.argmin
+        best_idx = {d: int(func(plot_data[d])) for d in datasets}
+
     for i, ckpt in enumerate(checkpoints):
-        values = [plot_data[dataset][i] for dataset in datasets]
-        bars = ax.bar(x + i * width, values, width, label=f'{ckpt}', 
-                     color=colors[i], alpha=0.8)
-        
-        # Add value labels on bars
-        for bar, val in zip(bars, values):
-            height = bar.get_height()
-            ax.annotate(f'{val:.1f}',
-                       xy=(bar.get_x() + bar.get_width() / 2, height),
-                       xytext=(0, 3),
-                       textcoords="offset points",
-                       ha='center', va='bottom', fontsize=9, fontweight='bold')
+        values = [plot_data[d][i] for d in datasets]
+        bars = ax.bar(x + i * width, values, width, label=f'{ckpt}',
+                      color=colors[i], alpha=0.8)
+
+        # IMPORTANT: capture dataset index with enumerate
+        for d_i, (bar, val) in enumerate(zip(bars, values)):
+            dataset_name = datasets[d_i]
+
+            # highlight the best checkpoint for this dataset
+            if i == best_idx[dataset_name]:
+                bar.set_edgecolor('black')
+                bar.set_linewidth(2.5)
+                bar.set_alpha(1.0)
+
+            ax.annotate(f'{val:.0f}',
+                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom',
+                        fontsize=9, fontweight='bold')
+
     ax.set_xticks(x + width)
-            
+    from matplotlib.patches import Patch
+    handles, labels = ax.get_legend_handles_labels()
+    proxy_handles = []
+    for h in handles:
+        color = h.patches[0].get_facecolor()
+        proxy_handles.append(Patch(facecolor=color, edgecolor='none'))
+    ax.legend(proxy_handles, labels)
+    ax.grid(True, alpha=0.3, axis='y')
+
+
 def plot_comparison(results, colors, ax, metric='bleu', metric_name=None, ylim=(0, 100)):
     
     checkpoints = list(results.keys())
@@ -64,7 +98,7 @@ def plot_comparison(results, colors, ax, metric='bleu', metric_name=None, ylim=(
     if max_value<1 and ylim[1] == 100:
         ylim = (0, 1)
 
-    add_bars(plot_data, checkpoints, datasets, ax, colors)
+    add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=False if metric == 'wer' else True)
     
     if metric_name is None:
         metric_name = metric.upper()
@@ -73,8 +107,6 @@ def plot_comparison(results, colors, ax, metric='bleu', metric_name=None, ylim=(
     ax.set_title(f'{metric_name} Score Comparison', fontsize=14, fontweight='bold')
     ax.set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
     ax.set_ylim(ylim)
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3, axis='y')
 
 def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
     """Plot overall performance summary."""
@@ -110,15 +142,13 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
         metrics_summary['Avg WER'].append(np.mean(wer_scores) if wer_scores else 0)
         metrics_summary['Avg ROUGE'].append(np.mean(rouge_scores) if rouge_scores else 0)
     
-    add_bars(metrics_summary, checkpoints, metrics_summary, ax, colors)
+    add_bars(metrics_summary, checkpoints, list(metrics_summary.keys()), ax, colors)
     
     ax.set_xlabel('Metric Type', fontsize=12, fontweight='bold')
     ax.set_ylabel('Average Score', fontsize=12, fontweight='bold')
     ax.set_title('Overall Performance Summary', fontsize=14, fontweight='bold')
     ax.set_xticklabels(list(metrics_summary.keys()))
     ax.set_ylim(ylim)
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3, axis='y')
 
 def select_data(results, data_type=None, lang=None):
     """Select data based on metric type."""
