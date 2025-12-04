@@ -116,6 +116,7 @@ def analyze_trends(results):
     for dataset in datasets:
         print(f"\n{dataset}:")
         metrics = list(results[steps[0]][dataset].keys())
+        metrics = [m for m in metrics if m not in ['data_type', 'lang']]
         
         for metric in metrics:
             values = []

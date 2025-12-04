@@ -113,10 +113,10 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
     
     # Calculate average performance for each checkpoint
     metrics_summary = {
-        'Avg BERT F1': [],
-        'Avg ROUGE': [],
-        'Avg BLEU': [],
-        'Avg WER': []
+        'QA - Avg BERT F1': [],
+        'QA - Avg ROUGE': [],
+        'AST - Avg BLEU': [],
+        'ASR - Avg WER': []
     }
     
     for ckpt in checkpoints:
@@ -137,10 +137,10 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
                 wer_scores.append(metrics['wer'])
 
         
-        metrics_summary['Avg BLEU'].append(np.mean(bleu_scores) if bleu_scores else 0)
-        metrics_summary['Avg BERT F1'].append(np.mean(bert_scores) if bert_scores else 0)
-        metrics_summary['Avg WER'].append(np.mean(wer_scores) if wer_scores else 0)
-        metrics_summary['Avg ROUGE'].append(np.mean(rouge_scores) if rouge_scores else 0)
+        metrics_summary['AST - Avg BLEU'].append(np.mean(bleu_scores) if bleu_scores else 0)
+        metrics_summary['QA - Avg BERT F1'].append(np.mean(bert_scores) if bert_scores else 0)
+        metrics_summary['ASR - Avg WER'].append(np.mean(wer_scores) if wer_scores else 0)
+        metrics_summary['QA - Avg ROUGE'].append(np.mean(rouge_scores) if rouge_scores else 0)
     
     add_bars(metrics_summary, checkpoints, list(metrics_summary.keys()), ax, colors)
     
