@@ -32,7 +32,7 @@ def add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=True):
     x = np.arange(len(datasets))
     width = 1 / (len(checkpoints) + 1)
 
-    if "Avg WER" in datasets:
+    if "ASR - Avg WER (FR/EN)" in datasets:
         best_idx = {}
         for d in datasets:
             vals = plot_data[d]
@@ -80,7 +80,7 @@ def add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=True):
     ax.grid(True, alpha=0.3, axis='y')
 
 
-def plot_comparison(results, colors, ax, metric='bleu', metric_name=None, ylim=(0, 100)):
+def plot_comparison(results, colors, ax, metric='bleu', title=None, ylim=(0, 100)):
     
     checkpoints = list(results.keys())
     first_row = results[checkpoints[0]]
@@ -100,11 +100,12 @@ def plot_comparison(results, colors, ax, metric='bleu', metric_name=None, ylim=(
 
     add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=False if metric == 'wer' else True)
     
-    if metric_name is None:
-        metric_name = metric.upper()
+    metric_name = metric.upper().replace("_", " ")
+    if not title:
+        title = f'{metric_name} Score'
     ax.set_xlabel('Dataset', fontsize=12, fontweight='bold')
     ax.set_ylabel(f'{metric_name} Score', fontsize=12, fontweight='bold')
-    ax.set_title(f'{metric_name} Score Comparison', fontsize=14, fontweight='bold')
+    ax.set_title(f'{title} Comparison', fontsize=14, fontweight='bold')
     ax.set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
     ax.set_ylim(ylim)
 
@@ -116,7 +117,7 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
         'QA - Avg BERT F1': [],
         'QA - Avg ROUGE': [],
         'AST - Avg BLEU': [],
-        'ASR - Avg WER': []
+        'ASR - Avg WER (FR/EN)': []
     }
     
     for ckpt in checkpoints:
@@ -139,7 +140,7 @@ def plot_summary_comparison(results, checkpoints, colors, ax, ylim=(0, 100)):
         
         metrics_summary['AST - Avg BLEU'].append(np.mean(bleu_scores) if bleu_scores else 0)
         metrics_summary['QA - Avg BERT F1'].append(np.mean(bert_scores) if bert_scores else 0)
-        metrics_summary['ASR - Avg WER'].append(np.mean(wer_scores) if wer_scores else 0)
+        metrics_summary['ASR - Avg WER (FR/EN)'].append(np.mean(wer_scores) if wer_scores else 0)
         metrics_summary['QA - Avg ROUGE'].append(np.mean(rouge_scores) if rouge_scores else 0)
     
     add_bars(metrics_summary, checkpoints, list(metrics_summary.keys()), ax, colors)
@@ -169,7 +170,7 @@ def create_simple_comparison(results):
     """Create simple, clear comparison plots."""
     
     # Create a large figure with clear subplots
-    fig, axes = plt.subplots(3, 2, figsize=(22, 14))
+    fig, axes = plt.subplots(3, 3, figsize=(26, 14))
     fig.suptitle('Model Performance Comparison', 
                  fontsize=20, fontweight='bold', y=0.98)
     
@@ -177,23 +178,24 @@ def create_simple_comparison(results):
     colors = ['#3498db', '#e74c3c', '#f1c40f', '#2ecc71']  # Blue, Red, Green
     
     ast_data = select_data(results, "ast")
-    qa_data = select_data(results, "qa")
-    asr_data = select_data(results, "asr")
     summary_data = select_data(results, lang=["en", "fr", "fr-en"])
     
     # 2. BERT F1 Scores Comparison (Top Right)
-    plot_comparison(qa_data, colors, axes[0, 0], "bert_f1", "BERT F1")
-    plot_comparison(qa_data, colors, axes[0, 1], "rougeL", "Rouge L")
-    
-    # 1. BLEU Scores Comparison (Top Left)
-    plot_comparison(ast_data, colors, axes[1, 0], "bleu", ylim=(0, 60))
-    plot_comparison(ast_data, colors, axes[1, 1], "wer", ylim=(50, 100))
+    plot_comparison(select_data(results, "qa", lang="en"), colors, axes[0, 0], "bert_f1", "English BERT F1")
+    plot_comparison(select_data(results, "qa", lang="fr"), colors, axes[0, 1], "bert_f1", "French BERT F1")
+    plot_comparison(select_data(results, "qa"), colors, axes[0, 2], "rougeL", "Rouge L")
 
     # 3. WER Comparison (Bottom Left)
-    plot_comparison(asr_data, colors, axes[2, 0], "wer")
+    plot_comparison(select_data(results, "asr", lang="en"), colors, axes[1, 0], "wer", title="English WER")
+    plot_comparison(select_data(results, "asr", lang="fr"), colors, axes[1, 1], "wer", title="French WER")
+    plot_comparison(select_data(results, "asr", lang=["it", "es", "de", "pt", "nl"]), colors, axes[1, 2], "wer", title="Multilang WER")
+
+    # 1. BLEU Scores Comparison (Top Left)
+    plot_comparison(ast_data, colors, axes[2, 0], "bleu", ylim=(0, 60))
+    plot_comparison(ast_data, colors, axes[2, 1], "wer", ylim=(50, 100))
     
     # 4. Overall Performance Summary (Bottom Right)
-    plot_summary_comparison(summary_data, checkpoints, colors, axes[2, 1], ylim=(0, 80))
+    plot_summary_comparison(summary_data, checkpoints, colors, axes[2, 2], ylim=(0, 80))
     
     plt.tight_layout()
     plt.savefig('simple_checkpoint_comparison.png', dpi=300, bbox_inches='tight')
