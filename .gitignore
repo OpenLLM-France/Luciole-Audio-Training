@@ -17,3 +17,4 @@ local/
 *.tmp
 tmp/
 adapter_training/nemo/convert_to_hf/log/
+assets/plot
