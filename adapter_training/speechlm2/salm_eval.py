@@ -385,6 +385,8 @@ def main(cfg: SalmEvalConfig):
         results = load_results(output_result_path)
         for i, dataset in enumerate(cfg.inputs):
             dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
+            if dataset_config.name not in results:
+                results[dataset_config.name] = dict()
             results[dataset_config.name].update(dict(data_type=dataset_config.data_type, lang=dataset_config.lang))
             if dataset_config.name in results and not cfg.force_compute_metrics:
                 missing_metric = False
