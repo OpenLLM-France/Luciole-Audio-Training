@@ -9,7 +9,7 @@ inputs:
 - name: HeySQuAD_EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/test.jsonl.gz
   lang: en
-- name: Public_sg_speech_qa_EN
+- name: Public-sg-speech-qa_EN
   manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/AudioLLMs--public_sg_speech_qa_test/test.jsonl.gz
   lang: en
 - name: UltraChat_EN

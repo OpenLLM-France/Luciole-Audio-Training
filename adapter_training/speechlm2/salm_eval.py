@@ -155,7 +155,6 @@ def get_output_manifest_path(cfg, name):
         return None
 
 def evaluate(hyps, refs, dataset_config, results, name):
-    results[name] = dict()
     if "wer" in dataset_config.metrics:
         wer, _, nins, ndel, nsub = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)
         print(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
@@ -385,8 +384,7 @@ def main(cfg: SalmEvalConfig):
         results = load_results(output_result_path)
         for i, dataset in enumerate(cfg.inputs):
             dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
-            if dataset_config.name not in results:
-                results[dataset_config.name] = dict()
+            results.setdefault(dataset_config.name, dict())
             results[dataset_config.name].update(dict(data_type=dataset_config.data_type, lang=dataset_config.lang))
             if dataset_config.name in results and not cfg.force_compute_metrics:
                 missing_metric = False
