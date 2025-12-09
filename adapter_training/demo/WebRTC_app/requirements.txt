@@ -1,0 +1,7 @@
+aiohttp
+aiortc
+av
+librosa
+soundfile
+# torch
+nemo_toolkit[all]

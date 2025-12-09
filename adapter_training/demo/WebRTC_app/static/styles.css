@@ -1,0 +1,243 @@
+:root {
+    --bg-color: #343541;
+    --sidebar-bg: #202123;
+    --input-bg: #40414f;
+    --text-primary: #ececf1;
+    --text-secondary: #c5c5d2;
+    --user-msg-bg: #343541;
+    --ai-msg-bg: #444654;
+    --border-color: #4d4d4f;
+    --accent-color: #10a37f;
+    --accent-hover: #1a7f64;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    height: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    transition: transform 0.3s ease;
+}
+
+.new-chat-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.new-chat-btn:hover {
+    background-color: #2b2c2f;
+}
+
+.history {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.history-item {
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-item:hover {
+    background-color: #2a2b32;
+}
+
+/* Chat Area */
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.chat-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-indicator {
+    font-size: 0.8rem;
+    color: #ef4444;
+}
+
+.status-indicator.connected {
+    color: #22c55e;
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 120px;
+    /* Space for input */
+    scroll-behavior: smooth;
+}
+
+.message {
+    padding: 24px;
+    display: flex;
+    gap: 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.message.system {
+    background-color: var(--ai-msg-bg);
+}
+
+.message.user {
+    background-color: var(--user-msg-bg);
+}
+
+.avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+
+.message.system .avatar {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.message.user .avatar {
+    background-color: #5436da;
+    color: white;
+}
+
+.content {
+    flex: 1;
+    line-height: 1.6;
+    font-size: 1rem;
+    white-space: pre-wrap;
+}
+
+/* Input Area */
+.input-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-image: linear-gradient(180deg, rgba(53, 53, 65, 0), #343541 50%);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.input-container {
+    width: 100%;
+    max-width: 768px;
+    background-color: var(--input-bg);
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.input-container:focus-within {
+    border-color: rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    resize: none;
+    max-height: 200px;
+    padding: 8px 0;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+#mic-btn.recording {
+    color: #ef4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.disclaimer {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+}
