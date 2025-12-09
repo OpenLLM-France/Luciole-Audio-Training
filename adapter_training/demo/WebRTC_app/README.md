@@ -27,14 +27,20 @@ This is a web application that interfaces with the SALM (SpeechLM2) model to pro
 
 ## Configuration
 
-The application expects the SALM model to be located at:
-`/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B`
+The application uses a `.env` file for configuration. A default `.env` file is provided, but you can modify it to suit your needs.
 
-If your model is located elsewhere, please update the `MODEL_PATH` variable in `app.py`:
+Create or modify the `.env` file in the project root:
 
-```python
-MODEL_PATH = "/path/to/your/model"
+```bash
+MODEL_PATH=/path/to/your/model
+PORT=8080
+MAX_NEW_TOKENS=360
+DEFAULT_INSTRUCTION="Listen to the audio and answer the question:"
+
 ```
+
+The application expects the SALM model to be located at the path specified in `MODEL_PATH`.
+
 
 ## Usage
 

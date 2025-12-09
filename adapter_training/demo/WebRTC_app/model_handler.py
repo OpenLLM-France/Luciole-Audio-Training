@@ -9,8 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class SALMModel:
-    def __init__(self, model_path):
+    def __init__(self, model_path, default_instruction="Listen to the audio and answer the question:"):
         self.model_path = os.path.expanduser(model_path)
+        self.default_instruction = default_instruction
         logger.info(f"Loading SALM model from {self.model_path}...")
         try:
             self.model = slm.models.SALM.from_pretrained(self.model_path).eval()
@@ -51,7 +52,7 @@ class SALMModel:
             
             # Construct prompt with audio
             # Default instruction if text_input is empty
-            instruction = text_input if text_input else "Listen to the audio and answer the question:"
+            instruction = text_input if text_input else self.default_instruction
             
             prompt_content = (
                 f"{instruction}\n"

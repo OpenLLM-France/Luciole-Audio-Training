@@ -3,6 +3,9 @@
 import json
 import os
 import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
 import logging
 import uuid
 import wave
@@ -14,8 +17,10 @@ from model_handler import SALMModel
 
 # Configuration
 ROOT = Path(__file__).parent
-MODEL_PATH = "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B"
-PORT = 8080
+MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B")
+PORT = int(os.getenv("PORT", 8080))
+MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 360))
+DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("WebRTC-App")
@@ -23,7 +28,7 @@ logger = logging.getLogger("WebRTC-App")
 # Initialize Model
 # We initialize it globally for now. In production, might want lazy loading or a separate worker.
 try:
-    salm_model = SALMModel(MODEL_PATH)
+    salm_model = SALMModel(MODEL_PATH, default_instruction=DEFAULT_INSTRUCTION)
 except Exception as e:
     logger.error(f"Could not load model: {e}")
     salm_model = None
@@ -137,7 +142,7 @@ async def offer_with_datachannel(request):
                     prompt = data.get("text", "")
                     
                     if salm_model:
-                        response = salm_model.generate(audio_path=audio_path, text_input=prompt, history=current_history)
+                        response = salm_model.generate(audio_path=audio_path, text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
                         
                         # Update history
                         SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt if prompt else "Audio Message"})
@@ -155,7 +160,7 @@ async def offer_with_datachannel(request):
             elif data.get("type") == "text_only":
                  prompt = data.get("text", "")
                  if salm_model:
-                     response = salm_model.generate(text_input=prompt, history=current_history)
+                     response = salm_model.generate(text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
                      SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt})
                      SESSIONS[state["session_id"]]["history"].append({"role": "assistant", "content": response})
                  else:
@@ -221,7 +226,7 @@ async def upload_audio(request):
     current_history = SESSIONS[session_id]["history"]
 
     if salm_model:
-        response = salm_model.generate(audio_path=filename, text_input=text_prompt, history=current_history)
+        response = salm_model.generate(audio_path=filename, text_input=text_prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
         SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
         SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
     else:
