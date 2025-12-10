@@ -4,5 +4,6 @@ av
 librosa
 soundfile
 # torch
-nemo_toolkit[all]
+# nemo_toolkit[all]
 python-dotenv
+huggingface_hub

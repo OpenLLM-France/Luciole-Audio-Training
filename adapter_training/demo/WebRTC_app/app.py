@@ -18,8 +18,8 @@ from model_handler import SALMModel
 # Configuration
 ROOT = Path(__file__).parent
 MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B")
-PORT = int(os.getenv("PORT", 8080))
-MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 360))
+PORT = int(os.getenv("PORT", 9009))
+MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 
 logging.basicConfig(level=logging.INFO)
@@ -252,4 +252,4 @@ if __name__ == "__main__":
     app.router.add_static("/static/", path=ROOT / "static", name="static")
     
     logger.info(f"Starting server on port {PORT}")
-    web.run_app(app, host='localhost', port=PORT)
+    web.run_app(app, host=os.getenv("HOST", '0.0.0.0'), port=PORT)

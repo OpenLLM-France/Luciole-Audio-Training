@@ -53,10 +53,43 @@ The application expects the SALM model to be located at the path specified in `M
 2.  Open your web browser and navigate to:
 
     ```
-    http://localhost:8080
+    http://localhost:9009
     ```
 
 3.  Allow microphone access when prompted to use the streaming feature.
+
+## Docker Usage
+
+Alternatively, you can run the application using Docker.
+
+### 1. Build the Docker Image
+
+You need to provide your Hugging Face token to download the model during the build.
+Assuming your `HF_TOKEN` is in your `.env` file, you can run:
+
+```bash
+# Export the Hugging Face token & base model (llm) from .env
+export $(grep -E '^HF_TOKEN=' .env)
+export $(grep -E '^BASE_MODEL=' .env)
+
+# Build the image
+docker build \
+  --build-arg HF_TOKEN="$HF_TOKEN" \
+  --build-arg BASE_MODEL="$BASE_MODEL" \
+  -t webrtc-app .
+```
+
+### 2. Run the Container
+
+The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you wish to use a different model, you can still mount it and override `MODEL_PATH`:
+
+```bash
+docker run -d \
+  -p 9009:9009 \
+  -v /path/to/SALM/model:/app/model \
+  -e MODEL_PATH=/app/model \
+  webrtc-app
+```
 
 ## Project Structure
 
