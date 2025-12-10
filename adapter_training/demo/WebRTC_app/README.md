@@ -22,7 +22,8 @@ This is a web application that interfaces with the SALM (SpeechLM2) model to pro
 2.  Install the Python dependencies:
 
     ```bash
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir nemo_toolkit[all]
     ```
 
 ## Configuration
@@ -33,10 +34,11 @@ Create or modify the `.env` file in the project root:
 
 ```bash
 MODEL_PATH=/path/to/your/model
-PORT=8080
-MAX_NEW_TOKENS=360
+PORT=9009
+MAX_NEW_TOKENS=64
 DEFAULT_INSTRUCTION="Listen to the audio and answer the question:"
-
+HF_TOKEN=your_huggingface_token
+BASE_MODEL=meta-llama/Llama-3.2-1B-Instruct
 ```
 
 The application expects the SALM model to be located at the path specified in `MODEL_PATH`.
