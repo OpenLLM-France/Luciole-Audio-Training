@@ -81,7 +81,7 @@ docker build \
 
 ### 2. Run the Container
 
-The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you wish to use a different model, you can still mount it and override `MODEL_PATH`:
+The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you wish to use a different model, you can just re-build the image with the `BASE_MODEL` argument or just download it inside the container:
 
 ```bash
 docker run -d \
