@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SALM Chat</title>
+    <title>SALeM Chat</title>
     <link rel="stylesheet" href="static/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,18 +25,25 @@
 
         <main class="chat-area">
             <div class="chat-header">
-                <h1>SALM Model</h1>
-                <span class="status-indicator" id="connection-status">Disconnected</span>
+                <div class="logo-container">
+                    <div class="logo">SALeM</div>
+                    <span class="logo-subtitle">Speech & Language Model</span>
+                </div>
+                <span class="status-indicator connected" id="connection-status">Ready</span>
             </div>
 
             <div class="messages-container" id="messages">
                 <div class="message system">
                     <div class="avatar">AI</div>
-                    <div class="content">Hello! I am SALM. You can chat with me using text or voice.</div>
+                    <div class="content">Hello! I am SALeM. You can chat with me using text or voice.</div>
                 </div>
             </div>
 
             <div class="input-area">
+                <div id="file-preview" class="file-preview hidden">
+                    <span id="file-name"></span>
+                    <button id="remove-file-btn" class="icon-btn" title="Remove File">✕</button>
+                </div>
                 <div class="input-container">
                     <input type="file" id="audio-upload" accept="audio/*" style="display: none;">
                     <button id="upload-btn" class="icon-btn" title="Upload Audio">
@@ -65,11 +72,11 @@
                         </svg>
                     </button>
                 </div>
-                <div class="disclaimer">SALM can make mistakes. Consider checking important information.</div>
+                <div class="disclaimer">SALeM can make mistakes. Consider checking important information.</div>
             </div>
         </main>
     </div>
-    <script src="static/client.js"></script>
+    <script src="static/client.js?v=12"></script>
 </body>
 
 </html>

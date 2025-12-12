@@ -45,25 +45,37 @@ class SALMModel:
         if history:
             current_turn.extend(history)
         
+        import uuid
+        
         if audio_path:
             # Ensure audio is processed
-            clean_audio_path = "/tmp/temp_inference_audio.wav"
-            self.process_audio(audio_path, clean_audio_path)
-            
-            # Construct prompt with audio
-            # Default instruction if text_input is empty
-            instruction = text_input if text_input else self.default_instruction
-            
-            prompt_content = (
-                f"{instruction}\n"
-                f"{self.model.audio_locator_tag}\n"
-            )
-            
-            current_turn.append({
-                "role": "user",
-                "content": prompt_content,
-                "audio": [clean_audio_path],
-            })
+            # Use uploads dir relative to current working directory (which is /app in docker)
+            import pathlib
+            uploads_dir = pathlib.Path("uploads")
+            uploads_dir.mkdir(exist_ok=True)
+            clean_audio_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
+            try:
+                self.process_audio(audio_path, clean_audio_path)
+                
+                # Construct prompt with audio
+                # Default instruction if text_input is empty
+                instruction = text_input if text_input else self.default_instruction
+                
+                prompt_content = (
+                    f"{instruction}\n"
+                    f"{self.model.audio_locator_tag}\n"
+                )
+                
+                current_turn.append({
+                    "role": "user",
+                    "content": prompt_content,
+                    "audio": [clean_audio_path],
+                })
+            except Exception as e:
+                logger.error(f"Error processing audio in generate: {e}")
+                if os.path.exists(clean_audio_path):
+                    os.remove(clean_audio_path)
+                raise e
         else:
             # Text-only interaction
             if not text_input:
@@ -94,4 +106,10 @@ class SALMModel:
             return response_text
         except Exception as e:
             logger.error(f"Inference error: {e}")
-            return f"Error generating response: {str(e)}"
+            raise e
+        finally:
+            # Clean up processed audio file
+            if audio_path and 'clean_audio_path' in locals() and os.path.exists(clean_audio_path):
+                os.remove(clean_audio_path)
+
+

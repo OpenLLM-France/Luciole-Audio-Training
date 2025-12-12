@@ -89,6 +89,7 @@ The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you w
 docker run -d \
   -p 9009:9009 \
   -v /path/to/SALM/model:/app/model \
+  -v "$(pwd)":/app \
   -e MODEL_PATH=/app/model \
   webrtc-app
 ```

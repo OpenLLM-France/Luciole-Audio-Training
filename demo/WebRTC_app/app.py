@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
-import json
-import os
 import asyncio
-from dotenv import load_dotenv
-
-load_dotenv()
+import json
 import logging
+import os
 import uuid
 import wave
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from aiohttp import web
-from aiortc import RTCSessionDescription, RTCPeerConnection
+from aiortc import RTCPeerConnection, RTCSessionDescription
 from av.audio.resampler import AudioResampler
+
 from model_handler import SALMModel
 
 # Configuration
@@ -189,35 +191,40 @@ async def offer_with_datachannel(request):
 
 async def upload_audio(request):
     reader = await request.multipart()
-    field = await reader.next()
+    file_written = False
     
-    if field.name != 'audio':
-        return web.Response(status=400, text="Invalid file field")
+    # Use a local uploads directory for visibility
+    uploads_dir = ROOT / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
     
-    filename = f"/tmp/upload_{uuid.uuid4().hex}.wav"
+    filename = str(uploads_dir / f"upload_{uuid.uuid4().hex}.wav")
     size = 0
-    with open(filename, 'wb') as f:
-        while True:
-            chunk = await field.read_chunk()
-            if not chunk:
-                break
-            size += len(chunk)
-            f.write(chunk)
-            
-    # Get optional text prompt and sessionId
     text_prompt = ""
     session_id = "default"
-    
+
     while True:
         field = await reader.next()
         if field is None:
             break
-        if field.name == 'text':
+        
+        if field.name == 'audio':
+            with open(filename, 'wb') as f:
+                while True:
+                    chunk = await field.read_chunk()
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    f.write(chunk)
+            file_written = True
+        elif field.name == 'text':
             text_prompt = await field.read(decode=True)
             text_prompt = text_prompt.decode('utf-8')
         elif field.name == 'sessionId':
             session_id_bytes = await field.read(decode=True)
             session_id = session_id_bytes.decode('utf-8')
+
+    if not file_written:
+        return web.Response(status=400, text="No audio file received")
 
     logger.info(f"Received file {filename} ({size} bytes) with prompt: {text_prompt} for session {session_id}")
 
@@ -226,9 +233,20 @@ async def upload_audio(request):
     current_history = SESSIONS[session_id]["history"]
 
     if salm_model:
-        response = salm_model.generate(audio_path=filename, text_input=text_prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
-        SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
-        SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
+        try:
+            logger.info(f"Starting generation for session {session_id}...")
+            response = salm_model.generate(audio_path=filename, text_input=text_prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
+            logger.info(f"Generation complete for session {session_id}")
+            SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
+            SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
+        except Exception as e:
+            logger.error(f"Error during generation: {e}")
+            if os.path.exists(filename):
+                os.remove(filename)
+            return web.Response(status=500, text=f"Error processing audio: {str(e)}")
+            
+        # SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
+        # SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
     else:
         response = "Model not loaded."
 

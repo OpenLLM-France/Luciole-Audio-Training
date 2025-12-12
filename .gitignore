@@ -17,3 +17,5 @@ local/
 *.tmp
 tmp/
 adapter_training/nemo/convert_to_hf/log/
+adapter_training/demo/WebRTC_app/uploads
+adapter_training/demo/WebRTC_app/models
