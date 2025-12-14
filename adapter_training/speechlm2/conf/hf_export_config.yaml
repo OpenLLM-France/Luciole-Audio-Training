@@ -1,0 +1,23 @@
+# HuggingFace Export Configuration
+# This config is used with to_hf.py to convert NeMo checkpoints to HuggingFace format
+#
+# Usage:
+#   python to_hf.py --config-name=hf_export_config
+#
+# Or override from command line:
+#   python to_hf.py --config-name=hf_export_config ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Full Python path to your model class
+# Example: nemo.collections.speechlm2.models.DuplexS2SModel
+class_path: nemo.collections.speechlm2.models.SALM
+
+# Path to your PyTorch Lightning checkpoint file (.ckpt) or directory (for distributed checkpoints)
+# Replace this with your actual checkpoint path
+ckpt_path: <ckpt_path>
+
+# Path to the experiment's config YAML file used during training
+# This should be one of the config files in the conf/ directory
+ckpt_config: <ckpt_path>/exp_config.yaml
+# Output directory where the HuggingFace-compatible checkpoint will be saved
+# The model can then be loaded with: ModelClass.from_pretrained(output_dir)
+output_dir: <ckpt_path>-HuggingFace-ckpt

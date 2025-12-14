@@ -97,7 +97,7 @@ data:
     use_multimodal_sampling: true
     measure_total_length: true
     # batch_size: 4
-    batch_tokens: 3072
+    batch_tokens: 512 #2048 #3072
     max_tokens: 1024
 
     input_cfg:
@@ -112,26 +112,29 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.25
-            tags: {lang: fr}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/manifest_Multilingual_LibriSpeech_recasepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.25
-            tags: {lang: fr}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.25
-            tags: {lang: fr}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.25
-            tags: {lang: fr}
-
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/AfricanAccentedFrench/manifest_AfricanAccentedFrench_recasepunc_max30_train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LesVocaux/manifest_LesVocaux_recasepunc.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/PxSLU/manifest_PxSLU_recasepunc.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/VoxForge/manifest_VoxForge_recasepunc.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
       # =====================================
-      # ASR English, Italian, Spanish, German
+      # ASR English
       # =====================================
       - type: group
         weight: 0.2
@@ -140,7 +143,7 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.3
+            weight: 0.4
             tags: {lang: en}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/Yodas/manifest_Yodas.jsonl
@@ -150,7 +153,7 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/FLEURS/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.3
+            weight: 0.2
       # ==========================
       # ASR Italian, Spanish, German
       # ==========================
@@ -161,7 +164,7 @@ data:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/FLEURS/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.33
+            weight: 0.34
             tags: {lang: it}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/FLEURS/train.jsonl

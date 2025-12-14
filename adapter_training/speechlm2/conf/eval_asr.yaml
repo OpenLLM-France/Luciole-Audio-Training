@@ -42,7 +42,7 @@ inputs:
   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/CoVoST/test.jsonl.gz
   limit_val_batches: 25
   user_prompt: "Traduit ce fichier audio en anglais"
-  metric: ["bleu", "wer"]
+  metric: "bleu"
   show_examples: 2
   data_type: ast
   lang: fr-en
@@ -50,7 +50,7 @@ inputs:
   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/mTEDx/test.jsonl.gz
   limit_val_batches: 25
   user_prompt: "Traduit ce fichier audio en anglais"
-  metric: ["bleu", "wer"]
+  metric: "bleu"
   show_examples: 2
   data_type: ast
   lang: fr-en
