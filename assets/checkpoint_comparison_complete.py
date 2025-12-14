@@ -70,13 +70,6 @@ def add_bars(plot_data, checkpoints, datasets, ax, colors, higher_better=True):
                         fontsize=9, fontweight='bold')
 
     ax.set_xticks(x + width)
-    from matplotlib.patches import Patch
-    handles, labels = ax.get_legend_handles_labels()
-    proxy_handles = []
-    for h in handles:
-        color = h.patches[0].get_facecolor()
-        proxy_handles.append(Patch(facecolor=color, edgecolor='none'))
-    ax.legend(proxy_handles, labels)
     ax.grid(True, alpha=0.3, axis='y')
 
 
@@ -186,16 +179,25 @@ def create_simple_comparison(results):
     plot_comparison(select_data(results, "qa"), colors, axes[0, 2], "rougeL", "Rouge L")
 
     # 3. WER Comparison (Bottom Left)
-    plot_comparison(select_data(results, "asr", lang="en"), colors, axes[1, 0], "wer", title="English WER")
-    plot_comparison(select_data(results, "asr", lang="fr"), colors, axes[1, 1], "wer", title="French WER")
-    plot_comparison(select_data(results, "asr", lang=["it", "es", "de", "pt", "nl"]), colors, axes[1, 2], "wer", title="Multilang WER")
+    plot_comparison(select_data(results, "asr", lang="en"), colors, axes[1, 0], "wer", ylim=(0, 30), title="English WER")
+    plot_comparison(select_data(results, "asr", lang="fr"), colors, axes[1, 1], "wer", ylim=(0, 30), title="French WER")
+    plot_comparison(select_data(results, "asr", lang=["it", "es", "de", "pt", "nl"]), colors, axes[1, 2], "wer", ylim=(0, 30), title="Multilang WER")
 
     # 1. BLEU Scores Comparison (Top Left)
     plot_comparison(ast_data, colors, axes[2, 0], "bleu", ylim=(0, 60))
-    plot_comparison(ast_data, colors, axes[2, 1], "wer", ylim=(50, 100))
+    # plot_comparison(ast_data, colors, axes[2, 1], "bleu", ylim=(50, 100))
     
     # 4. Overall Performance Summary (Bottom Right)
-    plot_summary_comparison(summary_data, checkpoints, colors, axes[2, 2], ylim=(0, 80))
+    plot_summary_comparison(summary_data, checkpoints, colors, axes[2, 1], ylim=(0, 80))
+    
+    # Create a single shared legend in the unused subplot
+    from matplotlib.patches import Patch
+    axes[2, 2].axis('off')
+    legend_handles = [Patch(facecolor=colors[i], edgecolor='black', linewidth=1.5, label=ckpt) 
+                     for i, ckpt in enumerate(checkpoints)]
+    axes[2, 2].legend(handles=legend_handles, loc='center', fontsize=14, 
+                     frameon=True, title='Checkpoints', title_fontsize=16,
+                     edgecolor='black', fancybox=True, shadow=True)
     
     plt.tight_layout()
     plt.savefig('simple_checkpoint_comparison.png', dpi=300, bbox_inches='tight')
