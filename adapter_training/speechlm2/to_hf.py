@@ -65,6 +65,13 @@ def main(cfg: HfExportConfig):
     model = load_model(cfg.ckpt_path, cfg.class_path, cfg.ckpt_config)
     model.save_pretrained(cfg.output_dir)
     print(f"Model saved to {cfg.output_dir}")
+    
+    # Save tokenizer if the model has one
+    if hasattr(model, 'tokenizer') and model.tokenizer is not None:
+        model.tokenizer.save_pretrained(cfg.output_dir)
+        print(f"Tokenizer saved to {cfg.output_dir}")
+    else:
+        print("Warning: Model does not have a tokenizer attribute. You may need to save it separately.")
 
 
 if __name__ == "__main__":
