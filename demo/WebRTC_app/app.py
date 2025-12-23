@@ -8,6 +8,7 @@ import uuid
 import wave
 from pathlib import Path
 from dotenv import load_dotenv
+import threading
 
 load_dotenv()
 
@@ -25,7 +26,34 @@ MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 
 logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("WebRTC-App")
+
+async def stream_generator_in_thread(generator_func, *args, **kwargs):
+    """
+    Runs a synchronous generator in a separate thread and yields items asynchronously.
+    """
+    queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+    
+    def producer():
+        try:
+            for item in generator_func(*args, **kwargs):
+                loop.call_soon_threadsafe(queue.put_nowait, item)
+            loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel
+        except Exception as e:
+            logger.error(f"Producer thread error: {e}")
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    # Start the producer thread
+    t = threading.Thread(target=producer)
+    t.start()
+    
+    while True:
+        item = await queue.get()
+        if item is None:
+            break
+        yield item
 
 # Initialize Model
 # We initialize it globally for now. In production, might want lazy loading or a separate worker.
@@ -140,34 +168,90 @@ async def offer_with_datachannel(request):
             if data.get("type") == "stop":
                 # Stop recording and infer
                 if state["handler"]:
-                    audio_path = await state["handler"].stop_recording()
+                    raw_audio_path = await state["handler"].stop_recording()
                     prompt = data.get("text", "")
+                    generation_id = data.get("generationId", 0)
                     
                     if salm_model:
-                        response = salm_model.generate(audio_path=audio_path, text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
-                        
-                        # Update history
-                        SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt if prompt else "Audio Message"})
-                        SESSIONS[state["session_id"]]["history"].append({"role": "assistant", "content": response})
+                        try:
+                            # Process audio explicitly and keep it for history
+                            import uuid
+                            uploads_dir = ROOT / "uploads"
+                            uploads_dir.mkdir(exist_ok=True)
+                            
+                            # Create a persistent clean audio file
+                            processed_filename = f"processed_{uuid.uuid4().hex}.wav"
+                            clean_audio_path = str(uploads_dir / processed_filename)
+                            
+                            salm_model.process_audio(raw_audio_path, clean_audio_path)
+                            
+                            # Stream response using the clean audio
+                            full_response = ""
+                            # Pass history + new audio
+                            async for token in stream_generator_in_thread(salm_model.generate_stream, audio_path=clean_audio_path, text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS):
+                                if channel.readyState == "open":
+                                    channel.send(json.dumps({"type": "token", "text": token, "generationId": generation_id}))
+                                    full_response += token
+                                else:
+                                    logger.warning("DataChannel closed during streaming, stopping.")
+                                    break
+                            
+                            if channel.readyState == "open":
+                                channel.send(json.dumps({"type": "done", "text": "", "generationId": generation_id}))
+                            
+                            # Cleanup response
+                            clean_response = full_response
+                            if "<|im_start|>assistant" in clean_response:
+                                clean_response = clean_response.split("<|im_start|>assistant")[-1].strip()
+                            
+                            # Update history (without audio path since we're deleting the file)
+                            SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt or "Audio Message"})
+                            SESSIONS[state["session_id"]]["history"].append({"role": "assistant", "content": clean_response})
+                            
+                            # Delete processed audio file immediately
+                            if clean_audio_path and os.path.exists(clean_audio_path):
+                                os.remove(clean_audio_path)
+                                logger.info(f"Deleted processed audio: {clean_audio_path}")
+                            
+                        except Exception as e:
+                            logger.error(f"Streaming error: {e}")
+                            channel.send(json.dumps({"type": "response", "text": f"Error: {str(e)}"}))
                         
                     else:
                         response = "Model not loaded."
+                        channel.send(json.dumps({"type": "response", "text": response}))
                     
-                    channel.send(json.dumps({"type": "response", "text": response}))
-                    
-                    # Clean up audio file
-                    if audio_path and os.path.exists(audio_path):
-                        os.remove(audio_path)
+                    # Clean up RAW audio file (we kept the processed one)
+                    if raw_audio_path and os.path.exists(raw_audio_path):
+                        os.remove(raw_audio_path)
             
             elif data.get("type") == "text_only":
                  prompt = data.get("text", "")
                  if salm_model:
-                     response = salm_model.generate(text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
-                     SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt})
-                     SESSIONS[state["session_id"]]["history"].append({"role": "assistant", "content": response})
+                     try:
+                         full_response = ""
+                         async for token in stream_generator_in_thread(salm_model.generate_stream, text_input=prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS):
+                             if channel.readyState == "open":
+                                 channel.send(json.dumps({"type": "token", "text": token}))
+                                 full_response += token
+                             else:
+                                 logger.warning("DataChannel closed during streaming, stopping.")
+                                 break
+                         
+                         channel.send(json.dumps({"type": "done", "text": ""}))
+
+                         clean_response = full_response
+                         if "<|im_start|>assistant" in clean_response:
+                             clean_response = clean_response.split("<|im_start|>assistant")[-1].strip()
+
+                         SESSIONS[state["session_id"]]["history"].append({"role": "user", "content": prompt})
+                         SESSIONS[state["session_id"]]["history"].append({"role": "assistant", "content": clean_response})
+                     except Exception as e:
+                         logger.error(f"Streaming error: {e}")
+                         channel.send(json.dumps({"type": "response", "text": f"Error: {str(e)}"}))
                  else:
                      response = "Model not loaded."
-                 channel.send(json.dumps({"type": "response", "text": response}))
+                     channel.send(json.dumps({"type": "response", "text": response}))
 
     @pc.on("track")
     async def on_track(track):
@@ -180,6 +264,18 @@ async def offer_with_datachannel(request):
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
+
+    # Wait for ICE gathering to complete (workaround for non-trickle clients)
+    # aiortc doesn't have a direct "wait for complete" method that blocks until done, 
+    # but we can check if we have candidates or wait a bit.
+    # Actually, aiortc generates candidates as part of setLocalDescription if they are host candidates.
+    # For a more robust wait (if using STUN/TURN on server), we might need to wait.
+    # But usually for host-only, it's instant.
+    # However, to be safe and symmetric with the client fix:
+    retry_count = 0
+    while pc.iceGatheringState != "complete" and retry_count < 10:
+        await asyncio.sleep(0.2)
+        retry_count += 1
 
     return web.Response(
         content_type="application/json",
@@ -235,22 +331,49 @@ async def upload_audio(request):
     if salm_model:
         try:
             logger.info(f"Starting generation for session {session_id}...")
-            response = salm_model.generate(audio_path=filename, text_input=text_prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS)
+            
+            # Process audio explicitly
+            processed_filename = f"processed_{uuid.uuid4().hex}.wav"
+            clean_audio_path = str(uploads_dir / processed_filename)
+            salm_model.process_audio(filename, clean_audio_path)
+
+            full_response = ""
+            async for token in stream_generator_in_thread(salm_model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, max_new_tokens=MAX_NEW_TOKENS):
+                full_response += token
+                
+            clean_response = full_response
+            if "<|im_start|>assistant" in clean_response:
+                 clean_response = clean_response.split("<|im_start|>assistant")[-1].strip()
+                 
             logger.info(f"Generation complete for session {session_id}")
-            SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
-            SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
+            
+            # Update history with AUDIO
+            instruction = text_prompt if text_prompt else salm_model.default_instruction
+            prompt_content = f"{instruction}\n{salm_model.model.audio_locator_tag}\n"
+            
+            user_turn = {
+                "role": "user",
+                "content": prompt_content,
+                "audio": [clean_audio_path]
+            }
+            
+            SESSIONS[session_id]["history"].append(user_turn)
+            SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
+            
+            response = clean_response
+            
         except Exception as e:
             logger.error(f"Error during generation: {e}")
+            # Don't delete clean_audio_path if we want logs, but usually nice to cleanup on error
+            if os.path.exists(clean_audio_path):
+                os.remove(clean_audio_path)
             if os.path.exists(filename):
                 os.remove(filename)
             return web.Response(status=500, text=f"Error processing audio: {str(e)}")
-            
-        # SESSIONS[session_id]["history"].append({"role": "user", "content": text_prompt if text_prompt else f"Uploaded Audio: {os.path.basename(filename)}"})
-        # SESSIONS[session_id]["history"].append({"role": "assistant", "content": response})
     else:
         response = "Model not loaded."
 
-    # Cleanup
+    # Cleanup RAW file
     if os.path.exists(filename):
         os.remove(filename)
 

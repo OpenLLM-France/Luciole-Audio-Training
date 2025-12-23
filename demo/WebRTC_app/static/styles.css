@@ -531,3 +531,39 @@ textarea::placeholder {
         padding: 16px;
     }
 }
+
+/* Thinking Box Styles */
+.thinking-box {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.thinking-box summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-weight: 500;
+    user-select: none;
+    outline: none;
+    padding: 4px;
+}
+
+.thinking-box summary:hover {
+    color: var(--accent-color);
+}
+
+.thinking-content {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 6px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85em;
+    line-height: 1.4;
+    border-left: 2px solid var(--accent-color);
+}

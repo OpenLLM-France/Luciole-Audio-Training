@@ -212,7 +212,8 @@ newChatBtn.addEventListener('click', () => {
 // Initialize WebRTC
 async function startWebRTC() {
     const config = {
-        sdpSemantics: 'unified-plan'
+        sdpSemantics: 'unified-plan',
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     };
 
     pc = new RTCPeerConnection(config);
@@ -241,8 +242,19 @@ function setupDataChannel(channel) {
 
     channel.onmessage = (evt) => {
         const data = JSON.parse(evt.data);
-        if (data.type === 'response') {
-            // Remove thinking indicator if exists
+
+        // Ignore tokens from old generations
+        if (data.generationId && data.generationId !== streamState.currentGenerationId) {
+            console.log(`Ignoring token from old generation ${data.generationId} (current: ${streamState.currentGenerationId})`);
+            return;
+        }
+
+        if (data.type === 'token') {
+            handleStreamToken(data.text);
+        } else if (data.type === 'done') {
+            finalizeStream();
+        } else if (data.type === 'response') {
+            // Legacy/Error fallback
             if (currentThinkingMsg) {
                 currentThinkingMsg.remove();
                 currentThinkingMsg = null;
@@ -252,10 +264,195 @@ function setupDataChannel(channel) {
     };
 }
 
+// Streaming State
+let streamState = {
+    isStreaming: false,
+    messageDiv: null,
+    contentDiv: null,
+    thinkingDetails: null,
+    thinkingContent: null,
+    mainContent: null,
+    inThinkingBlock: false,
+    buffer: ''
+};
+
+function handleStreamToken(token) {
+    // Remove initial thinking indicator if this is the start
+    if (currentThinkingMsg) {
+        currentThinkingMsg.remove();
+        currentThinkingMsg = null;
+    }
+
+    // CRITICAL: If we're already streaming and this is a new message,
+    // finalize the old one first to prevent mixing
+    if (streamState.isStreaming && !streamState.messageDiv) {
+        // Edge case: streaming flag is set but no message div
+        finalizeStream();
+    }
+
+    if (!streamState.isStreaming) {
+        // Initialize new message
+        streamState.isStreaming = true;
+        streamState.stopRequested = false;
+
+        // Show stop button
+        if (stopBtn) {
+            stopBtn.classList.remove('hidden');
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system';
+
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'avatar';
+        avatarDiv.textContent = 'AI';
+
+        streamState.contentDiv = document.createElement('div');
+        streamState.contentDiv.className = 'content';
+
+        // We'll append structured content here.
+        // Initially, we just have a main text node or thinking box.
+        // To keep it simple, we'll append text nodes to mainContent container if not thinking.
+        streamState.mainContent = document.createElement('span');
+        streamState.contentDiv.appendChild(streamState.mainContent);
+
+        msgDiv.appendChild(avatarDiv);
+        msgDiv.appendChild(streamState.contentDiv);
+
+        messagesContainer.appendChild(msgDiv);
+        streamState.messageDiv = msgDiv;
+        streamState.buffer = '';
+        streamState.inThinkingBlock = false;
+    }
+
+    // Accumulate buffer to detect tags
+    streamState.buffer += token;
+
+    // Check for tag transitions
+    // 1. Enter thinking: <think>
+    if (!streamState.inThinkingBlock && streamState.buffer.includes('<think>')) {
+        const parts = streamState.buffer.split('<think>');
+        const preText = parts[0];
+        streamState.buffer = parts[1] || ''; // Remaining after tag
+
+        if (preText) {
+            streamState.mainContent.textContent += preText;
+        }
+
+        streamState.inThinkingBlock = true;
+
+        // Create thinking box if needed
+        if (!streamState.thinkingDetails) {
+            streamState.thinkingDetails = document.createElement('details');
+            streamState.thinkingDetails.className = 'thinking-box';
+
+            const summary = document.createElement('summary');
+            summary.textContent = 'Thinking Process';
+
+            streamState.thinkingContent = document.createElement('div');
+            streamState.thinkingContent.className = 'thinking-content';
+
+            streamState.thinkingDetails.appendChild(summary);
+            streamState.thinkingDetails.appendChild(streamState.thinkingContent);
+
+            // Insert before main content usually
+            streamState.contentDiv.insertBefore(streamState.thinkingDetails, streamState.mainContent);
+
+            // Auto-expand while generating? Maybe.
+            streamState.thinkingDetails.open = true;
+        }
+    }
+
+    // 2. Exit thinking: </think>
+    if (streamState.inThinkingBlock && streamState.buffer.includes('</think>')) {
+        const parts = streamState.buffer.split('</think>');
+        const thinkText = parts[0];
+        streamState.buffer = parts[1] || '';
+
+        if (thinkText) {
+            streamState.thinkingContent.textContent += thinkText;
+        }
+
+        streamState.inThinkingBlock = false;
+        // Close box when done?
+        streamState.thinkingDetails.open = false;
+    }
+
+    // 3. Normal content processing
+    // If we successfully processed tags, streamState.buffer contains the 'rest'.
+    // If no tags found yet, we might be inside a tag or just normal text.
+    // To be safe, we only append if we are sure we aren't splitting a tag.
+    // Simple heuristic: if buffer ends with '<', wait.
+
+    // Optimized: convert buffer to text immediately if no partial tag risk
+    // Only risk is '<' at end.
+
+    if (!streamState.buffer.includes('<')) {
+        if (streamState.inThinkingBlock) {
+            streamState.thinkingContent.textContent += streamState.buffer;
+        } else {
+            // Filter ChatML tags if they leak
+            let cleanText = streamState.buffer.replace('<|im_start|>', '').replace('assistant', '');
+            streamState.mainContent.textContent += cleanText;
+        }
+        streamState.buffer = '';
+    }
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function finalizeStream() {
+    if (!streamState.isStreaming) return;
+
+    // Flush remaining buffer
+    if (streamState.buffer) {
+        if (streamState.inThinkingBlock) {
+            streamState.thinkingContent.textContent += streamState.buffer;
+        } else {
+            streamState.mainContent.textContent += streamState.buffer;
+        }
+    }
+
+    // Save to history
+    const text = streamState.contentDiv.innerText; // Get visible text (approx)
+    if (currentMessages.length > 0) {
+        currentMessages.push({ role: 'assistant', text: text });
+        saveCurrentChat();
+    }
+
+    streamState.isStreaming = false;
+    streamState.messageDiv = null;
+    streamState.thinkingDetails = null;
+    streamState.buffer = '';
+}
+
 async function negotiate() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
+    console.log('ICE gathering started...');
+    // Wait for ICE gathering to complete to ensure all candidates are included
+    if (pc.iceGatheringState !== 'complete') {
+        await new Promise(resolve => {
+            const checkState = () => {
+                if (pc.iceGatheringState === 'complete') {
+                    pc.removeEventListener('icegatheringstatechange', checkState);
+                    console.log('ICE gathering complete.');
+                    resolve();
+                }
+            };
+            pc.addEventListener('icegatheringstatechange', checkState);
+            // Fallback timeout in case it never completes (e.g. no network)
+            setTimeout(() => {
+                console.warn('ICE gathering timed out, sending what we have.');
+                resolve();
+            }, 3000);
+        });
+    } else {
+        console.log('ICE gathering already complete.');
+    }
+
+    console.log('Sending offer to server...');
     const response = await fetch('/offer', {
         method: 'POST',
         headers: {
@@ -268,8 +465,14 @@ async function negotiate() {
         })
     });
 
+    if (!response.ok) {
+        throw new Error('Server returned error: ' + response.statusText);
+    }
+
     const answer = await response.json();
+    console.log('Received answer from server. Setting remote description...');
     await pc.setRemoteDescription(answer);
+    console.log('WebRTC negotiation complete.');
 }
 
 // UI Interactions
@@ -368,6 +571,12 @@ async function uploadFile(file, prompt) {
 }
 
 micBtn.addEventListener('click', async () => {
+    // Auto-stop any active generation before starting recording
+    if (streamState.isStreaming) {
+        console.log('Stopping active generation before starting recording');
+        finalizeStream();
+    }
+
     if (!isRecording) {
         await startRecording();
     } else {
@@ -407,7 +616,13 @@ async function startRecording() {
 
     } catch (e) {
         console.error('Error starting recording:', e);
-        alert('Could not access microphone.');
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            alert('Microphone access denied. Please allow microphone permissions.');
+        } else if (location.hostname !== 'localhost' && location.protocol === 'http:') {
+            alert('Microphone access requires a secure connection (HTTPS). You are using HTTP. Please setup HTTPS or use localhost.');
+        } else {
+            alert('Could not access microphone. Error: ' + e.message);
+        }
     }
 }
 
@@ -430,6 +645,7 @@ async function stopRecording() {
     textInput.value = '';
 
     if (dc && dc.readyState === 'open') {
+        console.log('Sending stop message to server');
         dc.send(JSON.stringify({
             type: 'stop',
             text: prompt
@@ -487,19 +703,56 @@ function sendMessage() {
 
 async function sendTextOnly(text) {
     if (!pc) {
+        console.log('Starting WebRTC connection...');
         await startWebRTC();
+        console.log('Negotiating...');
         await negotiate();
-        // Wait for DC to open
-        await new Promise(resolve => {
-            if (dc.readyState === 'open') resolve();
-            else dc.onopen = resolve;
-        });
+        console.log('Waiting for DataChannel to open...');
+        // Wait for DC to open with timeout
+        try {
+            await new Promise((resolve, reject) => {
+                if (dc.readyState === 'open') {
+                    resolve();
+                } else {
+                    const onOpen = () => {
+                        cleanup();
+                        resolve();
+                    };
+                    const onError = (e) => {
+                        cleanup();
+                        reject(new Error('DataChannel error: ' + e));
+                    };
+                    const timeoutId = setTimeout(() => {
+                        cleanup();
+                        reject(new Error('DataChannel connection timed out'));
+                    }, 10000); // 10 second timeout
+
+                    const cleanup = () => {
+                        if (dc) {
+                            dc.removeEventListener('open', onOpen);
+                            dc.removeEventListener('error', onError);
+                        }
+                        clearTimeout(timeoutId);
+                    };
+
+                    dc.addEventListener('open', onOpen);
+                    dc.addEventListener('error', onError);
+                }
+            });
+            console.log('DataChannel opened successfully.');
+        } catch (e) {
+            console.error('Connection failed:', e);
+            statusIndicator.textContent = 'Connection Timeout';
+            appendMessage('system', 'Error: Could not connect to server. Please try refreshing.');
+            return;
+        }
     }
 
     if (dc && dc.readyState === 'open') {
         dc.send(JSON.stringify({
             type: 'text_only',
-            text: text
+            text: text,
+            generationId: streamState.currentGenerationId
         }));
 
         // Show thinking indicator
@@ -521,7 +774,58 @@ function appendMessage(role, text) {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'content';
-    contentDiv.textContent = text;
+
+    // Check for thinking tags
+    // Pattern: <think> ... </think>
+    // We handle the case where content might be mixed or multiple blocks, 
+    // but typically it's one block at the start.
+
+    // Simple regex for extracting think block
+    const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+    let match;
+    let lastIndex = 0;
+    let hasThinking = false;
+
+    // We'll build the content nodes
+    const contentFragment = document.createDocumentFragment();
+
+    while ((match = thinkRegex.exec(text)) !== null) {
+        hasThinking = true;
+
+        // Add text before the think block
+        const beforeText = text.substring(lastIndex, match.index);
+        if (beforeText) {
+            contentFragment.appendChild(document.createTextNode(beforeText));
+        }
+
+        // Add the thinking box
+        const thoughts = match[1];
+        const details = document.createElement('details');
+        details.className = 'thinking-box';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Thinking Process';
+        const p = document.createElement('div');
+        p.className = 'thinking-content';
+        p.textContent = thoughts; // Use textContent to avoid XSS
+
+        details.appendChild(summary);
+        details.appendChild(p);
+        contentFragment.appendChild(details);
+
+        lastIndex = thinkRegex.lastIndex;
+    }
+
+    // Add remaining text
+    const remainingText = text.substring(lastIndex);
+    if (remainingText) {
+        contentFragment.appendChild(document.createTextNode(remainingText));
+    }
+
+    if (hasThinking) {
+        contentDiv.appendChild(contentFragment);
+    } else {
+        contentDiv.textContent = text;
+    }
 
     msgDiv.appendChild(avatarDiv);
     msgDiv.appendChild(contentDiv);

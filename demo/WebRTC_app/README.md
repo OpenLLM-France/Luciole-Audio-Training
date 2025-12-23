@@ -86,13 +86,27 @@ docker build \
 The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you wish to use a different model, you can just re-build the image with the `BASE_MODEL` argument or just download it inside the container:
 
 ```bash
-docker run -d \
-  -p 9009:9009 \
-  -v /path/to/SALM/model:/app/model \
+# Go to the project directory
+cd <PATH-TO-REPO>/demo/WebRTC_app
+
+# Run the container
+docker run --init -d \
+  --name salm-webrtc-app \
+  --gpus all \
+  -p <PORT-LOCAL-USER>:9009 \
+  -p 3478:3478/udp \
+  -p 50000-50100:50000-50100/udp \
+  -v /PTH/TO/SALM/MODEL:/app/model \
   -v "$(pwd)":/app \
   -e MODEL_PATH=/app/model \
   webrtc-app
 ```
+### Note
+ * the `-p 3478:3478/udp` and `-p 50000-50100:50000-50100/udp` are required for WebRTC to access the microphone if the app was not built locally (runned on a remote server).
+ * the `-p <PORT-LOCAL-USER>:9009` is the port on which the application is running.
+ * the `-v /PTH/TO/SALM/MODEL:/app/model` is the path to the SALM model.
+ * the `-v "$(pwd):/app"` is the path to the project directory.
+ * the `-e MODEL_PATH=/app/model` is the path to the SALM model.
 
 ## Project Structure
 
