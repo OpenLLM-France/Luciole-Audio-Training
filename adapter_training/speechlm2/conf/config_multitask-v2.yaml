@@ -15,7 +15,7 @@ model:
 
   prevent_freeze_params: []
 
-  prompt_format: llama3
+  prompt_format: ${oc.env:PROMPT_FORMAT}
   audio_locator_tag: "<|audio|>"
   token_equivalent_duration: 0.08
 
@@ -24,7 +24,8 @@ model:
     r: 128
   #  lora_alpha: 256
   #  lora_dropout: 0.01
-  #  target_modules: ["q_proj", "v_proj"] # Light LoRA
+  #  target_modules: ["q_proj", "v_proj"] # Light LoRA also "
+  # # if you want to train Luciole with LoRA you have to remove the # before target_modules
 
   perception:
      target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
@@ -346,7 +347,7 @@ exp_manager:
     filename: "{step:06.0f}"
     monitor: "step"
     mode: "max"
-    every_n_train_steps: 5000
+    every_n_train_steps: 1000
     every_n_epochs: null
     save_top_k: -1
     always_save_nemo: false
