@@ -54,7 +54,7 @@ model:
 
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 1e-4
+    lr: 3e-4
     betas: [0.9, 0.98]
     weight_decay: 1e-3
     foreach: true # set to false if having issues with tensor-parallelism
@@ -62,7 +62,7 @@ model:
   lr_scheduler:
     _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
     warmup_steps: 250
-    min_lr: 1e-5
+    min_lr: 1e-6
     max_steps: ${trainer.max_steps}
     
 trainer:
@@ -73,7 +73,7 @@ trainer:
   max_epochs: -1 
   # max_steps: 20
   limit_train_batches: 250_000  # number of steps in 1 epoch bc no epoch in lhotse
-  accumulate_grad_batches: 10
+  accumulate_grad_batches: 2
   limit_val_batches: 0.0
   val_check_interval: 5000
   num_sanity_val_steps: 1
@@ -112,7 +112,7 @@ exp_manager:
     filename: "{step:06.0f}"
     monitor: step
     mode: max
-    every_n_train_steps: 1000
+    every_n_train_steps: 2500
     every_n_epochs: null
     save_top_k: -1
     always_save_nemo: false
@@ -126,10 +126,7 @@ data:
     token_equivalent_duration: ${model.token_equivalent_duration}
     input_cfg:
       - type: group
-        tags:
-          lang: fr
-          pnc: yes
-          task: asr
+        tags: {lang: fr, pnc: yes, task: asr}
         input_cfg:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
@@ -142,6 +139,9 @@ data:
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_TEDx/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           # - type: multimodal_conversation
           #   manifest_filepath: ${oc.env:DATA_FOLDER}/tarred/asr/fr/ACSYNT/manifest_0.jsonl
@@ -194,10 +194,7 @@ data:
           # Missing youtube, PxSLU, SimSamu, Voxforge, Clapi, ESLO, Lesvocaux, linagora_meetings
         weight: 0.3
       - type: group
-        tags:
-          lang: en
-          pnc: yes
-          task: asr
+        tags: {lang: en, pnc: yes, task: asr}
         input_cfg:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/FLEURS/train.jsonl
@@ -211,19 +208,32 @@ data:
         weight: 0.3
       - type: group
         tags:
-          lang: multi
-          pnc: yes
-          task: asr
+        tags: {lang: fr, pnc: yes, task: asr}
         input_cfg:
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/FLEURS/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: it}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/FLEURS/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: de}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/FLEURS/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: es}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: it}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: de}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {lang: es}
         weight: 0.1
       - type: group
         tags:
@@ -251,6 +261,9 @@ data:
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/sound/audio-question-answering/en/clotho_aqa_improved/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.1
       - type: group
@@ -283,9 +296,39 @@ data:
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/CoVoST/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/mTEDx/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/Multilingual_TEDx/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
-        weight: 0.1
+        weight: 0.05
+      - type: group
+        tags:
+          pnc: yes
+          task: ast
+        input_cfg:
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-en/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: es, target_lang: en}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-fr/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: es, target_lang: fr}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-it/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: es, target_lang: it}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/it-en/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: it, target_lang: en}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/it-es/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: it, target_lang: es}
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-es/Multilingual_TEDx/train.jsonl
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags: {source_lang: fr, target_lang: es}
+        weight: 0.05
     seed: 42
     shuffle: true
     shard_seed: "randomized"
