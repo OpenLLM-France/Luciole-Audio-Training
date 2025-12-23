@@ -17,6 +17,7 @@ from typing import Optional, Any
 import random
 import os
 import json
+import fcntl
 from pathlib import Path
 from tqdm import tqdm
 
@@ -72,6 +73,7 @@ class SalmEvalConfig:
     force_compute_metrics: bool = False
     limit_val_batches: int = 100
     data_type: str = "asr"
+    dataset_filter: Optional[Any] = None  # Filter datasets by index (int) or name (str)
 
 @dataclass
 class SalmDatasetInfer:
@@ -184,9 +186,10 @@ def evaluate(hyps, refs, dataset_config, results, name):
     if "bert" in dataset_config.metrics:
         from bert_score import score
         if dataset_config.lang=="en":
-            model = f"{os.getenv('HOME')}/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594"
-        elif dataset_config.lang=="fr":
-            model = f"{os.getenv('HOME')}/.cache/huggingface/hub/models--bert-base-multilingual-cased/snapshots/3f076fdb1ab68d5b2880cb87a0886f315b8146f8"
+            model = "google-bert/bert-base-uncased"
+        else:
+            # Default to multilingual BERT for fr and other languages
+            model = "google-bert/bert-base-multilingual-cased"
         P, R, F1 = score(hyps, refs, 
                          lang=dataset_config.lang, 
                          model_type=model,
@@ -327,15 +330,28 @@ def load_model(ckpt, device, ckpt_class=None, ckpt_xp_path=None):
     return model
 
 def load_results(result_file):
+    """Load results with file locking for concurrent access."""
     if result_file.exists():
         with open(result_file, "r") as f:
             try:
+                # Acquire shared lock for reading
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                 old_data = json.load(f)
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             except json.JSONDecodeError:
                 old_data = {}
     else:
         old_data = {}
     return old_data
+
+def save_results(result_file, results):
+    """Save results with file locking for concurrent access."""
+    result_file.parent.mkdir(parents=True, exist_ok=True)
+    # Use exclusive lock for writing
+    with open(result_file, "w") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        json.dump(results, f, indent=4)
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 def print_data(dataset_results, dataset_config):
     for i, (id, ref, hyp, prompt) in enumerate(zip(dataset_results["ids"], dataset_results["refs"], dataset_results["hyps"], dataset_results["prompts"])):
@@ -382,9 +398,32 @@ def main(cfg: SalmEvalConfig):
         print()
         output_result_path = get_output_manifest_path(cfg, ckpt).parent / "results.json"
         results = load_results(output_result_path)
+        
+        # Filter datasets if specified
+        datasets_to_eval = []
         for i, dataset in enumerate(cfg.inputs):
+            # Apply dataset filter if specified
+            if cfg.dataset_filter is not None:
+                # Filter by index
+                if isinstance(cfg.dataset_filter, int):
+                    if i != cfg.dataset_filter:
+                        continue
+                # Filter by name
+                elif isinstance(cfg.dataset_filter, str):
+                    dataset_name = dataset.get("name", str(i)) if isinstance(dataset, dict) else str(i)
+                    if dataset_name != cfg.dataset_filter:
+                        continue
+                # Filter by list of indices or names
+                elif isinstance(cfg.dataset_filter, (list, tuple)):
+                    dataset_name = dataset.get("name", str(i)) if isinstance(dataset, dict) else str(i)
+                    if i not in cfg.dataset_filter and dataset_name not in cfg.dataset_filter:
+                        continue
+            datasets_to_eval.append((i, dataset))
+        
+        for i, dataset in datasets_to_eval:
             dataset_config = SalmDatasetInfer.from_config(dataset, cfg, i=i)
             results.setdefault(dataset_config.name, dict())
+            # Always save metadata first
             results[dataset_config.name].update(dict(data_type=dataset_config.data_type, lang=dataset_config.lang))
             if dataset_config.name in results and not cfg.force_compute_metrics:
                 missing_metric = False
@@ -410,9 +449,12 @@ def main(cfg: SalmEvalConfig):
             print()
             results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
             print_data(dataset_results, dataset_config)
-        print(f"Writing results to {output_result_path}")
-        with open(output_result_path, "w") as f:
-            json.dump(results, f, indent=4)
+            # Save results after each dataset (in case of parallel execution)
+            print(f"Writing results to {output_result_path}")
+            save_results(output_result_path, results)
+        # Final save
+        print(f"Final write to {output_result_path}")
+        save_results(output_result_path, results)
     
 def parse_hyp(answer: torch.Tensor, eos_tokens: list[int]):
     end = (answer == torch.isin(answer, torch.tensor(eos_tokens))).nonzero(as_tuple=True)[0]
