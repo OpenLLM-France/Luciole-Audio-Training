@@ -59,8 +59,8 @@ class SALMModel:
                 if hasattr(base, 'model'):
                     base = base.model
                 
-                logger.info(f"Model Structure Debug: {base}")
-                logger.info(f"Model Attributes: {dir(base)}")
+                # logger.info(f"Model Structure Debug: {base}")
+                # logger.info(f"Model Attributes: {dir(base)}")
                 if hasattr(base, 'embed_tokens'):
                     logger.info("embed_tokens exists.")
                 else:

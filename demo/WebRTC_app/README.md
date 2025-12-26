@@ -38,7 +38,7 @@ PORT=9009
 MAX_NEW_TOKENS=64
 DEFAULT_INSTRUCTION="Listen to the audio and answer the question:"
 HF_TOKEN=your_huggingface_token
-BASE_MODEL=meta-llama/Llama-3.2-1B-Instruct
+BASE_MODEL=Qwen/Qwen3-4B-Thinking-2507
 ```
 
 The application expects the SALM model to be located at the path specified in `MODEL_PATH`.
@@ -83,7 +83,7 @@ docker build \
 
 ### 2. Run the Container
 
-The model (`meta-llama/Llama-3.2-1B-Instruct`) is baked into the image. If you wish to use a different model, you can just re-build the image with the `BASE_MODEL` argument or just download it inside the container:
+The model (`Qwen/Qwen3-4B-Thinking-2507`) is baked into the image. If you wish to use a different model, you can just re-build the image with the `BASE_MODEL` argument or just download it inside the container:
 
 ```bash
 # Go to the project directory
@@ -96,7 +96,7 @@ docker run --init -d \
   -p <PORT-LOCAL-USER>:9009 \
   -p 3478:3478/udp \
   -p 50000-50100:50000-50100/udp \
-  -v /PTH/TO/SALM/MODEL:/app/model \
+  -v /home/hnaouara/SPEECHLM2_MODELS/Canary-Qwen3.5B-Thinking:/app/model \
   -v "$(pwd)":/app \
   -e MODEL_PATH=/app/model \
   webrtc-app

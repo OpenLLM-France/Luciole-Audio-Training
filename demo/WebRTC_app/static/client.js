@@ -1,4 +1,5 @@
 const micBtn = document.getElementById('mic-btn');
+const stopBtn = document.getElementById('stop-btn');
 const sendBtn = document.getElementById('send-btn');
 const textInput = document.getElementById('text-input');
 const messagesContainer = document.getElementById('messages');
@@ -414,7 +415,7 @@ function finalizeStream() {
     }
 
     // Save to history
-    const text = streamState.contentDiv.innerText; // Get visible text (approx)
+    const text = streamState.contentDiv ? streamState.contentDiv.innerText : ""; // Get visible text (approx)
     if (currentMessages.length > 0) {
         currentMessages.push({ role: 'assistant', text: text });
         saveCurrentChat();
@@ -492,6 +493,23 @@ textInput.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
+
+if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+        if (!streamState.isStreaming) return;
+
+        console.log('Stop requested by user.');
+        streamState.stopRequested = true;
+
+        // Send stop signal to server
+        if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'stop' }));
+        }
+
+        finalizeStream();
+        stopBtn.classList.add('hidden');
+    });
+}
 
 removeFileBtn.addEventListener('click', () => {
     currentFile = null;
