@@ -1,7 +1,7 @@
 # Ignore Python cache files
 __pycache__/
 logs/
-ouput_ckpts*/
+output_ckpts*/
 *.sh
 core
 *.pyc
