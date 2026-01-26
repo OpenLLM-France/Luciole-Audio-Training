@@ -1,8 +1,10 @@
 ############ Model ############
 model:
-  pretrained_llm: "meta-llama/Llama-3.2-1B-Instruct"
+  pretrained_llm: ${oc.env:LLM_MODEL}
   pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
   pretrained_weights: true  # If false → load architecture only
+  trust_remote_code: true
+  dtype: bf16
 
   freeze_params:
     # Freeze LLM
@@ -22,10 +24,8 @@ model:
   lora:
     task_type: CAUSAL_LM
     r: 128
-  #  lora_alpha: 256
-  #  lora_dropout: 0.01
-  #  target_modules: ["q_proj", "v_proj"] # Light LoRA also "
-  # # if you want to train Luciole with LoRA you have to remove the # before target_modules
+    target_modules: ["q_proj", "v_proj"] 
+    # ["q_proj", "k_proj", "v_proj", "o_proj"]
 
   perception:
      target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
@@ -43,7 +43,7 @@ model:
 
   lr_scheduler:
     _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
-    warmup_steps: 250
+    warmup_steps: 500 # 250
     min_lr: 1e-6
     max_steps: ${trainer.max_steps}
 
@@ -76,6 +76,9 @@ trainer:
     _target_: lightning.pytorch.strategies.DDPStrategy
     gradient_as_bucket_view: true
     find_unused_parameters: true
+    #_target_: lightning.pytorch.strategies.ModelParallelStrategy
+    #tensor_parallel_size: 4
+    #data_parallel_size: 2
 
 ############ Data ############
 data:
@@ -92,17 +95,55 @@ data:
     use_lhotse: true
     num_workers: 4
 
-    max_duration: 60
+    max_duration: 45
     min_tokens: 2
     use_bucketing: false
     use_multimodal_sampling: true
     measure_total_length: true
-    # batch_size: 4
-    batch_tokens: 512 #2048 #3072
-    max_tokens: 1024
+    batch_size: 1
+    #batch_tokens: 2048 #3072
+    max_tokens: 3072
 
     input_cfg:
-
+      # ==========================
+      # QA English  
+      # ==========================
+      - type: group
+        tags: {lag: en, pnc: yes, task: qa}
+        weight: 0.2
+        input_cfg:
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl # max_dur=30.00
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.3
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl # max_dur=29.99
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl # max_dur=361.18
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl # max_dur=105.96
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl # max_dur=16.92
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl # max_dur=37.48
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl # max_dur=28.75
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
+          - type: multimodal_conversation
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl # max_dur=26.45
+            audio_locator_tag: ${model.audio_locator_tag}
+            weight: 0.1
       # ==========================
       # ASR French
       # ==========================
@@ -111,31 +152,22 @@ data:
         tags: {pnc: yes, task: asr, lang: fr}
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/FLEURS/manifest_FLEURS_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/FLEURS/train.jsonl # max_dur=29.40
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/manifest_Multilingual_LibriSpeech_recasepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_LibriSpeech/train_recasepunc.jsonl # max_dur=20.00
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/CommonVoice/train.jsonl # max_dur=17.86
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/YODAS/manifest_YODAS_casepunc_fr000.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Yodas/train.jsonl # max_dur=30.00
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/AfricanAccentedFrench/manifest_AfricanAccentedFrench_recasepunc_max30_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/PxSLU/train_recasepunc.jsonl # max_dur=29.95
             audio_locator_tag: ${model.audio_locator_tag}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/LesVocaux/manifest_LesVocaux_recasepunc.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/PxSLU/manifest_PxSLU_recasepunc.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/VoxForge/manifest_VoxForge_recasepunc.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/Multilingual_TEDx/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/fr/context/VoxForge/train_recasepunc.jsonl # max_dur=27.12
             audio_locator_tag: ${model.audio_locator_tag}
       # =====================================
       # ASR English
@@ -145,17 +177,17 @@ data:
         tags: {pnc: yes, task: asr, lang: en}
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/CommonVoice/manifest_CommonVoice_casepunc_train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/CommonVoice/train.jsonl # max_dur=49.93
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.4
             tags: {lang: en}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/Yodas/manifest_Yodas.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/Yodas/train.jsonl # max_dur=39.98
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.4
             tags: {lang: en}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/FLEURS/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/en/context/FLEURS/train.jsonl # max_dur=42.36
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.2
       # ==========================
@@ -166,35 +198,21 @@ data:
         weight: 0.1
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/FLEURS/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/FLEURS/train.jsonl # max_dur=34.20
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.16
+            weight: 0.34
             tags: {lang: it}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/FLEURS/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/FLEURS/train.jsonl # max_dur=29.22
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.16
+            weight: 0.33
             tags: {lang: es}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/FLEURS/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/FLEURS/train.jsonl # max_dur=26.76
             audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.16
+            weight: 0.33
             tags: {lang: de}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/it/context/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {lang: it}
-            weight: 0.16
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/de/context/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {lang: de}
-            weight: 0.16
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/asr/es/context/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {lang: es}
-            weight: 0.16
+
       # ==========================
       # QA French
       # ==========================
@@ -203,112 +221,38 @@ data:
         weight: 0.2
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl # max_dur=29.48
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.2
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl # max_dur=40.00
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.2
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl # max_dur=40.71
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.2
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl # max_dur=30.00
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.3
-
-      # ==========================
-      # QA English  
-      # ==========================
-      - type: group
-        tags: {lag: en, pnc: yes, task: qa}
-        weight: 0.2
-        input_cfg:
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.2
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/sound/audio-question-answering/en/clotho_aqa_improved/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            weight: 0.1
-
 
       # ==========================
       # AST FR→EN
       # ==========================
       - type: group
         tags: {source_lang: fr, target_lang: en, pnc: yes, task: ast}
-        weight: 0.05
+        weight: 0.1
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/CoVoST/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/context/Multilingual_TEDx/train.jsonl # max_dur=9.70
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.5
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/Multilingual_TEDx/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-en/context/CoVoST/train.jsonl # max_dur=388.51
             audio_locator_tag: ${model.audio_locator_tag}
             weight: 0.5
-      - type: group
-        tags:
-          pnc: yes
-          task: ast
-        input_cfg:
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-en/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: es, target_lang: en}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-fr/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: es, target_lang: fr}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/es-it/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: es, target_lang: it}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/it-en/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: it, target_lang: en}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/it-es/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: it, target_lang: es}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/multi-turn/ast/fr-es/Multilingual_TEDx/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {source_lang: fr, target_lang: es}
-        weight: 0.05
+
   validation_ds:
     prompt_format: ${model.prompt_format}
     token_equivalent_duration: ${model.token_equivalent_duration}
@@ -330,7 +274,7 @@ data:
 ############ Experiment Manager ############
 exp_manager:
   exp_dir: null
-  name: "SpeechLM2-multitasks"
+  name: "SALM-multitasks"
 
   create_tensorboard_logger: true
   create_checkpoint_callback: true
