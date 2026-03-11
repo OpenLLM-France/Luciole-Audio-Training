@@ -1,0 +1,796 @@
+input_cfg:
+  # ==========================
+  # QA English  
+  # ==========================
+  - type: group
+    tags: {lang: en, pnc: yes, task: qa}
+    weight: 0.15  # QA total = 0.30, EN=FR=0.15
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl # max_dur=30.00
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.15  # slightly upweighted: audio context + text question
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl # max_dur=361.18
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.10
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl # max_dur=105.96
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.10
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl # max_dur=16.92
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.10
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl # max_dur=37.48
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.10
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl # max_dur=28.75
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.10
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl # max_dur=29.99
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.15  # slightly upweighted: large diverse instruction set
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl # max_dur=26.45
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.15  # slightly upweighted: audio question + text context
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.05
+
+  # ==========================
+  # QA French
+  # ==========================
+  - type: group
+    tags: {lang: fr, pnc: yes, task: qa}
+    weight: 0.15  # QA total = 0.30, EN=FR=0.15
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl # max_dur=29.48
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl # max_dur=40.00
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl # max_dur=40.71
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl # max_dur=30.00
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+
+  # ==========================
+  # AQA
+  # ==========================
+  - type: group
+    tags: {lang: en, pnc: yes, task: aqa}
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+
+  # ==========================
+  # Audio captioning 
+  # ==========================
+  - type: group
+    tags: {pnc: yes, task: audio_captioning}
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: fr
+
+  # ==========================
+  # MQA : Music Question Answering
+  # ==========================
+  - type: group
+    tags: {pnc: yes, task: mqa}
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: fr
+
+  # ==========================
+  # MC: Music Captioning
+  # ==========================
+  - type: group
+    tags: {lang: en, pnc: yes, task: music_captioning}
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 1.0
+
+  # ==========================
+  # AGE - Gender - Emotional  (8 datasets — equal weight 0.125)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: Emotion Age and Gender recognition
+    weight: 0.02
+    input_cfg:
+      # EN
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_Age-Gender_reco/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech-emotion-recognition/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: en
+      # FR
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_Age-Gender_reco/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: fr
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: fr
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: fr
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech-emotion-recognition/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: fr
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          lang: fr
+
+  # ==========================
+  # Language Recognition  (2 datasets)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: language recognition
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          lang: fr
+
+  # ==========================
+  # Stress detection  (3 datasets)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: stress detection
+    weight: 0.03
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.34
+        tags:
+          lang: en
+          sub_task: Sentence Stress Detection
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssr/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.33
+        tags:
+          lang: en
+          sub_task: Sentence Stress Reasoning
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.33
+        tags:
+          lang: fr
+
+  # ==========================
+  # ASR French  (29 datasets — equal weight ~0.034)
+  # ==========================
+  - type: group
+    weight: 0.20
+    tags: {pnc: yes, task: asr, lang: fr}
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/FLEURS/train.jsonl # max_dur=29.40
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_LibriSpeech/train_recasepunc.jsonl # max_dur=20.00
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/train.jsonl # max_dur=17.86
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Yodas/train.jsonl # max_dur=30.00
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PxSLU/train_recasepunc.jsonl # max_dur=29.95
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxForge/train_recasepunc.jsonl # max_dur=27.12
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      # The datasets below could cause a problem during training
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ACSYNT/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LINAGORA_Meetings/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFAR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFNN1/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PFC/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/SimSamu/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/SUMM-RE/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxPopuli/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/AfricanAccentedFrench/train_recasepunc_max30.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPB/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPP2000/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CLAPI/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ESLO/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LesVocaux/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Adultes/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Enfants/train_recasepunc.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split0.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split1.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split2.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split3.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split4.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.034
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split5.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.026  # last two absorb rounding remainder: 28*0.034 + 2*0.026 = 1.00
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.026
+
+  # =====================================
+  # ASR English  (5 datasets)
+  # =====================================
+  - type: group
+    weight: 0.20
+    tags: {pnc: yes, task: asr, lang: en}
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/train.jsonl # max_dur=49.93
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags: {lang: en}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Yodas/train.jsonl # max_dur=39.98
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags: {lang: en}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/FLEURS/train.jsonl # max_dur=42.36
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.17
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train.jsonl # max_dur=42.36
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.17
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/VoxPopuli/train.jsonl # max_dur=42.36
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.16
+
+  # ==========================
+  # ASR Multi-lang
+  # ==========================
+  #### AR ####
+  - type: group
+    tags: {lang: ar, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.34
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.33
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.33
+
+  #### DE ####
+  - type: group
+    tags: {lang: de, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_LibriSpeech/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/VoxPopuli/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+
+  #### ES ####
+  - type: group
+    tags: {lang: es, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_LibriSpeech/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/VoxPopuli/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+
+  #### IT ####
+  - type: group
+    tags: {lang: it, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_LibriSpeech/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.20
+
+  #### NL ####
+  - type: group
+    tags: {lang: nl, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/Multilingual_LibriSpeech/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/VoxPopuli/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+
+  #### PT ####
+  - type: group
+    tags: {lang: pt, pnc: yes, task: asr}
+    weight: 0.01
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/CommonVoice/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/FLEURS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_LibriSpeech/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+
+  # ==========================
+  # AST X-EN  (8 datasets — equal weight 0.125)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: ast
+      target_lang: en
+    weight: 0.04
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: ar
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: de
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: it
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: it
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: pt
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: pt
+
+  # ==========================
+  # AST EN-X  (2 datasets)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: ast
+      source_lang: en
+    weight: 0.03
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          target_lang: ar
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-de/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.50
+        tags:
+          target_lang: de
+
+  # ==========================
+  # AST X-FR  (8 datasets — equal weight 0.125)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: ast
+      target_lang: fr
+    weight: 0.04
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: ar
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-fr/context/CommonVoiceDE2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: de
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/CommonVoiceES2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-fr/context/CommonVoiceIT2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: it
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/nl-fr/context/CommonVoiceNL2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: nl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/context/CommonVoicePT2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: pt
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/context/CommonVoicePT2FR_7B/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          source_lang: pt
+
+  # ==========================
+  # AST FR-X  (8 datasets — equal weight 0.125)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: ast
+      source_lang: fr
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: ar
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-de/context/CommonVoiceFR2DE/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: de
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/CommonVoiceFR2ES/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: es
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-it/context/CommonVoiceFR2IT/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: it
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-nl/context/CommonVoiceFR2NL/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: nl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/CommonVoiceFR2PT/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: pt
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.125
+        tags:
+          target_lang: pt
+
+  # ==========================
+  # AST FR-EN | EN-FR  (4 datasets — equal weight 0.25)
+  # ==========================
+  - type: group
+    tags:
+      pnc: yes
+      task: ast
+    weight: 0.02
+    input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CoVoST/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags:
+          source_lang: fr
+          target_lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CommonVoiceFR2EN/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags:
+          source_lang: fr
+          target_lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/Multilingual_TEDx/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags:
+          source_lang: fr
+          target_lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-fr/context/CommonVoiceEN2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
+        tags:
+          source_lang: en
+          target_lang: fr
