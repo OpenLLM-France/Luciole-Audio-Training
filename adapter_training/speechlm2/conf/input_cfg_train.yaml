@@ -11,6 +11,10 @@ input_cfg:
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.15  # slightly upweighted: audio context + text question
       - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slu-phase-2-sqa5/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.05
+      - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl # max_dur=361.18
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.10
@@ -38,10 +42,6 @@ input_cfg:
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl # max_dur=26.45
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.15  # slightly upweighted: audio question + text context
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/train.jsonl
-        audio_locator_tag: ${model.audio_locator_tag}
-        weight: 0.05
 
   # ==========================
   # QA French
@@ -95,13 +95,19 @@ input_cfg:
   # Audio captioning 
   # ==========================
   - type: group
-    tags: {pnc: yes, task: audio_captioning}
+    tags: {pnc: yes, task: audio captioning}
     weight: 0.02
     input_cfg:
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
         audio_locator_tag: ${model.audio_locator_tag}
-        weight: 0.50
+        weight: 0.25
+        tags:
+          lang: en
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        weight: 0.25
         tags:
           lang: en
       - type: multimodal_conversation
@@ -135,13 +141,12 @@ input_cfg:
   # MC: Music Captioning
   # ==========================
   - type: group
-    tags: {lang: en, pnc: yes, task: music_captioning}
+    tags: {lang: en, pnc: yes, task: music captioning}
     weight: 0.02
     input_cfg:
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
         audio_locator_tag: ${model.audio_locator_tag}
-        weight: 1.0
 
   # ==========================
   # AGE - Gender - Emotional  (8 datasets — equal weight 0.125)
@@ -166,7 +171,7 @@ input_cfg:
         tags:
           lang: en
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/train.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.125
         tags:
@@ -185,7 +190,7 @@ input_cfg:
         tags:
           lang: fr
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/train.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train.jsonl
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.125
         tags:
@@ -267,7 +272,7 @@ input_cfg:
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.034
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_LibriSpeech/train_recasepunc.jsonl # max_dur=20.00
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_LibriSpeech/train.jsonl # max_dur=20.00
         audio_locator_tag: ${model.audio_locator_tag}
         weight: 0.034
       - type: multimodal_conversation
@@ -561,10 +566,7 @@ input_cfg:
   # AST X-EN  (8 datasets — equal weight 0.125)
   # ==========================
   - type: group
-    tags:
-      pnc: yes
-      task: ast
-      target_lang: en
+    tags: {pnc: yes, task: ast, target_lang: en}
     weight: 0.04
     input_cfg:
       - type: multimodal_conversation
@@ -620,10 +622,7 @@ input_cfg:
   # AST EN-X  (2 datasets)
   # ==========================
   - type: group
-    tags:
-      pnc: yes
-      task: ast
-      source_lang: en
+    tags: {pnc: yes, task: ast, source_lang: en}
     weight: 0.03
     input_cfg:
       - type: multimodal_conversation
@@ -643,10 +642,7 @@ input_cfg:
   # AST X-FR  (8 datasets — equal weight 0.125)
   # ==========================
   - type: group
-    tags:
-      pnc: yes
-      task: ast
-      target_lang: fr
+    tags: {pnc: yes, task: ast, target_lang: fr}
     weight: 0.04
     input_cfg:
       - type: multimodal_conversation
@@ -702,10 +698,7 @@ input_cfg:
   # AST FR-X  (8 datasets — equal weight 0.125)
   # ==========================
   - type: group
-    tags:
-      pnc: yes
-      task: ast
-      source_lang: fr
+    tags: {pnc: yes, task: ast, source_lang: fr}
     weight: 0.02
     input_cfg:
       - type: multimodal_conversation
@@ -761,9 +754,7 @@ input_cfg:
   # AST FR-EN | EN-FR  (4 datasets — equal weight 0.25)
   # ==========================
   - type: group
-    tags:
-      pnc: yes
-      task: ast
+    tags: {pnc: yes, task: ast}
     weight: 0.02
     input_cfg:
       - type: multimodal_conversation
