@@ -1,0 +1,68 @@
+======================================================================
+  DATASET BALANCE SUMMARY REPORT
+======================================================================
+
+Total manifests parsed : 127
+Total samples          : 38,341,267
+Total audio duration   : 117,704.7 hours
+
+── Task distribution ──────────────────────────────────────────
+  asr                                      26,933,790.0 samples ( 70.2%)   84899.2 h  [61 manifests]
+  ast                                      7,680,071.0 samples ( 20.0%)   11154.6 h  [30 manifests]
+  qa                                       1,821,620.0 samples (  4.8%)   10838.2 h  [13 manifests]
+  Speaker Trait Recognition                995,077.0 samples (  2.6%)    1475.4 h  [8 manifests]
+  aqa                                      818,524.0 samples (  2.1%)    9117.4 h  [4 manifests]
+  audio captioning                          44,245.0 samples (  0.1%)     114.7 h  [3 manifests]
+  language recognition                      27,000.0 samples (  0.1%)      72.8 h  [2 manifests]
+  stress detection                          13,200.0 samples (  0.0%)      10.9 h  [3 manifests]
+  mqa                                        5,160.0 samples (  0.0%)      14.3 h  [2 manifests]
+  music captioning                           2,580.0 samples (  0.0%)       7.2 h  [1 manifests]
+
+── Language distribution ───────────────────────────────────────
+  en          22,862,666.0 samples ( 59.6%)   82919.7 h
+  fr          4,926,620.0 samples ( 12.8%)   15895.4 h
+  de          1,196,023.0 samples (  3.1%)    3213.1 h
+  en→fr       1,138,760.0 samples (  3.0%)    1798.4 h
+  fr→en       870,435.0 samples (  2.3%)    1211.3 h
+  es          730,291.0 samples (  1.9%)    1764.9 h
+  fr→es       613,777.0 samples (  1.6%)     883.2 h
+  de→fr       607,530.0 samples (  1.6%)     962.1 h
+  fr→pt       606,238.0 samples (  1.6%)     870.7 h
+  fr→it       592,957.0 samples (  1.5%)     850.7 h
+  fr→nl       592,709.0 samples (  1.5%)     850.3 h
+  fr→de       592,511.0 samples (  1.5%)     850.0 h
+  nl          441,631.0 samples (  1.2%)    1662.4 h
+  en→ar       429,267.0 samples (  1.1%)     587.6 h
+  en→de       429,267.0 samples (  1.1%)     587.6 h
+  es→fr       357,202.0 samples (  0.9%)     514.8 h
+  it          308,019.0 samples (  0.8%)     689.8 h
+  de→en       264,140.0 samples (  0.7%)     345.6 h
+  pt          153,490.0 samples (  0.4%)     350.2 h
+  es→en       128,165.0 samples (  0.3%)     195.8 h
+  fr→ar       116,027.0 samples (  0.3%)     166.2 h
+  it→fr       109,725.0 samples (  0.3%)     161.8 h
+  it→en        67,443.0 samples (  0.2%)     108.2 h
+  pt→fr        45,840.0 samples (  0.1%)      52.6 h
+  pt→en        45,749.0 samples (  0.1%)      70.9 h
+  nl→fr        43,448.0 samples (  0.1%)      54.1 h
+  ar           42,456.0 samples (  0.1%)      54.6 h
+  ar→fr        28,508.0 samples (  0.1%)      32.4 h
+  ar→en           373.0 samples (  0.0%)       0.4 h
+
+── Top-10 datasets by samples ──────────────────────────────────
+  Multilingual_LibriSpeech            asr                  lang=en    10,808,037 samples  44659.7 h
+  Yodas                               asr                  lang=en    7,984,260 samples  19447.4 h
+  CommonVoice                         asr                  lang=en    1,138,760 samples   1798.4 h
+  CommonVoiceEN2FR                    ast                  lang=en→fr 1,138,760 samples   1798.4 h
+  CommonVoice_Age-Gender_reco         Speaker Trait Recognition lang=en      667,207 samples   1036.0 h
+  CommonVoice                         asr                  lang=de      607,871 samples    962.7 h
+  CLEAR_v1.0.0_improved               aqa                  lang=en      607,543 samples   8488.7 h
+  CommonVoiceDE2FR                    ast                  lang=de→fr   607,530 samples    962.1 h
+  CommonVoice                         asr                  lang=fr      593,066 samples    850.8 h
+  CommonVoiceFR2EN                    ast                  lang=fr→en   593,033 samples    850.8 h
+
+── Balance notes ───────────────────────────────────────────────
+  ⚠  Task 'asr' dominates (70.2% of samples).
+  EN share: 59.6%   FR share: 12.8%
+
+======================================================================
