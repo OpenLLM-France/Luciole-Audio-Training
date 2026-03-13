@@ -1027,6 +1027,7 @@ def main():
         if stats is None:
             missing += 1
             if not args.skip_missing:
+                raise RuntimeError(f"Could not find {path}")
                 base.update({k: None for k in [
                     "num_audio_segments","num_samples",
                     "total_duration_sec","total_duration_dhms",
