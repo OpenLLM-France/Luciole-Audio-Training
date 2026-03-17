@@ -9,7 +9,7 @@ input_cfg:
 
       # FR — 30% of ASR (0.45 × 0.30 = 0.135)
       - type: group
-        weight: 0.135
+        weight: 0.30
         tags: {lang: fr}
         input_cfg:
           - type: multimodal_conversation
@@ -102,7 +102,7 @@ input_cfg:
 
       # EN — 30% of ASR (0.45 × 0.30 = 0.135)
       - type: group
-        weight: 0.135
+        weight: 0.30
         tags: {lang: en}
         input_cfg:
           - type: multimodal_conversation
@@ -138,7 +138,7 @@ input_cfg:
 
       # DE — 8% of ASR
       - type: group
-        weight: 0.036
+        weight: 0.08
         tags: {lang: de}
         input_cfg:
           - type: multimodal_conversation
@@ -159,7 +159,7 @@ input_cfg:
 
       # ES — 8% of ASR
       - type: group
-        weight: 0.036
+        weight: 0.08
         tags: {lang: es}
         input_cfg:
           - type: multimodal_conversation
@@ -180,7 +180,7 @@ input_cfg:
 
       # IT — 8% of ASR
       - type: group
-        weight: 0.036
+        weight: 0.08
         tags: {lang: it}
         input_cfg:
           - type: multimodal_conversation
@@ -201,7 +201,7 @@ input_cfg:
 
       # NL — 8% of ASR
       - type: group
-        weight: 0.036
+        weight: 0.08
         tags: {lang: nl}
         input_cfg:
           - type: multimodal_conversation
@@ -219,7 +219,7 @@ input_cfg:
 
       # PT — 8% of ASR
       - type: group
-        weight: 0.036
+        weight: 0.08
         tags: {lang: pt}
         input_cfg:
           - type: multimodal_conversation
