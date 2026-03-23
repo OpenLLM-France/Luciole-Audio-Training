@@ -12,6 +12,10 @@ python suggest_yaml_cfg.py dataset_analysis/metadata.csv --metric duration --tem
     --input_weights ../adapter_training/speechlm2/conf/input_cfg_train.yaml \
     --output dataset_analysis/suggested.yaml | tee dataset_analysis/suggested_notes.txt
 ```
+Note: the analysis can be re-run with:
+```bash
+python analyze_yaml_cfg.py dataset_analysis/metadata.csv dataset_analysis/suggested.yaml
+```
 
 # Step 3 — CSV + any YAML → plots  (instant, iterate freely)
 ```bash

@@ -26,46 +26,13 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from analyze_yaml_cfg import (
+    _EPSILON, _lang_key, fmt_hours, fmt_num, print_summary,
+)
+
 warnings.filterwarnings("ignore")
 
-_EPSILON     = 1e-9
 _TEMPERATURE = 2.0
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Formatting helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-def fmt_num(v) -> str:
-    if v is None or (isinstance(v, float) and math.isnan(v)):
-        return "—"
-    v = int(v)
-    if v >= 1_000_000: return f"{v/1_000_000:.2f}M"
-    if v >= 1_000:     return f"{v/1_000:.1f}K"
-    return str(v)
-
-
-def fmt_hours(secs) -> str:
-    if secs is None or (isinstance(secs, float) and math.isnan(secs)):
-        return "—"
-    h = secs / 3600
-    return f"{h:,.0f} h" if h >= 1000 else f"{h:.1f} h"
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Language key
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _lang_key(row) -> str:
-    task = str(row.get("task_type", "") or "").strip()
-    lang = str(row.get("language",  "") or "").strip()
-    if task == "ast":
-        src = str(row.get("source_lang", "") or "").strip()
-        tgt = str(row.get("target_lang", "") or "").strip()
-        if src and tgt:
-            return f"{src}→{tgt}"
-        return src or tgt or "unknown"
-    return lang or "unknown"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -340,45 +307,6 @@ def write_yaml(df: pd.DataFrame,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Summary printer
-# ──────────────────────────────────────────────────────────────────────────────
-
-def print_summary(df: pd.DataFrame, metric: str, temperature: float) -> None:
-    print("\n" + "="*72)
-    print("  SAMPLING WEIGHT SUMMARY")
-    print(f"  metric={metric}  T={temperature}")
-    print("="*72)
-    print(f"\n  {'Task':<8} {'Lang':<12} {'Dataset':<30} "
-          f"{'ds_w':>8} {'samp%':>7} {'passes':>7}")
-    print("  " + "-"*72)
-
-    for _, r in df.sort_values(["task_type","_lkey","effective_prob_pct"],
-                               ascending=[True,True,True]).iterrows():
-        ep   = r.get("expected_passes", "?")
-        flag = (" ⚠" if isinstance(ep,(int,float)) and ep > 5
-                else " ⚑" if isinstance(ep,(int,float)) and ep < 0.1 else "")
-        print(f"  {str(r['task_type']):<8} {str(r['_lkey']):<12} "
-              f"{str(r['dataset_name'])[:29]:<30} "
-              f"{r['dataset_w']:>8.4f} {r['effective_prob_pct']:>6.3f}%"
-              f"  {ep:>5}×{flag}")
-
-    print("  " + "-"*72)
-    print(f"  {'TOTAL':>53} {df['effective_prob_pct'].sum():>6.1f}%")
-
-    over  = df[df["expected_passes"] > 5]
-    under = df[df["expected_passes"] < 0.1]
-    if not over.empty:
-        names = ", ".join(f"{r['dataset_name']} ({r['expected_passes']:.1f}×)"
-                          for _, r in over.head(5).iterrows())
-        print(f"\n  ⚠  Over-sampled  (>5×): {names}")
-    if not under.empty:
-        names = ", ".join(f"{r['dataset_name']} ({r['expected_passes']:.3f}×)"
-                          for _, r in under.head(5).iterrows())
-        print(f"  ⚑  Under-sampled (<0.1×): {names}")
-    print("="*72 + "\n")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -387,8 +315,8 @@ def main():
         description="metadata CSV → suggested NeMo sampling YAML.")
     parser.add_argument("csv_path",
                         help="metadata.csv produced by generate_csv.py")
-    parser.add_argument("--output",      default="suggested.yaml",
-                        help="Output YAML path (default: suggested.yaml).")
+    parser.add_argument("--output",      default=None,
+                        help="Output YAML path. If omitted, only print the summary.")
     parser.add_argument("--metric",      default="duration",
                         choices=["duration","samples"],
                         help="Size metric for weighting (default: duration).")
@@ -442,8 +370,9 @@ def main():
                          input_lang_w=input_lang_w,
                          input_weights_mode=args.input_weights_mode)
 
-    print_summary(df, args.metric, args.temperature)
-    write_yaml(df, args.metric, args.temperature, Path(args.output))
+    print_summary(df, title=f"metric={args.metric}  T={args.temperature}")
+    if args.output:
+        write_yaml(df, args.metric, args.temperature, Path(args.output))
 
 
 if __name__ == "__main__":
