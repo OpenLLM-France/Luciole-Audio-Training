@@ -10,7 +10,7 @@ python generate_csv_metadata.py \
 ```bash
 python suggest_yaml_cfg.py dataset_analysis/metadata.csv --metric duration --temperature 2 \
     --input_weights ../adapter_training/speechlm2/conf/input_cfg_train.yaml \
-    --output dataset_analysis/suggested.yaml | tee dataset_analysis/README.md
+    --output dataset_analysis/suggested.yaml | tee dataset_analysis/suggested_notes.txt
 ```
 
 # Step 3 — CSV + any YAML → plots  (instant, iterate freely)
