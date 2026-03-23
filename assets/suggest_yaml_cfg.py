@@ -148,12 +148,12 @@ def write_yaml(df: pd.DataFrame,
                 task_w        = ("task_w",             "first"),
             )
             .reset_index()
-            .sort_values(["task_type","lang_w"], ascending=[True, True]))
+            .sort_values(["task_w","lang_w"], ascending=[False, False]))
 
     task_agg = (df.groupby("task_type")
                   .agg(task_w=("task_w","first"))
                   .reset_index()
-                  .sort_values("task_type", ascending=True))
+                  .sort_values("task_w", ascending=False))
 
     size_label = lambda h, n: (f"{h:.0f} h" if metric == "duration" else fmt_num(int(n)))
 
@@ -193,7 +193,7 @@ def write_yaml(df: pd.DataFrame,
             ]
 
             ds_sub = (df[(df["task_type"] == task) & (df["_lkey"] == lang)]
-                      .sort_values("dataset_w", ascending=True))
+                      .sort_values("dataset_w", ascending=False))
 
             for _, dr in ds_sub.iterrows():
                 dw     = dr["dataset_w"]
