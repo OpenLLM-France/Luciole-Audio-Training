@@ -367,12 +367,17 @@ def plot_composition(df: pd.DataFrame,
             "ht": task_hatch(m["task"]),
         })
 
-    grp_prob_totals = {}
+    grp_totals = {}
     for it in leg_items:
-        grp_prob_totals[it["group"]] = grp_prob_totals.get(it["group"], 0) + it["prob_pct"]
-    leg_items.sort(key=lambda x: (-grp_prob_totals[x["group"]], -x["prob_pct"]))
+        g = it["group"]
+        if g not in grp_totals:
+            grp_totals[g] = {"raw_pct": 0, "raw_h": 0, "prob_pct": 0}
+        grp_totals[g]["raw_pct"]  += it["raw_pct"]
+        grp_totals[g]["raw_h"]    += it["raw_h"]
+        grp_totals[g]["prob_pct"] += it["prob_pct"]
+    leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["prob_pct"], -x["prob_pct"]))
 
-    n_rows = len(leg_items) + len(grp_prob_totals) + 6
+    n_rows = len(leg_items) + len(grp_totals) + 6
     row_h  = 1.0 / max(n_rows, 1)
     col_xs = [0.00, 0.055, 0.60, 0.73, 0.90]
 
@@ -395,10 +400,23 @@ def plot_composition(df: pd.DataFrame,
     for item in leg_items:
         if item["group"] != current_group:
             current_group = item["group"]
+            gt = grp_totals[current_group]
             y_pos -= row_h * 0.35
-            ax_leg.text(0.0, y_pos + row_h * 0.15, current_group,
+            ty_grp = y_pos + row_h * 0.15
+            ax_leg.text(0.0, ty_grp, current_group,
                         fontsize=9, fontweight="bold", color="#111111",
                         va="center", transform=ax_leg.transAxes)
+            ax_leg.text(col_xs[2], ty_grp, f"{gt['raw_pct']:.1f}%", fontsize=8.5,
+                        fontweight="bold", va="center", ha="right", color="#111111",
+                        transform=ax_leg.transAxes, clip_on=False)
+            ax_leg.text(col_xs[3], ty_grp, f"{gt['raw_h']:,.0f}", fontsize=8.5,
+                        fontweight="bold", va="center", ha="right", color="#111111",
+                        transform=ax_leg.transAxes, clip_on=False)
+            delta_grp = gt["prob_pct"] - gt["raw_pct"]
+            clr_grp   = "#c0392b" if delta_grp < -1 else "#27ae60" if delta_grp > 1 else "#111111"
+            ax_leg.text(col_xs[4], ty_grp, f"{gt['prob_pct']:.1f}%", fontsize=8.5,
+                        fontweight="bold", va="center", ha="right", color=clr_grp,
+                        transform=ax_leg.transAxes, clip_on=False)
             y_pos -= row_h
 
         sw = 0.036
