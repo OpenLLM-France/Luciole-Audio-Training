@@ -280,10 +280,20 @@ def plot_composition(df: pd.DataFrame,
     raw_main  = _collapse(raw_grp,  raw_total)
     prob_main = _collapse(prob_grp, prob_total)
 
-    # Union of labels (raw order first)
-    all_labels = list(dict.fromkeys(
-        list(raw_main.index) + [l for l in prob_main.index if l not in raw_main.index]
-    ))
+    # Union of labels, sorted by task sampling weight desc, then by entry weight desc
+    all_labels_set = set(raw_main.index) | set(prob_main.index)
+    task_prob_total = {}
+    for lbl in all_labels_set:
+        task = lbl_map[lbl]["task"]
+        task_prob_total[task] = task_prob_total.get(task, 0) + prob_grp.get(lbl, 0)
+    all_labels = sorted(
+        all_labels_set,
+        key=lambda lbl: (-task_prob_total[lbl_map[lbl]["task"]], -prob_grp.get(lbl, 0)),
+    )
+
+    # Reindex series to follow the sorted order
+    raw_main  = raw_main.reindex(all_labels).dropna()
+    prob_main = prob_main.reindex(all_labels).dropna()
 
     raw_hrs    = {lbl: raw_grp.get(lbl, 0) / 3600 for lbl in all_labels}
     raw_pct    = {lbl: 100 * raw_grp.get(lbl, 0) / max(raw_total, _EPSILON)
@@ -357,12 +367,12 @@ def plot_composition(df: pd.DataFrame,
             "ht": task_hatch(m["task"]),
         })
 
-    grp_totals = {}
+    grp_prob_totals = {}
     for it in leg_items:
-        grp_totals[it["group"]] = grp_totals.get(it["group"], 0) + it["raw_h"]
-    leg_items.sort(key=lambda x: (x["group"], x["raw_h"]))
+        grp_prob_totals[it["group"]] = grp_prob_totals.get(it["group"], 0) + it["prob_pct"]
+    leg_items.sort(key=lambda x: (-grp_prob_totals[x["group"]], -x["prob_pct"]))
 
-    n_rows = len(leg_items) + len(grp_totals) + 6
+    n_rows = len(leg_items) + len(grp_prob_totals) + 6
     row_h  = 1.0 / max(n_rows, 1)
     col_xs = [0.00, 0.055, 0.60, 0.73, 0.90]
 
