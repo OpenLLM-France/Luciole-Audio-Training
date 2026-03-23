@@ -98,7 +98,11 @@ def flatten_manifests(yaml_path: str) -> list:
         sub_task = tags.get("sub_task",    inherited_subtask)
         src_lang = tags.get("source_lang", inherited_src_lang)
         tgt_lang = tags.get("target_lang", inherited_tgt_lang)
-        weight   = float(node.get("weight", inherited_weight) or inherited_weight)
+        node_weight = node.get("weight")
+        if node_weight is not None:
+            weight = inherited_weight * float(node_weight)
+        else:
+            weight = inherited_weight
         ntype    = node.get("type", "")
 
         if ntype == "multimodal_conversation":
@@ -347,6 +351,8 @@ def main():
                         help="Ignore manifests that don't exist on disk.")
     parser.add_argument("--workers",      type=int, default=8,
                         help="Parallel workers (default: 8).")
+    parser.add_argument("--include_weights", action="store_true",
+                        help="Include weight_group and weight_dataset columns in the output CSV.")
     args = parser.parse_args()
 
     first_yaml = Path(args.yaml_paths[0])
@@ -425,7 +431,10 @@ def main():
     print(f"\n\n   Found: {total - missing}  |  Missing: {missing}")
 
     df = pd.DataFrame(parsed_rows)
-    df = df[[c for c in COL_ORDER if c in df.columns]]
+    cols = [c for c in COL_ORDER if c in df.columns]
+    if not args.include_weights:
+        cols = [c for c in cols if c not in ("weight_group", "weight_dataset")]
+    df = df[cols]
 
     csv_path = out_dir / args.output_csv
     df.to_csv(csv_path, index=False)
