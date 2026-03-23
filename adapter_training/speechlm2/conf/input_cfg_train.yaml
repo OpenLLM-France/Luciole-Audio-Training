@@ -486,23 +486,23 @@ input_cfg:
         weight: 0.5
         input_cfg:
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/age/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Age recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech-emotion-recognition/age/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Age recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/gender/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech-emotion-recognition/gender/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech-emotion-recognition/emotion/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
@@ -526,23 +526,23 @@ input_cfg:
         weight: 0.5
         input_cfg:   
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/age/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Age recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech-emotion-recognition/age/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Age recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/gender/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech-emotion-recognition/gender/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech-emotion-recognition/emotion/train.jsonl
+            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Gender recognition}
           - type: multimodal_conversation
