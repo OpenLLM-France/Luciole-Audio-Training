@@ -360,11 +360,11 @@ input_cfg:
         tags: {source_lang: pt, target_lang: en}
 
   # ============================================================
-  # QA — 30%
+  # QA — 25%
   # ============================================================
   - type: group
     tags: {pnc: yes, task: qa}
-    weight: 0.30
+    weight: 0.25
     input_cfg:
       # EN QA
       - type: group
@@ -417,11 +417,11 @@ input_cfg:
             audio_locator_tag: ${model.audio_locator_tag}
 
   # ============================================================
-  # AQA — 5%
+  # AQA — 10%
   # ============================================================
   - type: group
     tags: {pnc: yes, task: aqa}
-    weight: 0.05
+    weight: 0.10
     input_cfg:
       # EN AQA
       - type: group
