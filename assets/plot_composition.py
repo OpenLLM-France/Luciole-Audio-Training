@@ -360,7 +360,7 @@ def plot_composition(df: pd.DataFrame,
     grp_totals = {}
     for it in leg_items:
         grp_totals[it["group"]] = grp_totals.get(it["group"], 0) + it["raw_h"]
-    leg_items.sort(key=lambda x: (-grp_totals[x["group"]], x["group"], -x["raw_h"]))
+    leg_items.sort(key=lambda x: (x["group"], x["raw_h"]))
 
     n_rows = len(leg_items) + len(grp_totals) + 6
     row_h  = 1.0 / max(n_rows, 1)

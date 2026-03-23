@@ -148,12 +148,12 @@ def write_yaml(df: pd.DataFrame,
                 task_w        = ("task_w",             "first"),
             )
             .reset_index()
-            .sort_values(["task_type","lang_w"], ascending=[True, False]))
+            .sort_values(["task_type","lang_w"], ascending=[True, True]))
 
     task_agg = (df.groupby("task_type")
                   .agg(task_w=("task_w","first"))
                   .reset_index()
-                  .sort_values("task_w", ascending=False))
+                  .sort_values("task_type", ascending=True))
 
     size_label = lambda h, n: (f"{h:.0f} h" if metric == "duration" else fmt_num(int(n)))
 
@@ -193,7 +193,7 @@ def write_yaml(df: pd.DataFrame,
             ]
 
             ds_sub = (df[(df["task_type"] == task) & (df["_lkey"] == lang)]
-                      .sort_values("dataset_w", ascending=False))
+                      .sort_values("dataset_w", ascending=True))
 
             for _, dr in ds_sub.iterrows():
                 dw     = dr["dataset_w"]
@@ -235,7 +235,7 @@ def print_summary(df: pd.DataFrame, metric: str, temperature: float) -> None:
     print("  " + "-"*72)
 
     for _, r in df.sort_values(["task_type","_lkey","effective_prob_pct"],
-                               ascending=[True,True,False]).iterrows():
+                               ascending=[True,True,True]).iterrows():
         ep   = r.get("expected_passes", "?")
         flag = (" ⚠" if isinstance(ep,(int,float)) and ep > 5
                 else " ⚑" if isinstance(ep,(int,float)) and ep < 0.1 else "")
