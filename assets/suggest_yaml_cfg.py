@@ -56,10 +56,19 @@ def parse_input_weights(yaml_path: str) -> tuple:
     task_weights = {}
     lang_weights = {}
 
+    def _validate_tags(tags, context=""):
+        for k, v in tags.items():
+            if v is None:
+                raise ValueError(
+                    f"YAML tag '{k}' has no value (parsed as None){context}. "
+                    f"Add a space after the colon: '{k}: <value>' instead of '{k}<value>'"
+                )
+
     for top in cfg.get("input_cfg", []):
         if not isinstance(top, dict) or top.get("type") != "group":
             continue
         tags = top.get("tags", {}) or {}
+        _validate_tags(tags)
         task = tags.get("task", "")
         if not task:
             continue
@@ -69,6 +78,7 @@ def parse_input_weights(yaml_path: str) -> tuple:
             if not isinstance(child, dict) or child.get("type") != "group":
                 continue
             ctags = child.get("tags", {}) or {}
+            _validate_tags(ctags, context=f" in task '{task}'")
             lang = ctags.get("lang", "")
             src  = ctags.get("source_lang", "")
             tgt  = ctags.get("target_lang", "")

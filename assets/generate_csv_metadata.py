@@ -90,6 +90,12 @@ def flatten_manifests(yaml_path: str) -> list:
         tags = node.get("tags", {}) or {}
         if isinstance(tags, str):
             tags = {}
+        for k, v in tags.items():
+            if v is None:
+                raise ValueError(
+                    f"YAML tag '{k}' has no value (parsed as None). "
+                    f"Add a space after the colon: '{k}: <value>' instead of '{k}<value>'"
+                )
 
         task     = tags.get("task",        inherited_task)
         lang     = tags.get("lang",        inherited_lang)

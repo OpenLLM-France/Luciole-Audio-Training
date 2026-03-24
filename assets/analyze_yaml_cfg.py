@@ -345,7 +345,9 @@ def main():
     matched   = (df["effective_prob"] > 0).sum()
     unmatched = (df["effective_prob"] == 0).sum()
     if unmatched > 0:
-        print(f"   ⚠ {unmatched} CSV rows had no matching entry in the YAML.")
+        print(f"   ⚠ {unmatched} CSV rows had no matching entry in the YAML:")
+        for _, r in df[df["effective_prob"] == 0].iterrows():
+            print(f"      - {r['dataset_name']} ({r.get('raw_manifest_path', '?')})")
     print(f"   Matched {matched} / {len(df)} rows.")
 
     # Generate report
