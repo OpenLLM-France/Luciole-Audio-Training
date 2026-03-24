@@ -368,7 +368,7 @@ input_cfg:
     input_cfg:
       # EN QA
       - type: group
-        tags: {lang:en}
+        tags: {lang: en}
         weight: 0.6
         input_cfg:
           - type: multimodal_conversation
@@ -400,7 +400,7 @@ input_cfg:
             audio_locator_tag: ${model.audio_locator_tag}
       # FR QA
       - type: group
-        tags: {lang:fr}
+        tags: {lang: fr}
         weight: 0.4
         input_cfg:
           - type: multimodal_conversation
@@ -424,54 +424,46 @@ input_cfg:
     weight: 0.10
     input_cfg:
       # EN AQA
-      - type: group
-        tags: {lang:en}
-        weight: 0.8
-        input_cfg:
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: aqa}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: aqa}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: aqa}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: aqa}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: audio_captioning}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: audio_captioning}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: music_captioning}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: mqa}
-      - type: group
-        tags: {lang:fr}
-        weight: 0.2
-        input_cfg:   
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: mqa}
-          - type: multimodal_conversation
-            manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags: {sub_task: audio_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: audio_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: audio_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: mqa} 
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
+        audio_locator_tag: ${model.audio_locator_tag}
+        tags: {sub_task: audio_captioning}
           
 
   # ============================================================
@@ -482,7 +474,7 @@ input_cfg:
     weight: 0.05
     input_cfg:
       - type: group
-        tags: {lang:en}
+        tags: {lang: en}
         weight: 0.5
         input_cfg:
           - type: multimodal_conversation
@@ -522,7 +514,7 @@ input_cfg:
             audio_locator_tag: ${model.audio_locator_tag}
             tags: {sub_task: Language recognition}
       - type: group
-        tags: {lang:fr}
+        tags: {lang: fr}
         weight: 0.5
         input_cfg:   
           - type: multimodal_conversation
