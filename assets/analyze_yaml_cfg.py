@@ -119,7 +119,7 @@ def print_summary(df: pd.DataFrame, title: str = "") -> None:
     print(f"\n  median passes: {median_ep:.2f}×  "
           f"(⚠ >{over_thr:.2f}×  ⚑ <{under_thr:.3f}×)")
     print(f"\n  {'Task':<8} {'Lang':<12} {'Dataset':<30} "
-          f"{'ds_w':>8} {'samp%':>7} {'passes':>7}")
+          f"{'w/group':>8} {'prob%':>7} {'passes':>7}")
     print("  " + "-"*72)
 
     for _, r in df.sort_values(["task_type","_lkey","effective_prob_pct"],

@@ -7,8 +7,8 @@ computing data-driven weights from scratch.
 
 Outputs
 -------
-  00_global_donut.png          — before/after resampling side-by-side donuts
-  01_word_lengths.png          — instruction / response word-count histograms
+  [prefix]dataset_distrib_pies_<metric>.png  — before/after resampling side-by-side donuts
+  [prefix]length_distrib.png                — instruction / response word-count histograms
 
 Usage
 -----
@@ -110,7 +110,8 @@ def plot_composition(df: pd.DataFrame,
                      out: Path,
                      metric: str,
                      temperature: float,
-                     split_label: str = "train") -> None:
+                     split_label: str = "train",
+                     prefix: str = "") -> None:
     """
     Two donuts side by side:
       Left  — raw audio duration (before resampling)
@@ -369,7 +370,7 @@ def plot_composition(df: pd.DataFrame,
         fontsize=13, fontweight="bold", y=1.00,
     )
 
-    out_path = out / f"00_global_donut_{metric}.png"
+    out_path = out / f"{prefix}dataset_distrib_pies_{metric}.png"
     plt.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
     print(f"  ✓  {out_path}")
@@ -379,7 +380,7 @@ def plot_composition(df: pd.DataFrame,
 # Word-length histogram
 # ──────────────────────────────────────────────────────────────────────────────
 
-def plot_word_lengths(df: pd.DataFrame, out: Path) -> None:
+def plot_word_lengths(df: pd.DataFrame, out: Path, prefix: str = "") -> None:
     instr = df["avg_instruction_words"].dropna()
     resp  = df["avg_response_words"].dropna()
     if instr.empty and resp.empty:
@@ -403,7 +404,7 @@ def plot_word_lengths(df: pd.DataFrame, out: Path) -> None:
         axes[1].set_title("Response length distribution")
 
     plt.tight_layout()
-    out_path = out / "01_word_lengths.png"
+    out_path = out / f"{prefix}length_distrib.png"
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     print(f"  ✓  {out_path}")
@@ -484,9 +485,13 @@ def main():
     split_label = (df["split"].mode()[0]
                    if "split" in df.columns and not df.empty else "train")
 
+    prefix = ""
+    if args.yaml:
+        prefix = Path(args.yaml).stem + "_"
+
     print("\n🎨 Generating plots …")
-    plot_composition(df, out_dir, args.metric, temperature, split_label=split_label)
-    plot_word_lengths(df, out_dir)
+    plot_composition(df, out_dir, args.metric, temperature, split_label=split_label, prefix=prefix)
+    # plot_word_lengths(df, out_dir, prefix=prefix)
     print(f"\n✅ Plots saved to: {out_dir.resolve()}\n")
 
 
