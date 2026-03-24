@@ -253,7 +253,8 @@ def write_yaml(df: pd.DataFrame,
                   .reset_index()
                   .sort_values("task_w", ascending=False))
 
-    size_label = lambda h, n: (f"{h:.0f} h" if metric == "duration" else fmt_num(int(n)))
+    def size_label(dur_h, n_samples):
+        return f"{fmt_hours(dur_h * 3600)}, {fmt_num(n_samples)} samples"
 
     lines = ["input_cfg:"]
 
@@ -295,9 +296,9 @@ def write_yaml(df: pd.DataFrame,
 
             for _, dr in ds_sub.iterrows():
                 dw     = dr["dataset_w"]
-                d_h    = dr.get("total_duration_sec", 0) or 0
+                d_h    = (dr.get("total_duration_sec", 0) or 0) / 3600
                 d_n    = dr.get("num_samples", 0) or 0
-                d_size = fmt_hours(d_h) if metric == "duration" else fmt_num(d_n)
+                d_size = size_label(d_h, d_n)
                 m_path = dr.get("raw_manifest_path", "<path>")
 
                 if len(ds_sub) > 1:
