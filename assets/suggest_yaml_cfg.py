@@ -91,6 +91,7 @@ def compute_weights(df: pd.DataFrame,
                     metric: str = "duration",
                     temperature: float = _TEMPERATURE,
                     min_weight: float = 0.0,
+                    max_passes: float = 0.0,
                     input_task_w: dict = None,
                     input_lang_w: dict = None,
                     input_weights_mode: str = "hard") -> pd.DataFrame:
@@ -178,10 +179,57 @@ def compute_weights(df: pd.DataFrame,
         df["effective_prob_pct"] = df["effective_prob"] * 100.0
 
     total_n = float(df["num_samples"].sum(skipna=True)) or 1.0
+
+    # ── max_passes: cap L3 weights so no dataset exceeds the threshold
+    if max_passes > 0:
+        df = _cap_passes(df, total_n, max_passes)
+
     df["expected_passes"] = (
         (df["effective_prob"] * total_n) / df["num_samples"].clip(lower=1)
     ).round(2)
 
+    return df
+
+
+def _cap_passes(df, total_n, max_passes, max_iter=50):
+    """Reduce dataset_w for datasets exceeding max_passes, redistributing
+    the freed weight to uncapped siblings in the same (task, lang) group.
+    Iterates because capping one dataset raises the effective_prob of others."""
+    for _ in range(max_iter):
+        df["effective_prob"] = df["task_w"] * df["lang_w"] * df["dataset_w"]
+        df["effective_prob_pct"] = df["effective_prob"] * 100.0
+        passes = (df["effective_prob"] * total_n) / df["num_samples"].clip(lower=1)
+        over = passes > max_passes
+        if not over.any():
+            break
+        for (task, lkey), grp in df[over].groupby(["task_type", "_lkey"]):
+            mask = (df["task_type"] == task) & (df["_lkey"] == lkey)
+            group = df.loc[mask]
+            group_passes = (group["effective_prob"] * total_n) / group["num_samples"].clip(lower=1)
+            capped = group_passes > max_passes
+            if capped.all():
+                # All exceed — just normalise evenly
+                df.loc[mask, "dataset_w"] = 1.0 / len(group)
+                continue
+            # Set capped datasets to exactly max_passes worth of dataset_w
+            tw = group["task_w"].iloc[0]
+            lw = group["lang_w"].iloc[0]
+            group_prob = tw * lw
+            if group_prob <= 0:
+                continue
+            for idx in group.index[capped]:
+                target_prob = max_passes * df.loc[idx, "num_samples"] / total_n
+                df.loc[idx, "dataset_w"] = target_prob / group_prob
+            # Redistribute remaining weight to uncapped datasets proportionally
+            used = df.loc[mask & capped, "dataset_w"].sum()
+            remaining = max(1.0 - used, 0.0)
+            uncapped_mask = mask & ~capped
+            uncapped_sum = df.loc[uncapped_mask, "dataset_w"].sum()
+            if uncapped_sum > 0 and remaining > 0:
+                df.loc[uncapped_mask, "dataset_w"] *= remaining / uncapped_sum
+    # Refresh effective_prob after capping
+    df["effective_prob"] = df["task_w"] * df["lang_w"] * df["dataset_w"]
+    df["effective_prob_pct"] = df["effective_prob"] * 100.0
     return df
 
 
@@ -339,6 +387,9 @@ def main():
                              "T=1→proportional, T=2→moderate, T→∞→uniform.")
     parser.add_argument("--min_weight",  type=float, default=0.0001,
                         help="Minimum effective probability floor (default: 0.0001).")
+    parser.add_argument("--max_passes",  type=float, default=0.0,
+                        help="Maximum expected passes per dataset (default: 0 = unlimited). "
+                             "Caps L3 weights and redistributes excess within each group.")
     parser.add_argument("--yaml_source", default=None,
                         help="If CSV contains multiple YAMLs, filter to this one.")
     parser.add_argument("--skip_missing", action="store_true",
@@ -376,10 +427,12 @@ def main():
         print(f"   Tasks:  {input_task_w}")
         print(f"   Langs:  {len(input_lang_w)} entries")
 
-    print(f"\n⚖️  metric={args.metric}  T={args.temperature}  min_weight={args.min_weight}")
+    max_p = f"  max_passes={args.max_passes}" if args.max_passes > 0 else ""
+    print(f"\n⚖️  metric={args.metric}  T={args.temperature}  min_weight={args.min_weight}{max_p}")
     df = compute_weights(df, metric=args.metric,
                          temperature=args.temperature,
                          min_weight=args.min_weight,
+                         max_passes=args.max_passes,
                          input_task_w=input_task_w,
                          input_lang_w=input_lang_w,
                          input_weights_mode=args.input_weights_mode)

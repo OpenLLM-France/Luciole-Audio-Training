@@ -30,7 +30,7 @@ input_cfg:
             weight: 0.0880   # L3 — CommonVoice (850.8 h, 593.1K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0770   # L3 — ESLO (272.4 h, 454.6K samples)
+            weight: 0.0771   # L3 — ESLO (272.4 h, 454.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ESLO/train_recasepunc.jsonl
           - type: multimodal_conversation
             weight: 0.0659   # L3 — Yodas (2,373 h, 332.7K samples)
@@ -111,7 +111,7 @@ input_cfg:
             weight: 0.0051   # L3 — PxSLU (4.2 h, 2.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PxSLU/train_recasepunc.jsonl
           - type: multimodal_conversation
-            weight: 0.0031   # L3 — LesVocaux (10.3 h, 744 samples)
+            weight: 0.0028   # L3 — LesVocaux (10.3 h, 744 samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LesVocaux/train_recasepunc.jsonl
       - type: group
         weight: 0.0800   # L2 — de (3,213 h, 1.20M samples)
@@ -156,51 +156,51 @@ input_cfg:
         tags: {task: asr, lang: it}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.3819   # L3 — CommonVoice (254.7 h, 172.8K samples)
+            weight: 0.3848   # L3 — CommonVoice (254.7 h, 172.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/CommonVoice/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2243   # L3 — Multilingual_LibriSpeech (247.4 h, 59.6K samples)
+            weight: 0.2260   # L3 — Multilingual_LibriSpeech (247.4 h, 59.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_LibriSpeech/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2053   # L3 — Multilingual_TEDx (100.7 h, 50.0K samples)
+            weight: 0.2069   # L3 — Multilingual_TEDx (100.7 h, 50.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_TEDx/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1380   # L3 — VoxPopuli (78.1 h, 22.6K samples)
+            weight: 0.1391   # L3 — VoxPopuli (78.1 h, 22.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0505   # L3 — FLEURS (9.0 h, 3.0K samples)
+            weight: 0.0432   # L3 — FLEURS (9.0 h, 3.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/FLEURS/train.jsonl
       - type: group
         weight: 0.0800   # L2 — nl (1,662 h, 441.6K samples)
         tags: {task: asr, lang: nl}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.6003   # L3 — Multilingual_LibriSpeech (1,554 h, 374.3K samples)
+            weight: 0.6076   # L3 — Multilingual_LibriSpeech (1,554 h, 374.3K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/Multilingual_LibriSpeech/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2046   # L3 — CommonVoice (54.1 h, 43.5K samples)
+            weight: 0.2070   # L3 — CommonVoice (54.1 h, 43.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/CommonVoice/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1421   # L3 — VoxPopuli (46.4 h, 21.0K samples)
+            weight: 0.1438   # L3 — VoxPopuli (46.4 h, 21.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/VoxPopuli/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0530   # L3 — FLEURS (7.7 h, 2.9K samples)
+            weight: 0.0416   # L3 — FLEURS (7.7 h, 2.9K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/FLEURS/train.jsonl
       - type: group
         weight: 0.0800   # L2 — pt (350.2 h, 153.5K samples)
         tags: {task: asr, lang: pt}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.4302   # L3 — Multilingual_TEDx (152.8 h, 90.2K samples)
+            weight: 0.4468   # L3 — Multilingual_TEDx (152.8 h, 90.2K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2774   # L3 — Multilingual_LibriSpeech (161.0 h, 37.5K samples)
+            weight: 0.2882   # L3 — Multilingual_LibriSpeech (161.0 h, 37.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_LibriSpeech/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2168   # L3 — CommonVoice (26.3 h, 22.9K samples)
+            weight: 0.2252   # L3 — CommonVoice (26.3 h, 22.9K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/CommonVoice/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0756   # L3 — FLEURS (10.2 h, 2.8K samples)
+            weight: 0.0398   # L3 — FLEURS (10.2 h, 2.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/FLEURS/train.jsonl
 
   - type: group
@@ -212,47 +212,47 @@ input_cfg:
         tags: {task: qa, lang: en}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.3022   # L3 — VoxPopuli-QA (4,540 h, 568.0K samples)
+            weight: 0.3186   # L3 — VoxPopuli-QA (4,540 h, 568.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2312   # L3 — Menlo--instruction-speech-encodec-v1.5 (678.2 h, 332.4K samples)
+            weight: 0.2437   # L3 — Menlo--instruction-speech-encodec-v1.5 (678.2 h, 332.4K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1626   # L3 — worstchan--UltraChat-300K-SLAM-Omni (342.1 h, 164.5K samples)
+            weight: 0.1714   # L3 — worstchan--UltraChat-300K-SLAM-Omni (342.1 h, 164.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0912   # L3 — gruhit-patel--alpaca_speech_instruct (72.1 h, 51.8K samples)
+            weight: 0.0962   # L3 — gruhit-patel--alpaca_speech_instruct (72.1 h, 51.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0862   # L3 — slu-phase-2-sqa5 (511.2 h, 46.2K samples)
+            weight: 0.0908   # L3 — slu-phase-2-sqa5 (511.2 h, 46.2K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slu-phase-2-sqa5/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0416   # L3 — yijingwu--HeySQuAD_human (18.0 h, 10.8K samples)
+            weight: 0.0320   # L3 — yijingwu--HeySQuAD_human (18.0 h, 10.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0380   # L3 — amuvarma--10k-filtered-tune-audio-text_answer (13.0 h, 9.0K samples)
+            weight: 0.0268   # L3 — amuvarma--10k-filtered-tune-audio-text_answer (13.0 h, 9.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0237   # L3 — liangtianle--science-question (7.7 h, 3.5K samples)
+            weight: 0.0104   # L3 — liangtianle--science-question (7.7 h, 3.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0233   # L3 — liangtianle--unsafety-question (15.9 h, 3.4K samples)
+            weight: 0.0101   # L3 — liangtianle--unsafety-question (15.9 h, 3.4K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
       - type: group
         weight: 0.3094   # L2 — fr (4,640 h, 632.2K samples)
         tags: {task: qa, lang: fr}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.6749   # L3 — VoxPopuli-QA (4,538 h, 568.9K samples)
+            weight: 0.7021   # L3 — VoxPopuli-QA (4,538 h, 568.9K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1994   # L3 — Vigogne--Alpaca (79.7 h, 49.7K samples)
+            weight: 0.2074   # L3 — Vigogne--Alpaca (79.7 h, 49.7K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1016   # L3 — ComparIA (21.5 h, 12.9K samples)
+            weight: 0.0856   # L3 — ComparIA (21.5 h, 12.9K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0241   # L3 — CohereLabs--aya_collection (1.0 h, 723 samples)
+            weight: 0.0048   # L3 — CohereLabs--aya_collection (1.0 h, 723 samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
 
   - type: group
@@ -450,38 +450,38 @@ input_cfg:
         tags: {task: aqa, lang: en}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.4315   # L3 — CLEAR_v1.0.0_improved (8,489 h, 607.5K samples)
+            weight: 0.4553   # L3 — CLEAR_v1.0.0_improved (8,489 h, 607.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1794   # L3 — CLEAR_v2.0.0_improved (312.5 h, 105.0K samples)
+            weight: 0.1893   # L3 — CLEAR_v2.0.0_improved (312.5 h, 105.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1752   # L3 — mispeech_MECAT-QA (279.7 h, 100.2K samples)
+            weight: 0.1849   # L3 — mispeech_MECAT-QA (279.7 h, 100.2K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0780   # L3 — mispeech_MECAT-Caption (55.4 h, 19.8K samples)
+            weight: 0.0823   # L3 — mispeech_MECAT-Caption (55.4 h, 19.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0422   # L3 — clotho_aqa_improved (36.4 h, 5.8K samples)
+            weight: 0.0330   # L3 — clotho_aqa_improved (36.4 h, 5.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0375   # L3 — AcousticDS (4.0 h, 4.6K samples)
+            weight: 0.0260   # L3 — AcousticDS (4.0 h, 4.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0281   # L3 — MusicCaps (7.2 h, 2.6K samples)
+            weight: 0.0147   # L3 — MusicCaps (7.2 h, 2.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0281   # L3 — MusicCaps (7.2 h, 2.6K samples)
+            weight: 0.0147   # L3 — MusicCaps (7.2 h, 2.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
       - type: group
         weight: 0.0959   # L2 — fr (62.5 h, 22.4K samples)
         tags: {task: aqa, lang: fr}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.7349   # L3 — mispeech_MECAT-Caption2FR (55.4 h, 19.8K samples)
+            weight: 0.8619   # L3 — mispeech_MECAT-Caption2FR (55.4 h, 19.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2651   # L3 — MusicCaps (7.2 h, 2.6K samples)
+            weight: 0.1381   # L3 — MusicCaps (7.2 h, 2.6K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
 
   - type: group
@@ -524,32 +524,32 @@ input_cfg:
         tags: {task: other, lang: fr}
         input_cfg:
           - type: multimodal_conversation
-            weight: 0.3443   # L3 — CommonVoice-gender-recognition (519.6 h, 365.9K samples)
+            weight: 0.3460   # L3 — CommonVoice-gender-recognition (519.6 h, 365.9K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
           - type: multimodal_conversation
-            weight: 0.3055   # L3 — CommonVoice-age-recognition (407.7 h, 288.1K samples)
+            weight: 0.3070   # L3 — CommonVoice-age-recognition (407.7 h, 288.1K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0661   # L3 — VoxLingua_lang_identification (36.5 h, 13.5K samples)
+            weight: 0.0665   # L3 — VoxLingua_lang_identification (36.5 h, 13.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0569   # L3 — ssi-speech-age-recognition (7.3 h, 10.0K samples)
+            weight: 0.0572   # L3 — ssi-speech-age-recognition (7.3 h, 10.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0569   # L3 — ssi-speech-gender-recognition (7.3 h, 10.0K samples)
+            weight: 0.0572   # L3 — ssi-speech-gender-recognition (7.3 h, 10.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0569   # L3 — ssi-speech-emotion-recognition (7.3 h, 10.0K samples)
+            weight: 0.0572   # L3 — ssi-speech-emotion-recognition (7.3 h, 10.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0569   # L3 — EmotionDS (8.7 h, 10.0K samples)
+            weight: 0.0572   # L3 — EmotionDS (8.7 h, 10.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0378   # L3 — ssd (3.6 h, 4.4K samples)
+            weight: 0.0379   # L3 — ssd (3.6 h, 4.4K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0119   # L3 — OreauFR_02 (0.3 h, 434 samples)
+            weight: 0.0104   # L3 — OreauFR_02 (0.3 h, 434 samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0068   # L3 — emotional-speech-audio-dataset-4languages-fr (0.2 h, 144 samples)
+            weight: 0.0035   # L3 — emotional-speech-audio-dataset-4languages-fr (0.2 h, 144 samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train.jsonl
