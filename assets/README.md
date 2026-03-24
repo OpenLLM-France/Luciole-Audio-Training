@@ -9,7 +9,7 @@ python generate_csv_metadata.py \
 # Step 2 — CSV + optional original YAML → suggested YAML  (instant)
 ```bash
 python suggest_yaml_cfg.py dataset_analysis/metadata.csv --metric duration --temperature 2 \
-    --input_weights ../adapter_training/speechlm2/conf/input_cfg_train.yaml \
+    --yaml ../adapter_training/speechlm2/conf/input_cfg_train.yaml \
     --output dataset_analysis/suggested.yaml | tee dataset_analysis/suggested_notes.txt
 ```
 Note: the analysis can be re-run with:

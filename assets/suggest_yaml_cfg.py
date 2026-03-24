@@ -12,9 +12,9 @@ python suggest_yaml_cfg.py metadata.csv \\
     --temperature 2.0 \\
     --min_weight 0.0001
 
-# Guide output with an existing YAML's task/language weights
+# Guide output with an existing YAML's task/language weights and dataset list
 python suggest_yaml_cfg.py metadata.csv \\
-    --input_weights input_cfg_train.yaml \\
+    --yaml input_cfg_train.yaml \\
     --input_weights_mode hard
 """
 
@@ -81,6 +81,28 @@ def parse_input_weights(yaml_path: str) -> tuple:
             lang_weights[(task, lkey)] = float(child.get("weight", 1.0) or 1.0)
 
     return task_weights, lang_weights
+
+
+def parse_yaml_manifests(yaml_path: str) -> set:
+    """Extract all manifest_filepath values from a NeMo YAML (recursive)."""
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    paths = set()
+
+    def _walk(node):
+        if isinstance(node, dict):
+            mf = node.get("manifest_filepath")
+            if mf:
+                paths.add(mf)
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(cfg)
+    return paths
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -394,12 +416,12 @@ def main():
                         help="If CSV contains multiple YAMLs, filter to this one.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False before computing weights.")
-    parser.add_argument("--input_weights", default=None,
-                        help="Optional NeMo YAML whose task/language weights are used "
-                             "to guide the output (e.g. input_cfg_train.yaml).")
+    parser.add_argument("--yaml", "--input_weights", default=None, dest="yaml",
+                        help="Optional NeMo YAML: used to extract task/language weights "
+                             "AND to filter the CSV to only datasets present in the YAML.")
     parser.add_argument("--input_weights_mode", default="hard",
                         choices=["hard", "soft", "weighting"],
-                        help="How --input_weights are applied (default: hard). "
+                        help="How --yaml weights are applied (default: hard). "
                              "hard: impose YAML weights for L1/L2, L3 stays data-driven. "
                              "soft: blend YAML and data-driven weights (product, renormalised). "
                              "weighting: multiply each dataset score by its YAML task×lang weight.")
@@ -421,11 +443,25 @@ def main():
     df = df[df["num_samples"].notna()].copy()
 
     input_task_w, input_lang_w = None, None
-    if args.input_weights:
-        print(f"\n📂 Reading input weights: {args.input_weights}  (mode={args.input_weights_mode})")
-        input_task_w, input_lang_w = parse_input_weights(args.input_weights)
+    if args.yaml:
+        print(f"\n📂 Reading YAML: {args.yaml}  (mode={args.input_weights_mode})")
+        input_task_w, input_lang_w = parse_input_weights(args.yaml)
         print(f"   Tasks:  {input_task_w}")
         print(f"   Langs:  {len(input_lang_w)} entries")
+
+        # Filter CSV to only datasets present in the YAML
+        yaml_manifests = parse_yaml_manifests(args.yaml)
+        csv_manifests = set(df["raw_manifest_path"].dropna())
+        missing = yaml_manifests - csv_manifests
+        if missing:
+            print(f"\n⚠️  {len(missing)} dataset(s) in YAML but missing from CSV:")
+            for m in sorted(missing):
+                print(f"      {m}")
+        extra = csv_manifests - yaml_manifests
+        if extra:
+            before = len(df)
+            df = df[df["raw_manifest_path"].isin(yaml_manifests)].copy()
+            print(f"   Dropped {before - len(df)} CSV rows not in YAML ({len(df)} remaining).")
 
     max_p = f"  max_passes={args.max_passes}" if args.max_passes > 0 else ""
     print(f"\n⚖️  metric={args.metric}  T={args.temperature}  min_weight={args.min_weight}{max_p}")

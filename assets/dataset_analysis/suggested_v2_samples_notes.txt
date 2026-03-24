@@ -2,9 +2,10 @@
 📊 Loading CSV : dataset_analysis/metadata.csv
    Loaded 130 rows.
 
-📂 Reading input weights: ../adapter_training/speechlm2/conf/input_cfg_train.yaml  (mode=hard)
+📂 Reading YAML: ../adapter_training/speechlm2/conf/input_cfg_train.yaml  (mode=hard)
    Tasks:  {'asr': 0.45, 'ast': 0.15, 'qa': 0.25, 'aqa': 0.1, 'other': 0.05}
    Langs:  7 entries
+   Dropped 1 CSV rows not in YAML (129 remaining).
 
 ⚖️  metric=samples  T=2.0  min_weight=0.0001  max_passes=20.0
 
@@ -13,57 +14,57 @@
   metric=samples  T=2.0
 ========================================================================
 
-  median passes: 4.01×  (⚠ >40.10×  ⚑ <0.401×)
+  median passes: 4.07×  (⚠ >40.70×  ⚑ <0.407×)
 
   Task     Lang         Dataset                         w/group   prob%  passes
   ------------------------------------------------------------------------
-  aqa      en           MusicCaps                        0.0147  0.132%   20.0×
-  aqa      en           MusicCaps                        0.0147  0.132%   20.0×
-  aqa      en           AcousticDS                       0.0260  0.235%   20.0×
-  aqa      en           clotho_aqa_improved              0.0330  0.298%   20.0×
-  aqa      en           mispeech_MECAT-Caption           0.0823  0.744%  14.61×
-  aqa      en           mispeech_MECAT-QA                0.1849  1.672%    6.5×
-  aqa      en           CLEAR_v2.0.0_improved            0.1893  1.711%   6.35×
-  aqa      en           CLEAR_v1.0.0_improved            0.4553  4.116%   2.64×
-  aqa      fr           MusicCaps                        0.1381  0.132%   20.0×
-  aqa      fr           mispeech_MECAT-Caption2FR        0.8619  0.827%  16.24×
-  asr      de           FLEURS                           0.0282  0.102%  13.32×
-  asr      de           Multilingual_TEDx                0.0426  0.153%   8.83×
+  aqa      en           MusicCaps                        0.0147  0.133%   20.0×
+  aqa      en           MusicCaps                        0.0147  0.133%   20.0×
+  aqa      en           AcousticDS                       0.0261  0.236%   20.0×
+  aqa      en           clotho_aqa_improved              0.0331  0.299%   20.0×
+  aqa      en           mispeech_MECAT-Caption           0.0822  0.743%  14.56×
+  aqa      en           mispeech_MECAT-QA                0.1848  1.671%   6.48×
+  aqa      en           CLEAR_v2.0.0_improved            0.1892  1.711%   6.33×
+  aqa      en           CLEAR_v1.0.0_improved            0.4552  4.115%   2.63×
+  aqa      fr           MusicCaps                        0.1385  0.133%   20.0×
+  aqa      fr           mispeech_MECAT-Caption2FR        0.8615  0.826%  16.18×
+  asr      de           FLEURS                           0.0282  0.102%  13.28×
+  asr      de           Multilingual_TEDx                0.0426  0.153%    8.8×
   asr      de           VoxPopuli                        0.1705  0.614%    2.2×
   asr      de           Multilingual_LibriSpeech         0.3550  1.278%   1.06×
   asr      de           CommonVoice                      0.4037  1.453%   0.93×
-  asr      en           FLEURS                           0.0066  0.088%  13.69×
-  asr      en           VoxPopuli                        0.0558  0.753%   1.61×
+  asr      en           FLEURS                           0.0066  0.088%  13.65×
+  asr      en           VoxPopuli                        0.0558  0.753%    1.6×
   asr      en           CommonVoice                      0.1394  1.881%   0.64×
   asr      en           Yodas                            0.3690  4.981%   0.24× ⚑
   asr      en           Multilingual_LibriSpeech         0.4293  5.796%   0.21× ⚑
-  asr      es           FLEURS                           0.0318  0.114%  15.95×
-  asr      es           VoxPopuli                        0.1357  0.489%   3.74×
-  asr      es           Multilingual_TEDx                0.1922  0.692%   2.64×
-  asr      es           Multilingual_LibriSpeech         0.2825  1.017%    1.8×
-  asr      es           CommonVoice                      0.3577  1.288%   1.42×
+  asr      es           FLEURS                           0.0318  0.114%   15.9×
+  asr      es           VoxPopuli                        0.1357  0.489%   3.73×
+  asr      es           Multilingual_TEDx                0.1922  0.692%   2.63×
+  asr      es           Multilingual_LibriSpeech         0.2825  1.017%   1.79×
+  asr      es           CommonVoice                      0.3577  1.288%   1.41×
   asr      fr           LesVocaux                        0.0028  0.038%   20.0×
-  asr      fr           PxSLU                            0.0051  0.068%  13.59×
-  asr      fr           SimSamu                          0.0064  0.086%  10.81×
-  asr      fr           FLEURS                           0.0065  0.087%  10.64×
-  asr      fr           ACSYNT                           0.0068  0.092%   10.1×
-  asr      fr           LINAGORA_Meetings                0.0090  0.121%   7.64×
-  asr      fr           AfricanAccentedFrench            0.0122  0.165%   5.61×
-  asr      fr           CLAPI                            0.0152  0.206%   4.51×
-  asr      fr           CFPB                             0.0155  0.209%   4.43×
-  asr      fr           VoxForge                         0.0171  0.231%   4.01×
-  asr      fr           CFPP2000                         0.0199  0.269%   3.45×
-  asr      fr           LVL-Atril-CTFAR                  0.0276  0.372%   2.49×
-  asr      fr           PFC                              0.0297  0.401%   2.32×
-  asr      fr           LVL-Atril-CTFNN1                 0.0302  0.408%   2.28×
+  asr      fr           PxSLU                            0.0051  0.068%  13.55×
+  asr      fr           SimSamu                          0.0064  0.086%  10.78×
+  asr      fr           FLEURS                           0.0065  0.087%  10.61×
+  asr      fr           ACSYNT                           0.0068  0.092%  10.07×
+  asr      fr           LINAGORA_Meetings                0.0090  0.121%   7.61×
+  asr      fr           AfricanAccentedFrench            0.0122  0.165%    5.6×
+  asr      fr           CLAPI                            0.0152  0.206%   4.49×
+  asr      fr           CFPB                             0.0155  0.209%   4.42×
+  asr      fr           VoxForge                         0.0171  0.231%    4.0×
+  asr      fr           CFPP2000                         0.0199  0.269%   3.44×
+  asr      fr           LVL-Atril-CTFAR                  0.0276  0.372%   2.48×
+  asr      fr           PFC                              0.0297  0.401%   2.31×
+  asr      fr           LVL-Atril-CTFNN1                 0.0302  0.408%   2.27×
   asr      fr           TCOF_Enfants                     0.0309  0.417%   2.22×
-  asr      fr           VoxPopuli                        0.0310  0.419%   2.22×
-  asr      fr           TCOF_Adultes                     0.0323  0.436%   2.13×
+  asr      fr           VoxPopuli                        0.0310  0.419%   2.21×
+  asr      fr           TCOF_Adultes                     0.0323  0.436%   2.12×
   asr      fr           Multilingual_TEDx                0.0389  0.526%   1.76×
   asr      fr           YouTubeFr                        0.0466  0.629%   1.47×
   asr      fr           YouTubeFr                        0.0523  0.707%   1.31×
-  asr      fr           YouTubeFr                        0.0542  0.732%   1.27×
-  asr      fr           YouTubeFr                        0.0551  0.744%   1.25×
+  asr      fr           YouTubeFr                        0.0542  0.732%   1.26×
+  asr      fr           YouTubeFr                        0.0551  0.744%   1.24×
   asr      fr           YouTubeFr                        0.0552  0.745%   1.24×
   asr      fr           YouTubeFr                        0.0552  0.745%   1.24×
   asr      fr           YouTubeFr                        0.0552  0.746%   1.24×
@@ -71,85 +72,84 @@
   asr      fr           Yodas                            0.0659  0.890%   1.04×
   asr      fr           ESLO                             0.0771  1.040%   0.89×
   asr      fr           CommonVoice                      0.0880  1.188%   0.78×
-  asr      it           FLEURS                           0.0432  0.155%   20.0×
-  asr      it           VoxPopuli                        0.1391  0.501%   8.64×
-  asr      it           Multilingual_TEDx                0.2069  0.745%   5.81×
-  asr      it           Multilingual_LibriSpeech         0.2260  0.814%   5.32×
-  asr      it           CommonVoice                      0.3848  1.385%   3.12×
-  asr      nl           FLEURS                           0.0416  0.150%   20.0×
-  asr      nl           VoxPopuli                        0.1438  0.518%   9.62×
-  asr      nl           CommonVoice                      0.2070  0.745%   6.68×
-  asr      nl           Multilingual_LibriSpeech         0.6076  2.187%   2.28×
-  asr      pt           FLEURS                           0.0398  0.143%   20.0×
-  asr      pt           CommonVoice                      0.2252  0.811%  13.78×
-  asr      pt           Multilingual_LibriSpeech         0.2882  1.037%  10.77×
-  asr      pt           Multilingual_TEDx                0.4468  1.609%   6.94×
-  ast      de→en        CoVoST                           1.0000  0.646%   0.95×
-  ast      de→fr        CommonVoiceDE2FR                 1.0000  0.980%   0.63×
-  ast      en→de        CoVoST                           1.0000  0.823%   0.75×
-  ast      en→fr        CommonVoiceEN2FR                 1.0000  1.341%   0.46×
-  ast      es→en        Multilingual_TEDx                0.3858  0.239%   2.57×
-  ast      es→en        CoVoST                           0.6142  0.381%   1.61×
-  ast      es→fr        Multilingual_TEDx                0.0924  0.076%   8.09×
-  ast      es→fr        CommonVoiceES2FR                 0.9076  0.747%   0.82×
-  ast      es→it        Multilingual_TEDx                1.0000  0.094%   6.54×
-  ast      es→pt        Multilingual_TEDx                1.0000  0.183%   3.37×
-  ast      fr→ar        CommonVoiceFR2AR                 1.0000  0.428%   1.44×
-  ast      fr→de        CommonVoiceFR2DE                 1.0000  0.967%   0.64×
-  ast      fr→en        Multilingual_TEDx                0.1205  0.218%   2.82×
-  ast      fr→en        CoVoST                           0.3451  0.625%   0.98×
-  ast      fr→en        CommonVoiceFR2EN                 0.5344  0.968%   0.64×
-  ast      fr→es        Multilingual_TEDx                0.1578  0.181%   3.39×
-  ast      fr→es        CommonVoiceFR2ES                 0.8422  0.968%   0.64×
-  ast      fr→it        CommonVoiceFR2IT                 1.0000  0.968%   0.64×
-  ast      fr→nl        CommonVoiceFR2NL                 1.0000  0.968%   0.64×
-  ast      fr→pt        Multilingual_TEDx                0.1302  0.145%   4.25×
-  ast      fr→pt        CommonVoiceFR2PT                 0.8698  0.968%   0.64×
-  ast      it→en        Multilingual_TEDx                0.4309  0.197%   3.12×
-  ast      it→en        CoVoST                           0.5691  0.260%   2.36×
-  ast      it→es        Multilingual_TEDx                1.0000  0.060%   10.3×
-  ast      it→fr        CommonVoiceIT2FR                 1.0000  0.416%   1.48×
-  ast      nl→fr        CommonVoiceNL2FR                 1.0000  0.262%   2.35×
-  ast      pt→en        CoVoST                           0.4100  0.153%   4.01×
-  ast      pt→en        Multilingual_TEDx                0.5900  0.221%   2.79×
-  ast      pt→es        Multilingual_TEDx                1.0000  0.135%   4.57×
-  ast      pt→fr        CommonVoicePT2FR                 0.5000  0.190%   3.23×
-  ast      pt→fr        CommonVoicePT2FR_7B              0.5000  0.190%   3.23×
-  other    en           ssd                              0.0282  0.081%   7.15×
-  other    en           ssr                              0.0282  0.081%   7.15×
-  other    en           EmotionDS                        0.0425  0.122%   4.75×
-  other    en           ssi-speech-age-recognition       0.0426  0.122%   4.74×
-  other    en           ssi-speech-gender-recognition    0.0426  0.122%   4.74×
-  other    en           ssi-speech-emotion-recognitio    0.0426  0.122%   4.74×
-  other    en           VoxLingua_lang_identification    0.0495  0.141%   4.08×
+  asr      it           FLEURS                           0.0433  0.156%   20.0×
+  asr      it           VoxPopuli                        0.1391  0.501%   8.61×
+  asr      it           Multilingual_TEDx                0.2069  0.745%   5.79×
+  asr      it           Multilingual_LibriSpeech         0.2260  0.814%    5.3×
+  asr      it           CommonVoice                      0.3848  1.385%   3.11×
+  asr      nl           FLEURS                           0.0417  0.150%   20.0×
+  asr      nl           VoxPopuli                        0.1438  0.518%   9.59×
+  asr      nl           CommonVoice                      0.2070  0.745%   6.66×
+  asr      nl           Multilingual_LibriSpeech         0.6075  2.187%   2.27×
+  asr      pt           FLEURS                           0.0399  0.144%   20.0×
+  asr      pt           CommonVoice                      0.2252  0.811%  13.73×
+  asr      pt           Multilingual_LibriSpeech         0.2881  1.037%  10.73×
+  asr      pt           Multilingual_TEDx                0.4468  1.608%   6.92×
+  ast      de→en        CoVoST                           1.0000  0.665%   0.98×
+  ast      de→fr        CommonVoiceDE2FR                 1.0000  1.008%   0.64×
+  ast      en→de        CoVoST                           1.0000  0.848%   0.77×
+  ast      en→fr        CommonVoiceEN2FR                 1.0000  1.381%   0.47×
+  ast      es→en        Multilingual_TEDx                0.3858  0.246%   2.64×
+  ast      es→en        CoVoST                           0.6142  0.392%   1.66×
+  ast      es→fr        Multilingual_TEDx                0.0924  0.078%    8.3×
+  ast      es→fr        CommonVoiceES2FR                 0.9076  0.769%   0.85×
+  ast      es→it        Multilingual_TEDx                1.0000  0.097%   6.71×
+  ast      es→pt        Multilingual_TEDx                1.0000  0.188%   3.46×
+  ast      fr→de        CommonVoiceFR2DE                 1.0000  0.996%   0.65×
+  ast      fr→en        Multilingual_TEDx                0.1205  0.225%   2.89×
+  ast      fr→en        CoVoST                           0.3451  0.643%   1.01×
+  ast      fr→en        CommonVoiceFR2EN                 0.5344  0.996%   0.65×
+  ast      fr→es        Multilingual_TEDx                0.1578  0.187%   3.48×
+  ast      fr→es        CommonVoiceFR2ES                 0.8422  0.996%   0.65×
+  ast      fr→it        CommonVoiceFR2IT                 1.0000  0.996%   0.65×
+  ast      fr→nl        CommonVoiceFR2NL                 1.0000  0.996%   0.65×
+  ast      fr→pt        Multilingual_TEDx                0.1302  0.149%   4.36×
+  ast      fr→pt        CommonVoiceFR2PT                 0.8698  0.996%   0.65×
+  ast      it→en        Multilingual_TEDx                0.4309  0.203%   3.21×
+  ast      it→en        CoVoST                           0.5691  0.268%   2.43×
+  ast      it→es        Multilingual_TEDx                1.0000  0.062%  10.57×
+  ast      it→fr        CommonVoiceIT2FR                 1.0000  0.429%   1.52×
+  ast      nl→fr        CommonVoiceNL2FR                 1.0000  0.270%   2.41×
+  ast      pt→en        CoVoST                           0.4100  0.158%   4.12×
+  ast      pt→en        Multilingual_TEDx                0.5900  0.227%   2.86×
+  ast      pt→es        Multilingual_TEDx                1.0000  0.139%   4.69×
+  ast      pt→fr        CommonVoicePT2FR                 0.5000  0.196%   3.32×
+  ast      pt→fr        CommonVoicePT2FR_7B              0.5000  0.196%   3.32×
+  other    en           ssd                              0.0282  0.081%   7.13×
+  other    en           ssr                              0.0282  0.081%   7.13×
+  other    en           EmotionDS                        0.0425  0.122%   4.73×
+  other    en           ssi-speech-age-recognition       0.0426  0.122%   4.73×
+  other    en           ssi-speech-gender-recognition    0.0426  0.122%   4.73×
+  other    en           ssi-speech-emotion-recognitio    0.0426  0.122%   4.73×
+  other    en           VoxLingua_lang_identification    0.0495  0.141%   4.07×
   other    en           CommonVoice-age-recognition      0.3477  0.995%   0.58×
   other    en           CommonVoice-gender-recognitio    0.3761  1.076%   0.54×
   other    fr           emotional-speech-audio-datase    0.0035  0.007%   20.0×
   other    fr           OreauFR_02                       0.0104  0.022%   20.0×
-  other    fr           ssd                              0.0379  0.081%   7.19×
-  other    fr           EmotionDS                        0.0572  0.122%   4.77×
-  other    fr           ssi-speech-age-recognition       0.0572  0.122%   4.77×
-  other    fr           ssi-speech-gender-recognition    0.0572  0.122%   4.77×
-  other    fr           ssi-speech-emotion-recognitio    0.0572  0.122%   4.77×
-  other    fr           VoxLingua_lang_identification    0.0665  0.142%    4.1×
+  other    fr           ssd                              0.0379  0.081%   7.16×
+  other    fr           EmotionDS                        0.0572  0.122%   4.75×
+  other    fr           ssi-speech-age-recognition       0.0572  0.122%   4.75×
+  other    fr           ssi-speech-gender-recognition    0.0572  0.122%   4.75×
+  other    fr           ssi-speech-emotion-recognitio    0.0572  0.122%   4.75×
+  other    fr           VoxLingua_lang_identification    0.0665  0.142%   4.09×
   other    fr           CommonVoice-age-recognition      0.3070  0.657%   0.89×
   other    fr           CommonVoice-gender-recognitio    0.3460  0.740%   0.79×
   qa       en           liangtianle--unsafety-questio    0.0101  0.174%   20.0×
   qa       en           liangtianle--science-question    0.0104  0.180%   20.0×
-  qa       en           amuvarma--10k-filtered-tune-a    0.0268  0.462%   20.0×
-  qa       en           yijingwu--HeySQuAD_human         0.0320  0.552%   20.0×
-  qa       en           slu-phase-2-sqa5                 0.0908  1.568%  13.23×
-  qa       en           gruhit-patel--alpaca_speech_i    0.0962  1.660%   12.5×
-  qa       en           worstchan--UltraChat-300K-SLA    0.1714  2.960%   7.01×
-  qa       en           Menlo--instruction-speech-enc    0.2437  4.207%   4.93×
-  qa       en           VoxPopuli-QA                     0.3186  5.500%   3.77×
+  qa       en           amuvarma--10k-filtered-tune-a    0.0268  0.464%   20.0×
+  qa       en           yijingwu--HeySQuAD_human         0.0321  0.554%   20.0×
+  qa       en           slu-phase-2-sqa5                 0.0908  1.568%  13.18×
+  qa       en           gruhit-patel--alpaca_speech_i    0.0961  1.660%  12.46×
+  qa       en           worstchan--UltraChat-300K-SLA    0.1714  2.959%   6.99×
+  qa       en           Menlo--instruction-speech-enc    0.2436  4.206%   4.91×
+  qa       en           VoxPopuli-QA                     0.3185  5.499%   3.76×
   qa       fr           CohereLabs--aya_collection       0.0048  0.037%   20.0×
-  qa       fr           ComparIA                         0.0856  0.662%   20.0×
-  qa       fr           Vigogne--Alpaca                  0.2074  1.605%  12.59×
-  qa       fr           VoxPopuli-QA                     0.7021  5.432%   3.72×
+  qa       fr           ComparIA                         0.0859  0.664%   20.0×
+  qa       fr           Vigogne--Alpaca                  0.2074  1.604%  12.55×
+  qa       fr           VoxPopuli-QA                     0.7019  5.430%   3.71×
   ------------------------------------------------------------------------
                                                   TOTAL  100.0%
-  ⚑  Under-sampled (<0.401×): Multilingual_LibriSpeech (0.210×), Yodas (0.240×)
+  ⚑  Under-sampled (<0.407×): Multilingual_LibriSpeech (0.210×), Yodas (0.240×)
 ========================================================================
 
 ✅ YAML → dataset_analysis/suggested_v2_samples.yaml
