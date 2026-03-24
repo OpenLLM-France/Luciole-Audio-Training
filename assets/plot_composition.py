@@ -26,7 +26,6 @@ python plot_composition.py metadata.csv --yaml_source train
 """
 
 import argparse
-import math
 import warnings
 from pathlib import Path
 
@@ -36,11 +35,14 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 import pandas as pd
 import seaborn as sns
-import yaml
+
+from analyze_yaml_cfg import (
+    _EPSILON, _lang_key, fmt_hours, fmt_num, read_yaml_weights,
+)
+from suggest_yaml_cfg import compute_weights
 
 warnings.filterwarnings("ignore")
 
-_EPSILON     = 1e-9
 _TEMPERATURE = 2.0
 PALETTE      = "Set2"
 
@@ -54,9 +56,9 @@ LANG_COLORS = {
     "mixed": "#AAAAAA", "unknown": "#CCCCCC", "": "#CCCCCC",
 }
 TASK_HATCHES = {
-    "asr": "", "ast": "///", "qa": "...", "aqa": "|||",
+    "asr": "", "ast": "///", "qa": "xxx", "aqa": "|||",
     "other": "ooo", "audio_captioning": "---",
-    "music_captioning": "***", "mqa": "xxx",
+    "music_captioning": "***", "mqa": "...",
 }
 
 def lang_color(lang: str) -> str:
@@ -64,132 +66,6 @@ def lang_color(lang: str) -> str:
 
 def task_hatch(task: str) -> str:
     return TASK_HATCHES.get(str(task).lower(), "")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Formatting
-# ──────────────────────────────────────────────────────────────────────────────
-
-def fmt_hours(secs) -> str:
-    if secs is None or (isinstance(secs, float) and math.isnan(secs)):
-        return "—"
-    h = secs / 3600
-    return f"{h:,.0f} h" if h >= 1000 else f"{h:.1f} h"
-
-def fmt_num(v) -> str:
-    if v is None or (isinstance(v, float) and math.isnan(v)):
-        return "—"
-    v = int(v)
-    if v >= 1_000_000: return f"{v/1_000_000:.2f}M"
-    if v >= 1_000:     return f"{v/1_000:.1f}K"
-    return str(v)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Language key
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _lang_key(row) -> str:
-    task = str(row.get("task_type", "") or "").strip()
-    lang = str(row.get("language",  "") or "").strip()
-    if task == "ast":
-        src = str(row.get("source_lang", "") or "").strip()
-        tgt = str(row.get("target_lang", "") or "").strip()
-        if src and tgt:
-            return f"{src}→{tgt}"
-        return src or tgt or "unknown"
-    return lang or "unknown"
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Weight computation  (same engine as suggest_yaml.py)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def compute_weights(df: pd.DataFrame,
-                    metric: str = "duration",
-                    temperature: float = _TEMPERATURE,
-                    min_weight: float = 0.0) -> pd.DataFrame:
-    df = df.copy()
-    df["_lkey"] = df.apply(_lang_key, axis=1)
-
-    def _size(row):
-        dur = row.get("total_duration_sec")
-        n   = row.get("num_samples")
-        dur_ok = dur is not None and not (isinstance(dur, float) and math.isnan(dur)) and float(dur) > 0
-        n_ok   = n   is not None and not (isinstance(n,   float) and math.isnan(n))   and float(n)   > 0
-        if metric == "duration":
-            return float(dur) if dur_ok else (float(n) if n_ok else _EPSILON)
-        return float(n) if n_ok else (float(dur) if dur_ok else _EPSILON)
-
-    df["_score"] = df.apply(_size, axis=1).apply(lambda x: x ** (1.0 / temperature))
-
-    gs = df.groupby(["task_type","_lkey"])["_score"].transform("sum")
-    df["dataset_w"] = df["_score"] / gs.replace(0, _EPSILON)
-
-    tl = df.groupby(["task_type","_lkey"])["_score"].sum().reset_index(name="gs")
-    ts = tl.groupby("task_type")["gs"].transform("sum")
-    tl["lang_w"] = tl["gs"] / ts.replace(0, _EPSILON)
-    ta = tl.groupby("task_type")["gs"].sum().reset_index(name="ts")
-    ta["task_w"] = ta["ts"] / max(ta["ts"].sum(), _EPSILON)
-    tl = tl.merge(ta[["task_type","task_w"]], on="task_type", how="left")
-    df = df.merge(tl[["task_type","_lkey","lang_w","task_w"]],
-                  on=["task_type","_lkey"], how="left")
-
-    df["effective_prob"] = df["task_w"] * df["lang_w"] * df["dataset_w"]
-    if min_weight > 0:
-        df["effective_prob"] = df["effective_prob"].clip(lower=min_weight)
-        df["effective_prob"] = df["effective_prob"] / df["effective_prob"].sum()
-
-    df["effective_prob_pct"] = df["effective_prob"] * 100.0
-    return df
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# YAML weight reader
-# ──────────────────────────────────────────────────────────────────────────────
-
-def read_yaml_weights(yaml_path: str) -> dict:
-    """
-    Parse a NeMo YAML and return a dict mapping
-    raw_manifest_path → effective_weight (product of all parent weights).
-    """
-    with open(yaml_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-
-    weights = {}
-
-    def recurse(node, parent_weight=1.0):
-        if not isinstance(node, dict):
-            return
-        w     = float(node.get("weight", 1.0) or 1.0)
-        ntype = node.get("type", "")
-        if ntype == "multimodal_conversation":
-            path = node.get("manifest_filepath", "")
-            weights[path] = parent_weight * w
-            return
-        if ntype == "group":
-            children = node.get("input_cfg", [])
-            # If no weights on children, distribute evenly
-            conv_children = [c for c in children
-                             if isinstance(c, dict) and c.get("type") == "multimodal_conversation"]
-            for child in children:
-                if isinstance(child, dict):
-                    # Use child's own weight if present, else equal share
-                    child_w = child.get("weight", None)
-                    if child_w is None and child.get("type") == "multimodal_conversation":
-                        child_w = 1.0 / max(len(conv_children), 1)
-                    elif child_w is None:
-                        child_w = 1.0
-                    recurse(child, parent_weight=parent_weight * w)
-
-    for top in cfg.get("input_cfg", []):
-        recurse(top, parent_weight=1.0)
-
-    # Normalise so they sum to 1
-    total = sum(weights.values())
-    if total > 0:
-        weights = {k: v / total for k, v in weights.items()}
-    return weights
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -208,8 +84,7 @@ def make_label(row):
 
     if task == "other":
         lbl = f"Other ({lang})" if lang else "Other"
-        # l1="mixed" (gray inner ring) + l2=lang (lang-color outer ring)
-        return ("Other", lbl, "mixed", lang or "mixed", task)
+        return ("Other", lbl, lang or "unknown", lang or "unknown", task)
 
     grp   = task.upper() if task in ("asr","ast","qa","mqa","aqa") \
             else task.replace("_"," ").title()
@@ -262,13 +137,22 @@ def plot_composition(df: pd.DataFrame,
 
 
 
-    # ── LEFT: raw audio duration ──────────────────────────────────────────────
-    raw_grp   = df.groupby("_lbl")["total_duration_sec"].sum().fillna(0)
+    # ── LEFT: raw distribution ───────────────────────────────────────────────
+    raw_col   = "total_duration_sec" if metric == "duration" else "num_samples"
+    raw_grp   = df.groupby("_lbl")[raw_col].sum().fillna(0)
     raw_grp   = raw_grp[raw_grp > 0].sort_values(ascending=False)
     raw_total = raw_grp.sum()
 
-    # ── RIGHT: sampling probability ───────────────────────────────────────────
-    prob_grp   = df.groupby("_lbl")["effective_prob"].sum().fillna(0)
+    # ── RIGHT: expected distribution after resampling ─────────────────────────
+    if metric == "duration":
+        # effective_prob is a per-sample weight; multiply by avg duration to get
+        # the expected duration contribution of each dataset.
+        avg_dur = df["total_duration_sec"].fillna(0) / df["num_samples"].clip(lower=1)
+        df["_resampled"] = df["effective_prob"] * avg_dur
+    else:
+        # effective_prob is already the expected sample share
+        df["_resampled"] = df["effective_prob"]
+    prob_grp   = df.groupby("_lbl")["_resampled"].sum().fillna(0)
     prob_grp   = prob_grp[prob_grp > 0].sort_values(ascending=False)
     prob_total = prob_grp.sum()
 
@@ -295,7 +179,10 @@ def plot_composition(df: pd.DataFrame,
     raw_main  = raw_main.reindex(all_labels).dropna()
     prob_main = prob_main.reindex(all_labels).dropna()
 
-    raw_hrs    = {lbl: raw_grp.get(lbl, 0) / 3600 for lbl in all_labels}
+    if metric == "duration":
+        raw_abs = {lbl: raw_grp.get(lbl, 0) / 3600 for lbl in all_labels}
+    else:
+        raw_abs = {lbl: int(raw_grp.get(lbl, 0))    for lbl in all_labels}
     raw_pct    = {lbl: 100 * raw_grp.get(lbl, 0) / max(raw_total, _EPSILON)
                   for lbl in all_labels}
     prob_pct   = {lbl: 100 * prob_grp.get(lbl, 0) / max(prob_total, _EPSILON)
@@ -340,17 +227,26 @@ def plot_composition(df: pd.DataFrame,
                 "AST — Inner ring: source lang  |  Outer ring: target lang",
                 ha="center", va="bottom", fontsize=7, color="#666666", style="italic")
 
+    if metric == "duration":
+        raw_centre = f"{raw_total/3600:,.0f} hr total\n(Raw duration)"
+        raw_title  = "Before resampling\n(actual audio hours)"
+        prob_centre = f"Expected duration\n(Weighted, T={temperature:.1f})"
+        prob_title  = f"After resampling\n(expected duration share, T={temperature:.1f})"
+    else:
+        raw_centre = f"{fmt_num(int(raw_total))} samples\n(Raw counts)"
+        raw_title  = "Before resampling\n(actual sample counts)"
+        prob_centre = f"Expected samples\n(Weighted, T={temperature:.1f})"
+        prob_title  = f"After resampling\n(expected sample share, T={temperature:.1f})"
+
     _draw_donut(ax_l, raw_main,
                 centre_top=f"Split: {split_label}",
-                centre_bot=f"{raw_total/3600:,.0f} hr total\n(Raw duration)")
-    ax_l.set_title("Before resampling\n(actual audio hours)",
-                   fontsize=12, fontweight="bold", pad=8, y=1.01)
+                centre_bot=raw_centre)
+    ax_l.set_title(raw_title, fontsize=12, fontweight="bold", pad=8, y=1.01)
 
     _draw_donut(ax_r, prob_main,
                 centre_top=f"Split: {split_label}",
-                centre_bot=f"100% of steps\n(Weighted, T={temperature:.1f})")
-    ax_r.set_title(f"After resampling\n(sampling probability, metric={metric}, T={temperature:.1f})",
-                   fontsize=12, fontweight="bold", pad=8, y=1.01)
+                centre_bot=prob_centre)
+    ax_r.set_title(prob_title, fontsize=12, fontweight="bold", pad=8, y=1.01)
 
     # ── Legend ────────────────────────────────────────────────────────────────
     leg_items = []
@@ -359,7 +255,7 @@ def plot_composition(df: pd.DataFrame,
         leg_items.append({
             "group":    m["group"],
             "label":    lbl,
-            "raw_h":    raw_hrs.get(lbl, 0),
+            "raw_abs":  raw_abs.get(lbl, 0),
             "raw_pct":  raw_pct.get(lbl, 0),
             "prob_pct": prob_pct.get(lbl, 0),
             "c1": lang_color(m["l1"]),
@@ -371,9 +267,9 @@ def plot_composition(df: pd.DataFrame,
     for it in leg_items:
         g = it["group"]
         if g not in grp_totals:
-            grp_totals[g] = {"raw_pct": 0, "raw_h": 0, "prob_pct": 0}
+            grp_totals[g] = {"raw_pct": 0, "raw_abs": 0, "prob_pct": 0}
         grp_totals[g]["raw_pct"]  += it["raw_pct"]
-        grp_totals[g]["raw_h"]    += it["raw_h"]
+        grp_totals[g]["raw_abs"]  += it["raw_abs"]
         grp_totals[g]["prob_pct"] += it["prob_pct"]
     leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["prob_pct"], -x["prob_pct"]))
 
@@ -381,11 +277,12 @@ def plot_composition(df: pd.DataFrame,
     row_h  = 1.0 / max(n_rows, 1)
     col_xs = [0.00, 0.055, 0.60, 0.73, 0.90]
 
+    abs_header = "Raw hrs" if metric == "duration" else "Raw count"
     for col, txt, ha in [
         (col_xs[1], "Dataset Group",  "left"),
         (col_xs[2], "Raw %",          "right"),
-        (col_xs[3], "Raw hrs",        "right"),
-        (col_xs[4], "Sampling %",     "right"),
+        (col_xs[3], abs_header,       "right"),
+        (col_xs[4], "Resampled %",    "right"),
     ]:
         ax_leg.text(col, 1.00, txt, fontsize=9, fontweight="bold",
                     va="top", ha=ha, transform=ax_leg.transAxes)
@@ -409,7 +306,8 @@ def plot_composition(df: pd.DataFrame,
             ax_leg.text(col_xs[2], ty_grp, f"{gt['raw_pct']:.1f}%", fontsize=8.5,
                         fontweight="bold", va="center", ha="right", color="#111111",
                         transform=ax_leg.transAxes, clip_on=False)
-            ax_leg.text(col_xs[3], ty_grp, f"{gt['raw_h']:,.0f}", fontsize=8.5,
+            abs_txt = f"{gt['raw_abs']:,.0f}" if metric == "duration" else fmt_num(gt['raw_abs'])
+            ax_leg.text(col_xs[3], ty_grp, abs_txt, fontsize=8.5,
                         fontweight="bold", va="center", ha="right", color="#111111",
                         transform=ax_leg.transAxes, clip_on=False)
             delta_grp = gt["prob_pct"] - gt["raw_pct"]
@@ -447,7 +345,8 @@ def plot_composition(df: pd.DataFrame,
                     transform=ax_leg.transAxes, clip_on=False)
         ax_leg.text(col_xs[2], ty, f"{item['raw_pct']:.1f}%", fontsize=8,
                     va="center", ha="right", transform=ax_leg.transAxes, clip_on=False)
-        ax_leg.text(col_xs[3], ty, f"{item['raw_h']:,.0f}", fontsize=8,
+        abs_txt = f"{item['raw_abs']:,.0f}" if metric == "duration" else fmt_num(item['raw_abs'])
+        ax_leg.text(col_xs[3], ty, abs_txt, fontsize=8,
                     va="center", ha="right", transform=ax_leg.transAxes, clip_on=False)
 
         delta = item["prob_pct"] - item["raw_pct"]
@@ -459,7 +358,7 @@ def plot_composition(df: pd.DataFrame,
         y_pos -= row_h
 
     ax_leg.text(0.0, max(y_pos - row_h, 0.01),
-                "Sampling % colour:  🟢 up-sampled vs raw   🔴 down-sampled vs raw",
+                "Resampled % colour:  🟢 up-sampled vs raw   🔴 down-sampled vs raw",
                 fontsize=7.5, color="#555555", style="italic",
                 va="bottom", transform=ax_leg.transAxes)
 
@@ -470,7 +369,7 @@ def plot_composition(df: pd.DataFrame,
         fontsize=13, fontweight="bold", y=1.00,
     )
 
-    out_path = out / "00_global_donut.png"
+    out_path = out / f"00_global_donut_{metric}.png"
     plt.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
     print(f"  ✓  {out_path}")

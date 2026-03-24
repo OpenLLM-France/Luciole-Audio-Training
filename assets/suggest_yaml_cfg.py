@@ -113,16 +113,29 @@ def compute_weights(df: pd.DataFrame,
     df["_lkey"] = df.apply(_lang_key, axis=1)
 
     def _size(row):
-        dur = row.get("total_duration_sec")
-        n   = row.get("num_samples")
-        dur_ok = dur is not None and not (isinstance(dur, float) and math.isnan(dur)) and float(dur) > 0
-        n_ok   = n   is not None and not (isinstance(n,   float) and math.isnan(n))   and float(n)   > 0
         if metric == "duration":
-            return float(dur) if dur_ok else (float(n) if n_ok else _EPSILON)
-        return float(n) if n_ok else (float(dur) if dur_ok else _EPSILON)
+            val = row.get("total_duration_sec")
+            col = "total_duration_sec"
+        else:
+            val = row.get("num_samples")
+            col = "num_samples"
+        if val is None or (isinstance(val, float) and math.isnan(val)) or float(val) <= 0:
+            raise ValueError(
+                f"Dataset '{row.get('dataset_name', '?')}': "
+                f"invalid {col}={val!r} (metric={metric})"
+            )
+        return float(val)
 
     df["_size"]  = df.apply(_size, axis=1)
     df["_score"] = df["_size"].apply(lambda x: x ** (1.0 / temperature))
+
+    # When metric is duration, convert from duration-proportional scores to
+    # sampling-proportional scores.  The YAML weights are per-sample
+    # probabilities, so to achieve a target duration share p_i for dataset i
+    # we need:  w_i ∝ p_i / avg_duration_i = D^(1/T) × n / D = n × D^(1/T−1)
+    if metric == "duration":
+        avg_dur = df["_size"] / df["num_samples"].clip(lower=1)
+        df["_score"] = df["_score"] / avg_dur.replace(0, _EPSILON)
 
     # ── weighting mode: fold YAML weights into scores before computing levels
     if input_weights_mode == "weighting" and (input_task_w or input_lang_w):
