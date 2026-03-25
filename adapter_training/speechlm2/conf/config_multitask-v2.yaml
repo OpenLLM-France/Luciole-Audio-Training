@@ -3,7 +3,6 @@ model:
   pretrained_llm: ${oc.env:LLM_MODEL}
   pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
   pretrained_weights: true  # If false → load architecture only
-  trust_remote_code: true
   dtype: bf16
 
   freeze_params:
