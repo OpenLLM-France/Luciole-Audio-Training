@@ -221,28 +221,28 @@ input_cfg:
             weight: 0.4666   # L3 — VoxPopuli-QA (4,540 h, 568.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
           - type: multimodal_conversation
-            weight: 0.2853   # L3 — Menlo--instruction-speech-encodec-v1.5 (678.2 h, 332.4K samples)
+            weight: 0.2857   # L3 — Menlo--instruction-speech-encodec-v1.5 (678.2 h, 332.4K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
           - type: multimodal_conversation
-            weight: 0.1412   # L3 — worstchan--UltraChat-300K-SLAM-Omni (342.1 h, 164.5K samples)
+            weight: 0.1417   # L3 — worstchan--UltraChat-300K-SLAM-Omni (342.1 h, 164.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0444   # L3 — gruhit-patel--alpaca_speech_instruct (72.1 h, 51.8K samples)
+            weight: 0.0447   # L3 — gruhit-patel--alpaca_speech_instruct (72.1 h, 51.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0396   # L3 — slu-phase-2-sqa5 (511.2 h, 46.2K samples)
+            weight: 0.0401   # L3 — slu-phase-2-sqa5 (511.2 h, 46.2K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slu-phase-2-sqa5/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0092   # L3 — yijingwu--HeySQuAD_human (18.0 h, 10.8K samples)
+            weight: 0.0101   # L3 — yijingwu--HeySQuAD_human (18.0 h, 10.8K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0077   # L3 — amuvarma--10k-filtered-tune-audio-text_answer (13.0 h, 9.0K samples)
+            weight: 0.0048   # L3 — amuvarma--10k-filtered-tune-audio-text_answer (13.0 h, 9.0K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0030   # L3 — liangtianle--science-question (7.7 h, 3.5K samples)
+            weight: 0.0032   # L3 — liangtianle--science-question (7.7 h, 3.5K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
           - type: multimodal_conversation
-            weight: 0.0029   # L3 — liangtianle--unsafety-question (15.9 h, 3.4K samples)
+            weight: 0.003   # L3 — liangtianle--unsafety-question (15.9 h, 3.4K samples)
             manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
       - type: group
         weight: 0.4000   # L2 — fr (4,640 h, 632.2K samples)

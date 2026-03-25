@@ -103,14 +103,14 @@
   ast      pt→fr        CommonVoicePT2FR_7B                   0.5000  0.196%     2.73×
   ast      pt→fr        CommonVoicePT2FR                      0.5000  0.196%     2.73×
   qa       en           VoxPopuli-QA                          0.4666  6.999%     3.94×
-  qa       en           Menlo--instruction-speech-encodec-    0.2853  4.279%     4.12×
-  qa       en           worstchan--UltraChat-300K-SLAM-Omn    0.1412  2.118%     4.12×
-  qa       en           gruhit-patel--alpaca_speech_instru    0.0444  0.666%     4.12×
-  qa       en           slu-phase-2-sqa5                      0.0396  0.594%     4.12×
-  qa       en           yijingwu--HeySQuAD_human              0.0092  0.138%     4.10×
-  qa       en           amuvarma--10k-filtered-tune-audio-    0.0077  0.115%     4.11×
-  qa       en           liangtianle--science-question         0.0030  0.045%     4.11×
-  qa       en           liangtianle--unsafety-question        0.0029  0.043%     4.11×
+  qa       en           Menlo--instruction-speech-encodec-    0.2857  4.285%     4.13×
+  qa       en           worstchan--UltraChat-300K-SLAM-Omn    0.1417  2.125%     4.14×
+  qa       en           gruhit-patel--alpaca_speech_instru    0.0447  0.670%     4.15×
+  qa       en           slu-phase-2-sqa5                      0.0401  0.601%     4.17×
+  qa       en           yijingwu--HeySQuAD_human              0.0101  0.151%     4.51×
+  qa       en           amuvarma--10k-filtered-tune-audio-    0.0048  0.072%     2.56×
+  qa       en           liangtianle--science-question         0.0032  0.048%     4.39×
+  qa       en           liangtianle--unsafety-question        0.0030  0.045%     4.26×
   qa       fr           VoxPopuli-QA                          0.7470  7.470%     4.20×
   qa       fr           Vigogne--Alpaca                       0.2000  2.000%    12.89× ⚠⚠
   qa       fr           ComparIA                              0.0500  0.500%    12.40× ⚠⚠
