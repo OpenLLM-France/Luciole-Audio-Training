@@ -23,6 +23,8 @@ model:
   lora:
     task_type: CAUSAL_LM
     r: 128
+    lora_alpha: 256
+    lora_dropout: 0.0
     target_modules: ["q_proj", "v_proj"] 
     # ["q_proj", "k_proj", "v_proj", "o_proj"]
 
@@ -42,7 +44,7 @@ model:
 
   lr_scheduler:
     _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
-    warmup_steps: 500 # 250
+    warmup_steps: 500
     min_lr: 1e-6
     max_steps: ${trainer.max_steps}
 
@@ -54,9 +56,9 @@ trainer:
   precision: bf16-true
 
   max_epochs: -1
-  max_steps: 10_000_000
+  max_steps: 600_000
 
-  limit_train_batches: 250_000
+  limit_train_batches: 100_000
   accumulate_grad_batches: 1
   limit_val_batches: 0.0
 
@@ -85,6 +87,7 @@ data:
     sample_rate: 16000
     prompt_format: ${model.prompt_format}
     token_equivalent_duration: ${model.token_equivalent_duration}
+    audio_locator_tag: "<|audio|>"
 
     seed: 42
     shuffle: true
@@ -92,16 +95,16 @@ data:
     text_field: "answer"
     lang_field: target_lang
     use_lhotse: true
-    num_workers: 4
+    num_workers: 2
 
-    max_duration: 45
-    min_tokens: 2
+    min_duration: 0.1
+    # max_duration: 120
+    # min_tokens: 2
     use_bucketing: false
     use_multimodal_sampling: true
     measure_total_length: true
-    # batch_size: 1
-    # #batch_tokens: 2048 #3072
-    max_tokens: 3072
+    batch_tokens: 4096
+    max_tokens: 2048
 
     input_cfg: null
 
@@ -111,7 +114,7 @@ data:
 
     sample_rate: 16000
     batch_size: 4
-    num_workers: 4
+    num_workers: 1
     seed: 42
     shard_seed: "randomized"
 
@@ -123,6 +126,7 @@ data:
             audio_locator_tag: ${model.audio_locator_tag}
             tags:
               context: "Repeat after me, typing in lowercase."
+
 ############ Experiment Manager ############
 exp_manager:
   exp_dir: null
@@ -143,7 +147,7 @@ exp_manager:
     filename: "{step:06.0f}"
     monitor: "step"
     mode: "max"
-    every_n_train_steps: 1000
+    every_n_train_steps: 2500
     every_n_epochs: null
     save_top_k: -1
     always_save_nemo: false

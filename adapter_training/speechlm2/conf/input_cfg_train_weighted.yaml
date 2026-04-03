@@ -5,7 +5,7 @@
 # Changed Others to 60% en/ 40% fr
 # Lowered weights of amuvarma
 # TODO Lower weight of Yodas and MLS since canary already trained on it?
-# TODO Increase weights for french emotion
+# TODO Increase weights for french emotion?
 
 - type: group
   weight: 0.4500   # L1 — ASR (84,782 h, 26.77M samples)
@@ -17,10 +17,10 @@
       input_cfg:
         - type: multimodal_conversation
           weight: 0.4311   # L3 — Multilingual_LibriSpeech (44,660 h, 10.81M samples)
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train.jsonl
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train_subsampled.jsonl
         - type: multimodal_conversation
           weight: 0.3705   # L3 — Yodas (19,447 h, 7.98M samples)
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Yodas/train.jsonl
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Yodas/train_subsampled.jsonl
         - type: multimodal_conversation
           weight: 0.1399   # L3 — CommonVoice (1,798 h, 1.14M samples)
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/train.jsonl
