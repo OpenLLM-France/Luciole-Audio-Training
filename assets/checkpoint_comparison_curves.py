@@ -23,7 +23,7 @@ def load_results(experiment_folder):
     
     checkpoints_folder = Path(experiment_folder)
     results_files = checkpoints_folder.rglob('results.json')
-    checkpoints = {int(p.parent.name.split('=')[1]): str(p) for p in results_files}
+    checkpoints = {int(p.parent.name.strip("-last").split('=')[1]): str(p) for p in results_files}
     checkpoints = dict(sorted(checkpoints.items()))
     
     results = {}

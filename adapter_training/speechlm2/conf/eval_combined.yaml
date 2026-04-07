@@ -1,86 +1,70 @@
-ckpt_xp_path: ${oc.env:SCRATCH}/speechlm/nemo_experiments/${oc.env:XP}
+ckpt_xp_path: ${oc.env:ALL_CCFRSCRATCH}/audio/training/speechlm2_experiments/${oc.env:XP}
 ckpt: null
 ckpt_class: nemo.collections.speechlm2.models.SALM
 ckpt_every_n_steps: 5000
 inputs:
   # ASR Datasets
   - name: FLEURS_FR
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/FLEURS/cuts_FLEURS_casepunc_test.jsonl.gz
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/context/FLEURS/test.jsonl.gz
     user_prompt: "Transcris ce fichier audio"
     metric: "wer"
     lang: fr
     data_type: asr
   - name: FLEURS_EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/FLEURS/test.jsonl.gz
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/context/FLEURS/test.jsonl.gz
     user_prompt: "Transcribe this audio file"
     metric: "wer"
     lang: en
     data_type: asr
   - name: FLEURS_DE
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/de/FLEURS/test.jsonl.gz
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/de/context/FLEURS/test.jsonl.gz
     user_prompt: "Schreibe alles auf, was im Audio gesagt wird."
     metric: "wer"
     lang: de
     data_type: asr
   - name: FLEURS_IT
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/it/FLEURS/test.jsonl.gz
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/it/context/FLEURS/test.jsonl.gz
     user_prompt: "Scrivi tutto ciò che si dice nell'audio."
     metric: "wer"
     lang: it
     data_type: asr
   - name: FLEURS_ES
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/es/FLEURS/test.jsonl.gz
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/es/context/FLEURS/test.jsonl.gz
     user_prompt: "Escribe todo lo que se dice en el audio."
     metric: "wer"
     lang: es
     data_type: asr
   - name: CommonVoice_FR
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_test.jsonl.gz
-    limit_val_batches: 25
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/context/CommonVoice/test.jsonl.gz
+    limit_val_batches: 20
     user_prompt: "Transcris ce fichier audio"
     metric: "wer"
     lang: fr
     data_type: asr
   - name: CommonVoice_EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/CommonVoice/cuts_CommonVoice_casepunc_test.jsonl.gz
-    limit_val_batches: 25
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/context/CommonVoice/test.jsonl.gz
+    limit_val_batches: 20
     user_prompt: "Transcribe this audio file"
     metric: "wer"
     lang: en
     data_type: asr
-  - name: CoVoST_FR-EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/CoVoST/test.jsonl.gz
-    limit_val_batches: 25
-    user_prompt: "Traduit ce fichier audio en anglais"
-    metric: "bleu"
-    show_examples: 2
-    data_type: ast
-    lang: fr-en
-  - name: mTEDx_FR-EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/mTEDx/test.jsonl.gz
-    limit_val_batches: 25
-    user_prompt: "Traduit ce fichier audio en anglais"
-    metric: "bleu"
-    show_examples: 2
-    data_type: ast
-    lang: fr-en
+  # - name: mTEDx_FR-EN
+  #   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/context/Multilingual_TEDx//test.jsonl.gz
+  #   limit_val_batches: 20
+  #   user_prompt: "Traduis ce fichier audio en anglais"
+  #   metric: "bleu"
+  #   show_examples: 2
+  #   data_type: ast
+  #   lang: fr-en
+  # - name: mTEDx_FR-ES
+  #   manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/context/Multilingual_TEDx//test.jsonl.gz
+  #   limit_val_batches: 20
+  #   user_prompt: "Traduis ce fichier audio en espagnol"
+  #   metric: "bleu"
+  #   show_examples: 2
+  #   data_type: ast
+  #   lang: fr-es
   # QA Datasets
-  - name: VoxPopuli-QA_EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/test.jsonl.gz
-    lang: en
-    data_type: qa
-    metric: ["bert", "bleu", "rouge"]
-    batch_size: 1
-    max_new_tokens: 256
-    limit_val_batches: 100
-  - name: HeySQuAD_EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/test.jsonl.gz
-    lang: en
-    data_type: qa
-    metric: ["bert", "bleu", "rouge"]
-    batch_size: 1
-    max_new_tokens: 256
-    limit_val_batches: 100
   - name: Public-sg-speech-qa_EN
     manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/AudioLLMs--public_sg_speech_qa_test/test.jsonl.gz
     lang: en
@@ -89,17 +73,9 @@ inputs:
     batch_size: 1
     max_new_tokens: 256
     limit_val_batches: 100
-  - name: UltraChat_EN
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/test.jsonl.gz
+  - name: OpenHermes_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/en/lmms-lab--openhermes_instruction/test.jsonl.gz
     lang: en
-    data_type: qa
-    metric: ["bert", "bleu", "rouge"]
-    batch_size: 1
-    max_new_tokens: 256
-    limit_val_batches: 100
-  - name: VoxPopuli-QA_FR
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/test.jsonl.gz
-    lang: fr
     data_type: qa
     metric: ["bert", "bleu", "rouge"]
     batch_size: 1
@@ -121,15 +97,7 @@ inputs:
     batch_size: 1
     max_new_tokens: 256
     limit_val_batches: 100
-  - name: ComparIA_FR
-    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/fr/ComparIA/test.jsonl.gz
-    lang: fr
-    data_type: qa
-    metric: ["bert", "bleu", "rouge"]
-    batch_size: 1
-    max_new_tokens: 256
-    limit_val_batches: 100
-batch_size: 64
+batch_size: 32
 data_type: asr
 max_new_tokens: 128
 show_examples: 1

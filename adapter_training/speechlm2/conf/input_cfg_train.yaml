@@ -343,10 +343,6 @@ input_cfg:
         audio_locator_tag: ${model.audio_locator_tag}
         tags: {source_lang: pt, target_lang: fr}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/context/CommonVoicePT2FR_7B/train.jsonl
-        audio_locator_tag: ${model.audio_locator_tag}
-        tags: {source_lang: pt, target_lang: fr}
-      - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/context/Multilingual_TEDx/train.jsonl
         audio_locator_tag: ${model.audio_locator_tag}
         tags: {source_lang: pt, target_lang: es}
