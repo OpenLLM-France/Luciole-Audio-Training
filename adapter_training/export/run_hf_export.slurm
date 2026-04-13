@@ -20,10 +20,10 @@ mkdir -p log
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
-EXPERIMENT_FOLDER="$SCRATCH/speechlm/nemo_experiments"
 
-export SPEECH_ENCODER_MODEL="/lustre/fsn1/projects/rech/qgz/uxn76rc/speechlm/models/canary-1b-v2.nemo"
-export DATA_FOLDER="/lustre/fsn1/projects/rech/qgz/commun/audio"
+export EXPERIMENT_FOLDER="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
+export SPEECH_ENCODER_MODEL="$SCRATCH/speechlm/models/canary-1b-v2.nemo"
+export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export TMPDIR=$JOBSCRATCH
@@ -34,13 +34,17 @@ export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
 export HYDRA_FULL_ERROR=1
 
-EXPERIMENT_NAME=$SLURM_JOB_NAME
+# EXPERIMENT_NAME=$SLURM_JOB_NAME
 
 # =====================================================
 # Configs
 # =====================================================
 CONFIG_PATH="$LOCAL_FOLDER/conf"
-CONFIG_NAME="export_to_hf.yaml"
+CONFIG_NAME="hf_export_config.yaml"
+
+export LLM_MODEL="Qwen/Qwen3-1.7B"
+export PROMPT_FORMAT="qwen"
+
 python $LOCAL_FOLDER/to_hf.py \
     --config-path=$CONFIG_PATH \
     --config-name=$CONFIG_NAME \

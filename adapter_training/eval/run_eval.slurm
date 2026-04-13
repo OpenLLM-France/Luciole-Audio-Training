@@ -56,44 +56,7 @@ DISTRIBUTED_ARGS="
 # Evaluation Launch
 # =====================================================
 export XP="<model_name>"
-CONFIG_NAME="eval_qa.yaml"
+CONFIG_NAME="eval_combined.yaml"
 srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
     --config-path=$CONFIG_PATH \
     --config-name=$CONFIG_NAME
-CONFIG_NAME="eval_asr.yaml"
-srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-    --config-path=$CONFIG_PATH \
-    --config-name=$CONFIG_NAME
-
-
-# export XP="train_multilingual"
-# CONFIG_NAME="eval_qa.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME
-# CONFIG_NAME="eval_asr.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME
-
-
-# export XP="train_adapter_1layer"
-# CONFIG_NAME="eval_qa.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME
-# CONFIG_NAME="eval_asr.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME
-
-
-# export XP="train_multilingual_biglr"
-# CONFIG_NAME="eval_qa.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME
-# CONFIG_NAME="eval_asr.yaml"
-# srun torchrun $DISTRIBUTED_ARGS $LOCAL_FOLDER/salm_eval.py \
-#     --config-path=$CONFIG_PATH \
-#     --config-name=$CONFIG_NAME

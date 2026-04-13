@@ -23,7 +23,7 @@ module purge
 module load arch/h100 nemo/2.4.0
 mkdir -p log
 
-export PYTHONPATH="$PYTHONPATH:$HOME/NeMo.luciole"
+export PYTHONPATH="$HOME/NeMo:$PYTHONPATH"
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
@@ -34,7 +34,7 @@ export HYDRA_FULL_ERROR=1
 export HF_DATASETS_OFFLINE=1
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
-export DATA_FOLDER="$SCRATCH/../commun/audio"
+export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 
 # =====================================================
 # Configuration
@@ -54,8 +54,8 @@ echo "========================================"
 # =====================================================
 # Get list of checkpoints
 # =====================================================
-CKPT_DIR="$SCRATCH/speechlm/nemo_experiments/$XP/checkpoints"
-CKPT_STEP=${CKPT_STEP:-5000}
+CKPT_DIR="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments/$XP/checkpoints"
+CKPT_STEP=${CKPT_STEP:-10000}
 CKPT_START=${CKPT_START:-0}
 
 echo "Filtering Checkpoints:"
@@ -176,6 +176,7 @@ while [ $CKPT_IDX -lt $NUM_CKPTS ]; do
                 if [ $CKPT_IDX -lt $NUM_CKPTS ]; then
                     CKPT_PATH=${CHECKPOINTS[$CKPT_IDX]}
                     echo "[GPU $GPU_ID] Previous task complete, starting $(basename $CKPT_PATH)"
+                    sleep 2 # avoid OOM
                     evaluate_checkpoint $GPU_ID "$CKPT_PATH"
                     PIDS[$GPU_ID]=$!
                     CKPT_IDX=$((CKPT_IDX + 1))
