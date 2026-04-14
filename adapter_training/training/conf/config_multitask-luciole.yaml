@@ -1,0 +1,159 @@
+############ Model ############
+model:
+  pretrained_llm: ${oc.env:LLM_MODEL}
+  pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
+  pretrained_weights: true  # If false → load architecture only
+  dtype: bf16
+
+  freeze_params:
+    # Freeze LLM
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+
+    # Freeze perception encoder & preprocessor
+    - "^perception\\.preprocessor\\..+$"
+    - "^perception\\.encoder\\..+$"
+
+  prevent_freeze_params: []
+
+  prompt_format: ${oc.env:PROMPT_FORMAT}
+  audio_locator_tag: "<|audio|>"
+  token_equivalent_duration: 0.08
+
+  lora:
+    task_type: CAUSAL_LM
+    r: 64
+    lora_alpha: 64
+    lora_dropout: 0.0
+    target_modules: ["q_proj", "v_proj"] 
+    # ["q_proj", "k_proj", "v_proj", "o_proj"]
+
+  perception:
+     target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
+     output_dim: 2048
+     modality_adapter:
+       _target_: nemo.collections.speechlm2.modules.perception.IdentityConnector
+       d_model: 1024
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 2e-4
+    betas: [0.9, 0.98]
+    weight_decay: 1e-3
+    foreach: true
+
+  lr_scheduler:
+    _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
+    warmup_steps: 500
+    min_lr: 1e-6
+    max_steps: ${trainer.max_steps}
+
+############ Trainer ############
+trainer:
+  devices: -1
+  accelerator: gpu
+  num_nodes: 1
+  precision: bf16-true
+
+  max_epochs: -1
+  max_steps: 600_000
+
+  limit_train_batches: 100_000
+  accumulate_grad_batches: 1
+  limit_val_batches: 0.0
+
+  val_check_interval: ${trainer.limit_train_batches}
+  num_sanity_val_steps: 1
+
+  sync_batchnorm: true
+  log_every_n_steps: 10
+  logger: false
+  use_distributed_sampler: false
+  enable_checkpointing: false
+
+  gradient_clip_val: 1.0
+
+  strategy:
+    _target_: lightning.pytorch.strategies.DDPStrategy
+    gradient_as_bucket_view: true
+    find_unused_parameters: true
+    #_target_: lightning.pytorch.strategies.ModelParallelStrategy
+    #tensor_parallel_size: 2
+    #data_parallel_size: 2
+
+############ Data ############
+data:
+  train_ds:
+    sample_rate: 16000
+    prompt_format: ${model.prompt_format}
+    token_equivalent_duration: ${model.token_equivalent_duration}
+    audio_locator_tag: "<|audio|>"
+
+    seed: 42
+    shuffle: true
+    shard_seed: "randomized"
+    text_field: "answer"
+    lang_field: target_lang
+    use_lhotse: true
+    num_workers: 3
+    use_multimodal_sampling: true
+    measure_total_length: true
+
+    min_duration: 0.1
+    # max_duration: 120
+    # min_tokens: 2
+    max_tokens: 3072
+
+    use_bucketing: true
+    bucket_duration_bins: [83,100,114,129,148,166,198,222,245,267,290,312,335,369,417,432,449,475,525,574,666,707,732,1024,2048,4096]
+    bucket_batch_size: [122,97,86,76,68,59,50,45,40,37,34,32,30,27,24,23,22,21,19,17,15,14,13,4,2,1]
+    # can still use batch_tokens when using bucketing
+    num_buckets: 26
+    bucket_buffer_size: 25000
+
+    input_cfg: null
+
+  validation_ds:
+    prompt_format: ${model.prompt_format}
+    token_equivalent_duration: ${model.token_equivalent_duration}
+
+    sample_rate: 16000
+    batch_size: 4
+    num_workers: 1
+    seed: 42
+    shard_seed: "randomized"
+
+    datasets:
+      CommonVoice_FR:
+        input_cfg:
+          - type: lhotse_as_conversation
+            cuts_path: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
+            audio_locator_tag: ${model.audio_locator_tag}
+            tags:
+              context: "Repeat after me, typing in lowercase."
+
+############ Experiment Manager ############
+exp_manager:
+  exp_dir: null
+  name: "SALM-multitasks"
+
+  create_tensorboard_logger: true
+  create_checkpoint_callback: true
+  use_datetime_version: false
+  max_time_per_run: "00:09:45:00"
+
+  resume_from_checkpoint: null
+  resume_if_exists: true
+  resume_ignore_no_checkpoint: true
+
+  create_wandb_logger: false
+
+  checkpoint_callback_params:
+    filename: "{step:06.0f}"
+    monitor: "step"
+    mode: "max"
+    every_n_train_steps: 2500
+    every_n_epochs: null
+    save_top_k: -1
+    always_save_nemo: false
+    save_nemo_on_train_end: false

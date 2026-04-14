@@ -217,7 +217,7 @@ torchrun ${DISTRIBUTED_ARGS} \
   ++data.train_ds.${batch_method}="$batch_value" \
   ++data.train_ds.max_tokens="$MAX_TOKENS" \
   ++data.train_ds.max_duration="$MAX_DURATION" \
-  ++data.train_ds.input_cfg="$CONFIG_PATH/data/input_cfg_train.yaml"\
+  ++data.train_ds.input_cfg="$CONFIG_PATH/data/input_cfg_train_weighted_randomorder_sharded.yaml"\
   ++trainer.accumulate_grad_batches="$ACCUMULATE_GRAD_BATCHES" \
   ++trainer.num_nodes="$NNODES" \
   ++exp_manager.exp_dir="$EXPERIMENT_FOLDER" \
