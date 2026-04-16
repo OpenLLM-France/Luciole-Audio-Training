@@ -43,7 +43,7 @@ from suggest_yaml_cfg import compute_weights
 
 warnings.filterwarnings("ignore")
 
-_TEMPERATURE = 2.0
+_TEMPERATURE = 1.0
 PALETTE      = "Set2"
 
 # ──────────────────────────────────────────────────────────────────────────────

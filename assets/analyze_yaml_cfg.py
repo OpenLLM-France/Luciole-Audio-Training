@@ -92,6 +92,9 @@ def read_yaml_weights(yaml_path: str) -> dict:
     with open(yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
+    if isinstance(cfg, list):
+        cfg = {"input_cfg": cfg}  # Handle legacy top-level list format
+
     weights = {}
 
     def recurse(node, parent_weight=1.0):
