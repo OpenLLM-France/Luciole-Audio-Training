@@ -165,15 +165,16 @@ def plot_composition(df: pd.DataFrame,
     raw_main  = _collapse(raw_grp,  raw_total)
     prob_main = _collapse(prob_grp, prob_total)
 
-    # Union of labels, sorted by task sampling weight desc, then by entry weight desc
+    # Union of labels, sorted by raw num_samples (before resampling) desc
     all_labels_set = set(raw_main.index) | set(prob_main.index)
-    task_prob_total = {}
+    samples_grp = df.groupby("_lbl")["num_samples"].sum().fillna(0)
+    task_samples_total = {}
     for lbl in all_labels_set:
         task = lbl_map[lbl]["task"]
-        task_prob_total[task] = task_prob_total.get(task, 0) + prob_grp.get(lbl, 0)
+        task_samples_total[task] = task_samples_total.get(task, 0) + samples_grp.get(lbl, 0)
     all_labels = sorted(
         all_labels_set,
-        key=lambda lbl: (-task_prob_total[lbl_map[lbl]["task"]], -prob_grp.get(lbl, 0)),
+        key=lambda lbl: (-task_samples_total[lbl_map[lbl]["task"]], -samples_grp.get(lbl, 0)),
     )
 
     # Reindex series to follow the sorted order
@@ -254,11 +255,12 @@ def plot_composition(df: pd.DataFrame,
     for lbl in all_labels:
         m = lbl_map[lbl]
         leg_items.append({
-            "group":    m["group"],
-            "label":    lbl,
-            "raw_abs":  raw_abs.get(lbl, 0),
-            "raw_pct":  raw_pct.get(lbl, 0),
-            "prob_pct": prob_pct.get(lbl, 0),
+            "group":       m["group"],
+            "label":       lbl,
+            "raw_abs":     raw_abs.get(lbl, 0),
+            "raw_pct":     raw_pct.get(lbl, 0),
+            "raw_samples": samples_grp.get(lbl, 0),
+            "prob_pct":    prob_pct.get(lbl, 0),
             "c1": lang_color(m["l1"]),
             "c2": lang_color(m["l2"]),
             "ht": task_hatch(m["task"]),
@@ -268,11 +270,13 @@ def plot_composition(df: pd.DataFrame,
     for it in leg_items:
         g = it["group"]
         if g not in grp_totals:
-            grp_totals[g] = {"raw_pct": 0, "raw_abs": 0, "prob_pct": 0}
-        grp_totals[g]["raw_pct"]  += it["raw_pct"]
-        grp_totals[g]["raw_abs"]  += it["raw_abs"]
-        grp_totals[g]["prob_pct"] += it["prob_pct"]
-    leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["prob_pct"], -x["prob_pct"]))
+            grp_totals[g] = {"raw_pct": 0, "raw_abs": 0, "raw_samples": 0, "prob_pct": 0}
+        grp_totals[g]["raw_pct"]    += it["raw_pct"]
+        grp_totals[g]["raw_abs"]    += it["raw_abs"]
+        grp_totals[g]["raw_samples"] += it["raw_samples"]
+        grp_totals[g]["prob_pct"]   += it["prob_pct"]
+    leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["raw_samples"],
+                                  -x["raw_samples"]))
 
     n_rows = len(leg_items) + len(grp_totals) + 6
     row_h  = 1.0 / max(n_rows, 1)
@@ -435,6 +439,8 @@ def main():
                         help="Filter CSV to this yaml_source value.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False.")
+    parser.add_argument("--ignore_missing_yaml", action="store_true",
+                        help="Only warn (instead of error) when YAML manifests are missing from CSV.")
     args = parser.parse_args()
 
     csv_path = Path(args.csv_path)
@@ -460,7 +466,22 @@ def main():
         # Read effective weights directly from the YAML
         print(f"\n📂 Reading weights from YAML: {args.yaml}")
         yaml_weights = read_yaml_weights(args.yaml)
-        # Map them onto the dataframe via raw_manifest_path
+        # Filter CSV to only datasets present in the YAML
+        yaml_paths = set(yaml_weights.keys())
+        csv_paths = set(df["raw_manifest_path"].dropna())
+        missing = yaml_paths - csv_paths
+        if missing:
+            msg = f"{len(missing)} dataset(s) in YAML but missing from CSV:\n"
+            msg += "\n".join(f"      {m}" for m in sorted(missing))
+            if args.ignore_missing_yaml:
+                print(f"\n⚠️  {msg}")
+            else:
+                raise SystemExit(f"\n❌ {msg}\n   Use --ignore_missing_yaml to skip this error.")
+        before = len(df)
+        df = df[df["raw_manifest_path"].isin(yaml_paths)].copy()
+        if len(df) < before:
+            print(f"   Dropped {before - len(df)} CSV rows not in YAML ({len(df)} remaining).")
+        # Map weights onto the dataframe via raw_manifest_path
         def _lookup_prob(row):
             path = row.get("raw_manifest_path", "")
             return yaml_weights.get(path, 0.0)
