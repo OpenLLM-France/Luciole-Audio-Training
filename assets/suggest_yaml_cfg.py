@@ -435,6 +435,8 @@ def main():
                              "hard: impose YAML weights for L1/L2, L3 stays data-driven. "
                              "soft: blend YAML and data-driven weights (product, renormalised). "
                              "weighting: multiply each dataset score by its YAML task×lang weight.")
+    parser.add_argument("--ignore_missing_yaml", action="store_true",
+                        help="Only warn (instead of error) when YAML manifests are missing from CSV.")
     args = parser.parse_args()
 
     print(f"\n📊 Loading CSV : {args.csv_path}")
@@ -464,9 +466,12 @@ def main():
         csv_manifests = set(df["raw_manifest_path"].dropna())
         missing = yaml_manifests - csv_manifests
         if missing:
-            print(f"\n⚠️  {len(missing)} dataset(s) in YAML but missing from CSV:")
-            for m in sorted(missing):
-                print(f"      {m}")
+            msg = f"{len(missing)} dataset(s) in YAML but missing from CSV:\n"
+            msg += "\n".join(f"      {m}" for m in sorted(missing))
+            if args.ignore_missing_yaml:
+                print(f"\n⚠️  {msg}")
+            else:
+                raise SystemExit(f"\n❌ {msg}\n   Use --ignore_missing_yaml to skip this error.")
         extra = csv_manifests - yaml_manifests
         if extra:
             before = len(df)
