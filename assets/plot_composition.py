@@ -73,33 +73,22 @@ def task_hatch(task: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def make_label(row):
+    """Return (group, unique_label, display_label, lang_src, lang_tgt, task)."""
     task = str(row["task_type"]).strip()
     lang = str(row.get("language", "") or "").strip()
     src  = str(row.get("source_lang", "") or "").strip()
     tgt  = str(row.get("target_lang", "") or "").strip()
 
+    grp = task.upper() if task in ("asr", "ast", "qa", "mqa", "aqa") \
+          else task.replace("_", " ").title()
+
     if task == "ast":
-        lbl = f"AST ({src}→{tgt})" if src and tgt else f"AST ({src}→?)" if src else "AST"
-        return "AST", lbl, src or lang or "unknown", tgt or lang or "unknown", task
+        disp = f"{src}→{tgt}" if src and tgt else f"{src}→?" if src else "?"
+        return "AST", f"AST:{disp}", disp, src or lang or "unknown", tgt or lang or "unknown", task
 
-    if task == "other":
-        lbl = f"Other ({lang})" if lang else "Other"
-        return ("Other", lbl, lang or "unknown", lang or "unknown", task)
-
-    grp   = task.upper() if task in ("asr","ast","qa","mqa","aqa") \
-            else task.replace("_"," ").title()
-    langs = (lang, lang) if lang else ("unknown","unknown")
-
-    for t, prefix in [("asr","ASR"),("qa","QA"),("aqa","Audio QA"),("mqa","Music QA")]:
-        if task == t:
-            return grp, f"{prefix} ({lang})" if lang else prefix, *langs, task
-
-    if task in ("audio_captioning","music_captioning"):
-        lbl = task.replace("_"," ").title()
-        return lbl, f"{lbl} ({lang})" if lang else lbl, *langs, task
-
-    lbl = task.replace("_"," ").title()
-    return grp, f"{lbl} ({lang})" if lang else lbl, *langs, task
+    disp = lang or "?"
+    langs = (lang or "unknown", lang or "unknown")
+    return grp, f"{grp}:{disp}", disp, *langs, task
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -111,7 +100,8 @@ def plot_composition(df: pd.DataFrame,
                      metric: str,
                      temperature: float,
                      split_label: str = "train",
-                     prefix: str = "") -> None:
+                     prefix: str = "",
+                     no_title: bool = False) -> None:
     """
     Two donuts side by side:
       Left  — raw audio duration (before resampling)
@@ -124,17 +114,19 @@ def plot_composition(df: pd.DataFrame,
     info        = df.apply(make_label, axis=1)
     df = df.copy()
     df["_grp"]  = [x[0] for x in info]
-    df["_lbl"]  = [x[1] for x in info]
-    df["_lsrc"] = [x[2] for x in info]
-    df["_ltgt"] = [x[3] for x in info]
-    df["_tsk"]  = [x[4] for x in info]
+    df["_lbl"]  = [x[1] for x in info]  # unique key (e.g. "ASR:fr")
+    df["_disp"] = [x[2] for x in info]  # display label (e.g. "fr")
+    df["_lsrc"] = [x[3] for x in info]
+    df["_ltgt"] = [x[4] for x in info]
+    df["_tsk"]  = [x[5] for x in info]
 
     lbl_map = {}
     for _, row in df.iterrows():
         lbl = row["_lbl"]
         if lbl not in lbl_map:
-            lbl_map[lbl] = {"group": row["_grp"], "l1": row["_lsrc"],
-                            "l2": row["_ltgt"],   "task": row["_tsk"]}
+            lbl_map[lbl] = {"group": row["_grp"], "disp": row["_disp"],
+                            "l1": row["_lsrc"], "l2": row["_ltgt"],
+                            "task": row["_tsk"]}
 
 
 
@@ -192,9 +184,9 @@ def plot_composition(df: pd.DataFrame,
 
     # ── Figure layout ─────────────────────────────────────────────────────────
     fig    = plt.figure(figsize=(30, 13))
-    ax_l   = fig.add_axes([0.01, 0.06, 0.29, 0.86])
-    ax_r   = fig.add_axes([0.32, 0.06, 0.29, 0.86])
-    ax_leg = fig.add_axes([0.63, 0.04, 0.36, 0.92])
+    ax_l   = fig.add_axes([0.00, 0.06, 0.29, 0.86])
+    ax_r   = fig.add_axes([0.26, 0.06, 0.29, 0.86])
+    ax_leg = fig.add_axes([0.56, 0.04, 0.44, 0.92])
 
     for ax in (ax_l, ax_r):
         ax.set_aspect("equal")
@@ -222,33 +214,31 @@ def plot_composition(df: pd.DataFrame,
                     facecolor=c1, edgecolor="white", linewidth=1.4, hatch=ht, alpha=0.93))
             theta = t1
         ax.text(0,  0.13, centre_top, ha="center", va="center",
-                fontsize=13, fontweight="bold", color="#1a1a1a")
+                fontsize=17, fontweight="bold", color="#1a1a1a")
         ax.text(0, -0.13, centre_bot, ha="center", va="center",
-                fontsize=10, color="#555555")
-        ax.text(0, -1.22,
-                "AST — Inner ring: source lang  |  Outer ring: target lang",
-                ha="center", va="bottom", fontsize=7, color="#666666", style="italic")
+                fontsize=14, color="#555555")
 
+    t_str = f", T={temperature:.1f}" if temperature != 1.0 else ""
     if metric == "duration":
-        raw_centre = f"{raw_total/3600:,.0f} hr total\n(Raw duration)"
-        raw_title  = "Before resampling\n(actual audio hours)"
-        prob_centre = f"Expected duration\n(Weighted, T={temperature:.1f})"
-        prob_title  = f"After resampling\n(expected duration share, T={temperature:.1f})"
+        raw_centre = f"{raw_total/3600:,.0f} hr total"
+        raw_title  = "Actual audio hours\nbefore resampling"
+        prob_centre = f"Expected duration"
+        prob_title  = f"Expected duration share\nafter resampling{t_str})"
     else:
-        raw_centre = f"{fmt_num(int(raw_total))} samples\n(Raw counts)"
-        raw_title  = "Before resampling\n(actual sample counts)"
-        prob_centre = f"Expected samples\n(Weighted, T={temperature:.1f})"
-        prob_title  = f"After resampling\n(expected sample share, T={temperature:.1f})"
+        raw_centre = f"{fmt_num(int(raw_total))} samples"
+        raw_title  = "Actual sample counts\nbefore resampling"
+        prob_centre = f"Expected samples"
+        prob_title  = f"Expected sample share\nafter resampling{t_str})"
 
     _draw_donut(ax_l, raw_main,
                 centre_top=f"Split: {split_label}",
                 centre_bot=raw_centre)
-    ax_l.set_title(raw_title, fontsize=12, fontweight="bold", pad=8, y=1.01)
+    ax_l.set_title(raw_title, fontsize=16, fontweight="bold", pad=8, y=1.01)
 
     _draw_donut(ax_r, prob_main,
                 centre_top=f"Split: {split_label}",
                 centre_bot=prob_centre)
-    ax_r.set_title(prob_title, fontsize=12, fontweight="bold", pad=8, y=1.01)
+    ax_r.set_title(prob_title, fontsize=16, fontweight="bold", pad=8, y=1.01)
 
     # ── Legend ────────────────────────────────────────────────────────────────
     leg_items = []
@@ -256,7 +246,7 @@ def plot_composition(df: pd.DataFrame,
         m = lbl_map[lbl]
         leg_items.append({
             "group":       m["group"],
-            "label":       lbl,
+            "label":       m["disp"],
             "raw_abs":     raw_abs.get(lbl, 0),
             "raw_pct":     raw_pct.get(lbl, 0),
             "raw_samples": samples_grp.get(lbl, 0),
@@ -280,16 +270,16 @@ def plot_composition(df: pd.DataFrame,
 
     n_rows = len(leg_items) + len(grp_totals) + 6
     row_h  = 1.0 / max(n_rows, 1)
-    col_xs = [0.00, 0.055, 0.60, 0.73, 0.90]
+    col_xs = [0.00, 0.055, 0.28, 0.43, 0.62]
 
     abs_header = "Raw hrs" if metric == "duration" else "Raw count"
     for col, txt, ha in [
-        (col_xs[1], "Dataset Group",  "left"),
+        (col_xs[0], "Dataset Group",  "left"),
         (col_xs[2], "Raw %",          "right"),
         (col_xs[3], abs_header,       "right"),
         (col_xs[4], "Resampled %",    "right"),
     ]:
-        ax_leg.text(col, 1.00, txt, fontsize=9, fontweight="bold",
+        ax_leg.text(col, 1.00, txt, fontsize=13, fontweight="bold",
                     va="top", ha=ha, transform=ax_leg.transAxes)
 
     ax_leg.plot([0, 1], [1.0 - 1.6*row_h, 1.0 - 1.6*row_h],
@@ -306,18 +296,18 @@ def plot_composition(df: pd.DataFrame,
             y_pos -= row_h * 0.35
             ty_grp = y_pos + row_h * 0.15
             ax_leg.text(0.0, ty_grp, current_group,
-                        fontsize=9, fontweight="bold", color="#111111",
+                        fontsize=13, fontweight="bold", color="#111111",
                         va="center", transform=ax_leg.transAxes)
-            ax_leg.text(col_xs[2], ty_grp, f"{gt['raw_pct']:.1f}%", fontsize=8.5,
+            ax_leg.text(col_xs[2], ty_grp, f"{gt['raw_pct']:.1f}%", fontsize=12.5,
                         fontweight="bold", va="center", ha="right", color="#111111",
                         transform=ax_leg.transAxes, clip_on=False)
             abs_txt = f"{gt['raw_abs']:,.0f}" if metric == "duration" else fmt_num(gt['raw_abs'])
-            ax_leg.text(col_xs[3], ty_grp, abs_txt, fontsize=8.5,
+            ax_leg.text(col_xs[3], ty_grp, abs_txt, fontsize=12.5,
                         fontweight="bold", va="center", ha="right", color="#111111",
                         transform=ax_leg.transAxes, clip_on=False)
             delta_grp = gt["prob_pct"] - gt["raw_pct"]
             clr_grp   = "#c0392b" if delta_grp < -1 else "#27ae60" if delta_grp > 1 else "#111111"
-            ax_leg.text(col_xs[4], ty_grp, f"{gt['prob_pct']:.1f}%", fontsize=8.5,
+            ax_leg.text(col_xs[4], ty_grp, f"{gt['prob_pct']:.1f}%", fontsize=12.5,
                         fontweight="bold", va="center", ha="right", color=clr_grp,
                         transform=ax_leg.transAxes, clip_on=False)
             y_pos -= row_h
@@ -346,36 +336,32 @@ def plot_composition(df: pd.DataFrame,
         lbl_str = item["label"][:44] + "…" if len(item["label"]) > 46 else item["label"]
         ty = y_pos + row_h * 0.15
 
-        ax_leg.text(col_xs[1], ty, lbl_str, fontsize=8, va="center",
+        ax_leg.text(col_xs[1], ty, lbl_str, fontsize=12, va="center",
                     transform=ax_leg.transAxes, clip_on=False)
-        ax_leg.text(col_xs[2], ty, f"{item['raw_pct']:.1f}%", fontsize=8,
+        ax_leg.text(col_xs[2], ty, f"{item['raw_pct']:.1f}%", fontsize=12,
                     va="center", ha="right", transform=ax_leg.transAxes, clip_on=False)
         abs_txt = f"{item['raw_abs']:,.0f}" if metric == "duration" else fmt_num(item['raw_abs'])
-        ax_leg.text(col_xs[3], ty, abs_txt, fontsize=8,
+        ax_leg.text(col_xs[3], ty, abs_txt, fontsize=12,
                     va="center", ha="right", transform=ax_leg.transAxes, clip_on=False)
 
         delta = item["prob_pct"] - item["raw_pct"]
         clr   = "#c0392b" if delta < -1 else "#27ae60" if delta > 1 else "#333333"
-        ax_leg.text(col_xs[4], ty, f"{item['prob_pct']:.1f}%", fontsize=8,
+        ax_leg.text(col_xs[4], ty, f"{item['prob_pct']:.1f}%", fontsize=12,
                     va="center", ha="right", color=clr,
                     transform=ax_leg.transAxes, clip_on=False)
 
         y_pos -= row_h
 
-    ax_leg.text(0.0, max(y_pos - row_h, 0.01),
-                "Resampled % colour:  🟢 up-sampled vs raw   🔴 down-sampled vs raw",
-                fontsize=7.5, color="#555555", style="italic",
-                va="bottom", transform=ax_leg.transAxes)
-
-    fig.suptitle(
-        f"Dataset composition — Before vs After resampling"
-        f"   (metric={metric}, T={temperature:.1f})\n"
-        "Color = language  |  Hatch = task",
-        fontsize=13, fontweight="bold", y=1.00,
-    )
+    if not no_title:
+        fig.suptitle(
+            f"Dataset composition — Before vs After resampling"
+            f"   (metric={metric}{t_str})\n"
+            "Color = language  |  Hatch = task",
+            fontsize=17, fontweight="bold", y=1.00,
+        )
 
     out_path = out / f"{prefix}dataset_distrib_pies_{metric}.png"
-    plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0)
     plt.close(fig)
     print(f"  ✓  {out_path}")
 
@@ -441,6 +427,8 @@ def main():
                         help="Drop rows where file_exists=False.")
     parser.add_argument("--ignore_missing_manifest", action="store_true",
                         help="Only warn (instead of error) when YAML manifests are missing from CSV.")
+    parser.add_argument("--no_title", action="store_true",
+                        help="Remove the figure title and save with no white borders.")
     args = parser.parse_args()
 
     csv_path = Path(args.csv_path)
@@ -511,7 +499,8 @@ def main():
         prefix = Path(args.yaml).stem + "_"
 
     print("\n🎨 Generating plots …")
-    plot_composition(df, out_dir, args.metric, temperature, split_label=split_label, prefix=prefix)
+    plot_composition(df, out_dir, args.metric, temperature, split_label=split_label, prefix=prefix,
+                     no_title=args.no_title)
     # plot_word_lengths(df, out_dir, prefix=prefix)
     print(f"\n✅ Plots saved to: {out_dir.resolve()}\n")
 
