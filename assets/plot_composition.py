@@ -439,7 +439,7 @@ def main():
                         help="Filter CSV to this yaml_source value.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False.")
-    parser.add_argument("--ignore_missing_yaml", action="store_true",
+    parser.add_argument("--ignore_missing_manifest", action="store_true",
                         help="Only warn (instead of error) when YAML manifests are missing from CSV.")
     args = parser.parse_args()
 
@@ -473,10 +473,10 @@ def main():
         if missing:
             msg = f"{len(missing)} dataset(s) in YAML but missing from CSV:\n"
             msg += "\n".join(f"      {m}" for m in sorted(missing))
-            if args.ignore_missing_yaml:
+            if args.ignore_missing_manifest:
                 print(f"\n⚠️  {msg}")
             else:
-                raise SystemExit(f"\n❌ {msg}\n   Use --ignore_missing_yaml to skip this error.")
+                raise SystemExit(f"\n❌ {msg}\n   Use --ignore_missing_manifest to skip this error.")
         before = len(df)
         df = df[df["raw_manifest_path"].isin(yaml_paths)].copy()
         if len(df) < before:
