@@ -93,7 +93,7 @@ def read_yaml_weights(yaml_path: str) -> dict:
         cfg = yaml.safe_load(f)
 
     if isinstance(cfg, list):
-        cfg = {"input_cfg": cfg}  # Handle legacy top-level list format
+        cfg = {"input_cfg": cfg}
 
     weights = {}
 
