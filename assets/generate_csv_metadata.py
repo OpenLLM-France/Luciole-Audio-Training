@@ -9,7 +9,7 @@ Usage
 # Single YAML
 python generate_csv_metadata.py config.yaml --output_dir ./out --data_root /data
 
-# Multiple YAMLs (results are concatenated, a 'yaml_source' column is added)
+# Multiple YAMLs (results are concatenated)
 python generate_csv_metadata.py train.yaml eval.yaml --output_dir ./out --data_root /data
 
 # Skip manifests that don't exist on disk (useful for dry-runs)
@@ -291,7 +291,6 @@ def parse_manifest(manifest_paths: list,
         "num_unique_speakers":         len(speaker_ids) if speaker_ids else None,
         "avg_audio_sampling_rate":     round(sum(sampling_rates)/len(sampling_rates)) if sampling_rates else None,
         "avg_audio_channels":          round(sum(channels_list)/len(channels_list), 2) if channels_list else None,
-        "path":                        " | ".join(paths_used),
     }
 
 
@@ -307,7 +306,6 @@ def _worker(args_tuple):
         "weight_dataset":  e_first["weight_dataset"] or 1.0,
         "weight_group":    e_first.get("weight_group", e_first["weight_dataset"]) or 1.0,
         "raw_manifest_path": key[8],
-        "yaml_source":     key[9],
     }
     if stats is None:
         base.update({k: None for k in [
@@ -318,7 +316,6 @@ def _worker(args_tuple):
             "avg_response_words","min_response_words","max_response_words",
             "num_unique_speakers","avg_audio_sampling_rate","avg_audio_channels",
         ]})
-        base["path"] = " | ".join(paths)
         base["file_exists"] = False
     else:
         stats.update(base)
@@ -332,7 +329,6 @@ def _worker(args_tuple):
 # ──────────────────────────────────────────────────────────────────────────────
 
 COL_ORDER = [
-    "yaml_source",
     "dataset_name","split","note","task_type","sub_task","language",
     "source_lang","target_lang","num_audio_segments","num_samples",
     "total_duration_sec","total_duration_dhms",
@@ -341,7 +337,7 @@ COL_ORDER = [
     "avg_instruction_words","min_instruction_words","max_instruction_words",
     "avg_response_words","min_response_words","max_response_words",
     "num_unique_speakers","avg_audio_sampling_rate","avg_audio_channels",
-    "weight_group","weight_dataset","file_exists","raw_manifest_path","path",
+    "weight_group","weight_dataset","file_exists","raw_manifest_path",
 ]
 
 
@@ -362,6 +358,8 @@ def main():
                         help="Parallel workers (default: 8).")
     parser.add_argument("--include_weights", action="store_true",
                         help="Include weight_group and weight_dataset columns in the output CSV.")
+    parser.add_argument("--force_overwrite", action="store_true",
+                        help="Recompute all rows even if the output CSV already exists.")
     args = parser.parse_args()
 
     first_yaml = Path(args.yaml_paths[0])
@@ -373,7 +371,6 @@ def main():
     all_tasks = []   # (key, paths, e_first)
 
     for yaml_path in args.yaml_paths:
-        yaml_name = Path(yaml_path).stem
         print(f"\n📂 Parsing YAML: {yaml_path}")
         entries = flatten_manifests(yaml_path)
         print(f"   Found {len(entries)} manifest entries.")
@@ -396,13 +393,12 @@ def main():
                 "split":            split,
                 "note":             ", ".join(note),
                 "raw_manifest_path": e.get("raw_manifest_path", path),
-                "yaml_source":      yaml_name,
             })
             key = (
                 name, split, ", ".join(note),
                 e["task_type"], e["sub_task"],
                 e["language"], e["source_lang"], e["target_lang"],
-                e.get("raw_manifest_path", ""), yaml_name,
+                e.get("raw_manifest_path", ""),
             )
             groups.setdefault(key, []).append(e)
 
@@ -412,40 +408,63 @@ def main():
             e_first = group_entries[0]
             all_tasks.append((key, paths, e_first))
 
-    print(f"\n   Total groups to parse: {len(all_tasks)} (workers={args.workers})")
+    # ── Load existing CSV to avoid recomputing known rows ────────────────────
+    csv_path = out_dir / args.output_csv
+    existing_df = None
+    existing_paths = set()
+    if csv_path.exists() and not args.force_overwrite:
+        existing_df = pd.read_csv(csv_path)
+        existing_paths = set(existing_df["raw_manifest_path"].dropna())
+        print(f"\n   Existing CSV: {csv_path} ({len(existing_df)} rows)")
+
+    new_tasks = [t for t in all_tasks if t[0][8] not in existing_paths]
+    skipped   = len(all_tasks) - len(new_tasks)
+    if skipped:
+        print(f"   Skipping {skipped} already-computed groups, {len(new_tasks)} new to parse.")
 
     parsed_rows = []
     missing     = 0
-    total       = len(all_tasks)
+    total       = len(new_tasks)
 
-    try:
-        with ProcessPoolExecutor(max_workers=args.workers) as executor:
-            futures = {executor.submit(_worker, t): t for t in all_tasks}
-            for i, future in enumerate(as_completed(futures)):
-                base, success, paths = future.result()
-                if not success:
-                    missing += len(paths)
-                    if not args.skip_missing:
-                        key = futures[future][0]
-                        raise RuntimeError(
-                            f"Missing manifests for {key[0]} {key[1]}: {paths}"
-                        )
-                parsed_rows.append(base)
-                pct = (i + 1) / total * 100
-                print(f"\r  [{i+1}/{total}] {pct:3.0f}% | {base['dataset_name'][:35]:<35}",
-                      end="", flush=True)
-    except KeyboardInterrupt:
-        print("\n\n❗ Interrupted."); sys.exit(1)
+    if new_tasks:
+        try:
+            with ProcessPoolExecutor(max_workers=args.workers) as executor:
+                futures = {executor.submit(_worker, t): t for t in new_tasks}
+                for i, future in enumerate(as_completed(futures)):
+                    base, success, paths = future.result()
+                    if not success:
+                        missing += len(paths)
+                        if not args.skip_missing:
+                            key = futures[future][0]
+                            raise RuntimeError(
+                                f"Missing manifests for {key[0]} {key[1]}: {paths}"
+                            )
+                    parsed_rows.append(base)
+                    pct = (i + 1) / total * 100
+                    print(f"\r  [{i+1}/{total}] {pct:3.0f}% | {base['dataset_name'][:35]:<35}",
+                          end="", flush=True)
+        except KeyboardInterrupt:
+            print("\n\n❗ Interrupted."); sys.exit(1)
 
-    print(f"\n\n   Found: {total - missing}  |  Missing: {missing}")
+        print(f"\n\n   Parsed: {total - missing}  |  Missing: {missing}")
+    else:
+        print("\n   Nothing new to parse.")
 
-    df = pd.DataFrame(parsed_rows)
+    # ── Merge with existing data ──────────────────────────────────────────────
+    new_df = pd.DataFrame(parsed_rows) if parsed_rows else pd.DataFrame()
+    if existing_df is not None and not existing_df.empty:
+        df = pd.concat([existing_df, new_df], ignore_index=True) if not new_df.empty else existing_df
+    else:
+        df = new_df
+
     cols = [c for c in COL_ORDER if c in df.columns]
     if not args.include_weights:
         cols = [c for c in cols if c not in ("weight_group", "weight_dataset")]
-    df = df[cols]
+    sort_cols = ["dataset_name", "task_type", "sub_task", "language", "num_samples", "raw_manifest_path"]
+    df = df[cols].sort_values(
+        sort_cols, key=lambda s: s.fillna(""), ignore_index=True,
+    )
 
-    csv_path = out_dir / args.output_csv
     df.to_csv(csv_path, index=False)
 
     # Quick summary

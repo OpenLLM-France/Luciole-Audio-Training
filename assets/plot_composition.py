@@ -21,8 +21,6 @@ python plot_composition.py metadata.csv --yaml suggested.yaml --output_dir ./plo
 # Custom temperature / metric
 python plot_composition.py metadata.csv --metric duration --temperature 3.0
 
-# Filter to one yaml_source if CSV has multiple
-python plot_composition.py metadata.csv --yaml_source train
 """
 
 import argparse
@@ -421,8 +419,6 @@ def main():
                         help=f"Smoothing T>0 (default {_TEMPERATURE}).")
     parser.add_argument("--min_weight",  type=float, default=0.0001,
                         help="Minimum effective probability floor (default: 0.0001).")
-    parser.add_argument("--yaml_source", default=None,
-                        help="Filter CSV to this yaml_source value.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False.")
     parser.add_argument("--ignore_missing_manifest", action="store_true",
@@ -438,10 +434,6 @@ def main():
     print(f"\n📊 Loading CSV  : {csv_path}")
     df = pd.read_csv(csv_path)
     print(f"   Loaded {len(df)} rows.")
-
-    if args.yaml_source:
-        df = df[df["yaml_source"] == args.yaml_source].copy()
-        print(f"   Filtered to yaml_source='{args.yaml_source}': {len(df)} rows.")
 
     if args.skip_missing and "file_exists" in df.columns:
         before = len(df)

@@ -14,9 +14,6 @@ python analyze_yaml_cfg.py out/metadata.csv out/suggested.yaml
 python analyze_yaml_cfg.py out/metadata.csv out/suggested.yaml \
     --steps 1000000 --samples_per_step 32
 
-# With a specific yaml_source filter
-python analyze_yaml_cfg.py out/metadata.csv out/suggested.yaml --yaml_source input_cfg_train
-
 # Save report to file
 python analyze_yaml_cfg.py out/metadata.csv out/suggested.yaml --output notes.txt
 """
@@ -299,8 +296,6 @@ def main():
                         help="Number of training steps (default: 1_000_000).")
     parser.add_argument("--samples_per_step", type=int, default=32,
                         help="Samples consumed per step (default: 32).")
-    parser.add_argument("--yaml_source", default=None,
-                        help="Filter CSV to this yaml_source value.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False.")
     parser.add_argument("--output", default=None,
@@ -310,10 +305,6 @@ def main():
     print(f"\n📊 Loading CSV  : {args.csv_path}")
     df = pd.read_csv(args.csv_path)
     print(f"   Loaded {len(df)} rows.")
-
-    if args.yaml_source:
-        df = df[df["yaml_source"] == args.yaml_source].copy()
-        print(f"   Filtered to yaml_source='{args.yaml_source}': {len(df)} rows.")
 
     if args.skip_missing and "file_exists" in df.columns:
         before = len(df)

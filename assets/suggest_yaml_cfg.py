@@ -422,8 +422,6 @@ def main():
     parser.add_argument("--max_passes",  type=float, default=0.0,
                         help="Maximum expected passes per dataset (default: 0 = unlimited). "
                              "Caps L3 weights and redistributes excess within each group.")
-    parser.add_argument("--yaml_source", default=None,
-                        help="If CSV contains multiple YAMLs, filter to this one.")
     parser.add_argument("--skip_missing", action="store_true",
                         help="Drop rows where file_exists=False before computing weights.")
     parser.add_argument("--yaml", "--input_weights", default=None, dest="yaml",
@@ -442,10 +440,6 @@ def main():
     print(f"\n📊 Loading CSV : {args.csv_path}")
     df = pd.read_csv(args.csv_path)
     print(f"   Loaded {len(df)} rows.")
-
-    if args.yaml_source:
-        df = df[df["yaml_source"] == args.yaml_source].copy()
-        print(f"   Filtered to yaml_source='{args.yaml_source}': {len(df)} rows.")
 
     if args.skip_missing and "file_exists" in df.columns:
         before = len(df)
