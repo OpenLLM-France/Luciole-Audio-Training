@@ -40,8 +40,8 @@ ENV MODEL_PATH=/app/model
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Make port 9009 available to the world outside this container
-EXPOSE 9009
+# Make port 7860 available to the world (HuggingFace Spaces port)
+EXPOSE 7860
 
 # Run app.py when the container launches
 CMD ["python", "app.py"]

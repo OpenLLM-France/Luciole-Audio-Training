@@ -4,59 +4,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SALeM Chat</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <title>SALeM</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/vendor/github.min.css" id="hljs-theme-light">
+    <link rel="stylesheet" href="/static/vendor/github-dark.min.css" id="hljs-theme-dark" disabled>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script>
+        (function () {
+            // Themes catalogue: name -> 'light' | 'dark'. Used to pick the
+            // right hljs stylesheet on boot.
+            window.SALEM_THEMES = {
+                linagora: 'light', carbon: 'dark', paper: 'light',
+                midnight: 'dark', terminal: 'dark', ocean: 'dark',
+            };
+            try {
+                var stored = localStorage.getItem('salem_theme');
+                if (!window.SALEM_THEMES[stored]) {
+                    stored = 'linagora';
+                }
+                document.documentElement.setAttribute('data-theme', stored);
+                var isDark = window.SALEM_THEMES[stored] === 'dark';
+                document.getElementById('hljs-theme-light').disabled = isDark;
+                document.getElementById('hljs-theme-dark').disabled = !isDark;
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'linagora');
+            }
+        })();
+    </script>
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/vendor/purify.min.js"></script>
+    <script src="/static/vendor/highlight.min.js"></script>
 </head>
 
 <body>
     <div class="app-container">
-        <aside class="sidebar">
-            <div class="new-chat-btn">
-                <span>+ New Chat</span>
+        <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+        <aside class="sidebar" id="sidebar" aria-label="Conversation history">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <div class="sidebar-brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="3" y="10" width="2.5" height="4" rx="1"></rect>
+                            <rect x="7" y="7" width="2.5" height="10" rx="1"></rect>
+                            <rect x="11" y="4" width="2.5" height="16" rx="1"></rect>
+                            <rect x="15" y="8" width="2.5" height="8" rx="1"></rect>
+                            <rect x="19" y="11" width="2.5" height="2" rx="1"></rect>
+                        </svg>
+                    </div>
+                    <span>SALeM</span>
+                </div>
+                <div class="sidebar-header-actions">
+                    <button id="settings-btn" class="icon-btn" type="button" aria-label="Open settings"
+                        title="Settings (Ctrl/Cmd+,)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
+                    </button>
+                    <button id="theme-toggle" class="icon-btn" type="button"
+                        aria-label="Toggle light / dark" title="Toggle light / dark">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"></circle>
+                            <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="history">
-                <!-- History items would go here -->
-                <div class="history-item">Previous Conversation</div>
+
+            <div class="sidebar-body">
+                <button id="new-chat-btn" class="new-chat-btn" type="button" title="New Chat (Ctrl/Cmd+K)">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>New Chat</span>
+                </button>
+
+                <div class="history-section-label">Recent</div>
+                <div class="history" id="history"></div>
+            </div>
+
+            <div class="sidebar-footer">
+                <span class="sidebar-footer-text">Speech &amp; Language</span>
             </div>
         </aside>
 
-        <main class="chat-area">
-            <div class="chat-header">
-                <div class="logo-container">
-                    <div class="logo">SALeM</div>
-                    <span class="logo-subtitle">Speech & Language Model</span>
+        <main class="chat-area" id="chat-area">
+            <header class="chat-header">
+                <div class="chat-header-left">
+                    <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Open sidebar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <button class="model-name-pill" id="model-name-pill" type="button"
+                        title="Active model — click for config.json">
+                        <span class="model-name-tag">Model</span>
+                        <span class="model-name-value" id="model-name-value">…</span>
+                    </button>
                 </div>
-                <span class="status-indicator connected" id="connection-status">Ready</span>
+                <div class="status-cluster">
+                    <button id="server-stats-btn" class="server-stats" type="button" aria-label="Server stats"
+                        title="Server stats">
+                        <span class="stats-pill stats-model" data-state="unknown">
+                            <span class="stats-dot" aria-hidden="true"></span>
+                            <span class="stats-label">model</span>
+                        </span>
+                        <span class="stats-pill stats-queue" data-state="ok">
+                            <span class="stats-bars" aria-hidden="true">
+                                <i></i><i></i><i></i><i></i><i></i>
+                            </span>
+                            <span class="stats-label" id="stats-queue-label">queue</span>
+                        </span>
+                        <span class="stats-pill stats-sessions" title="Active connections">
+                            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <span class="stats-label" id="stats-sessions-label">0</span>
+                        </span>
+                    </button>
+                    <span class="status-indicator" id="connection-status">Idle</span>
+                </div>
+            </header>
+
+            <div class="messages-container" id="messages-scroll">
+                <div class="messages-inner" id="messages"></div>
             </div>
 
-            <div class="messages-container" id="messages">
-                <div class="message system">
-                    <div class="avatar">AI</div>
-                    <div class="content">Hello! I am SALeM. You can chat with me using text or voice.</div>
-                </div>
-            </div>
+            <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" type="button"
+                aria-label="Scroll to bottom" title="Scroll to bottom">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
 
             <div class="input-area">
-                <div id="file-preview" class="file-preview hidden">
-                    <span id="file-name"></span>
-                    <button id="remove-file-btn" class="icon-btn" title="Remove File">✕</button>
+                <div id="mic-meter" class="mic-meter hidden" aria-hidden="true">
+                    <div class="mic-meter-bar"></div>
                 </div>
+
+                <div id="file-preview" class="file-preview hidden">
+                    <div class="file-preview-info">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span id="file-name"></span>
+                    </div>
+                    <button id="remove-file-btn" type="button" aria-label="Remove file" title="Remove file">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
                 <div class="input-container">
                     <input type="file" id="audio-upload" accept="audio/*" style="display: none;">
-                    <button id="upload-btn" class="icon-btn" title="Upload Audio">
-                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
-                            fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <button id="upload-btn" class="icon-btn" type="button" aria-label="Upload audio file"
+                        title="Upload audio">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
                     </button>
-                    <button id="mic-btn" class="icon-btn" title="Start Recording">
-                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
-                            fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <button id="mic-btn" class="icon-btn" type="button" aria-label="Start recording"
+                        title="Record audio">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                             <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -64,26 +201,259 @@
                         </svg>
                     </button>
                     <textarea id="text-input" placeholder="Send a message..." rows="1" data-gramm="false"
-                        wt-ignore-input="true"></textarea>
-                    <button id="stop-btn" class="icon-btn hidden" title="Stop Generation">
-                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
-                            fill="none" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="6" y="6" width="12" height="12"></rect>
+                        wt-ignore-input="true" aria-label="Message"></textarea>
+                    <div class="effort-picker">
+                        <button id="effort-toggle" class="effort-toggle" type="button"
+                            aria-haspopup="true" aria-expanded="false" aria-label="Effort mode"
+                            title="Effort mode">
+                            <span class="effort-toggle-dot" aria-hidden="true"></span>
+                            <span class="effort-toggle-label" id="effort-toggle-label">Normal</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div id="effort-menu" class="effort-menu hidden" role="menu">
+                            <button data-value="normal" class="effort-menu-item" type="button" role="menuitem">
+                                <span class="effort-menu-name">Normal</span>
+                                <span class="effort-menu-hint">Quick replies — your settings</span>
+                            </button>
+                            <button data-value="max" class="effort-menu-item" type="button" role="menuitem">
+                                <span class="effort-menu-name">Max thinking</span>
+                                <span class="effort-menu-hint">Longer reasoning, lower temperature</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="stop-btn" class="icon-btn hidden" type="button" aria-label="Stop generation"
+                        title="Stop generation (Esc)">
+                        <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="6" y="6" width="12" height="12" rx="1"></rect>
                         </svg>
                     </button>
-                    <button id="send-btn" class="icon-btn" title="Send Message">
-                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
-                            fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <button id="send-btn" class="icon-btn primary" type="button" aria-label="Send message"
+                        title="Send message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <line x1="22" y1="2" x2="11" y2="13"></line>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                         </svg>
                     </button>
                 </div>
-                <div class="disclaimer">SALeM can make mistakes. Consider checking important information.</div>
+                <div class="disclaimer">SALeM can make mistakes. Verify important information.</div>
+            </div>
+
+            <div id="drop-overlay" class="drop-overlay hidden" aria-hidden="true">
+                <div class="drop-overlay-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Drop audio file to upload</span>
+                </div>
             </div>
         </main>
     </div>
-    <script src="static/client.js?v=14"></script>
+
+    <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true"
+        aria-labelledby="modal-title">
+        <div class="modal">
+            <h2 id="modal-title" class="modal-title"></h2>
+            <p id="modal-description" class="modal-description"></p>
+            <input type="text" id="modal-input" class="modal-input hidden" autocomplete="off">
+            <div class="modal-actions">
+                <button id="modal-cancel" class="btn btn-secondary" type="button">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary" type="button">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true"
+        aria-labelledby="settings-title">
+        <div class="modal modal-wide">
+            <h2 id="settings-title" class="modal-title">Settings</h2>
+            <p class="modal-description">Preferences are saved to your browser.</p>
+
+            <div class="settings-grid">
+                <div class="settings-row">
+                    <label class="settings-label">Theme
+                        <span class="settings-hint">Pick your visual atmosphere</span>
+                    </label>
+                    <div class="theme-picker" id="theme-picker"></div>
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label">Mic mode</label>
+                    <div class="settings-segmented" data-setting="micMode">
+                        <button data-value="vad" type="button">Auto (VAD)</button>
+                        <button data-value="ptt" type="button">Push to talk</button>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label">Effort
+                        <span class="settings-hint">Max forces longer reasoning, lower temperature, and a token floor.</span>
+                    </label>
+                    <div class="settings-segmented" data-setting="effortMode">
+                        <button data-value="normal" type="button">Normal</button>
+                        <button data-value="max" type="button">Max thinking</button>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="set-silence-ms">VAD silence (ms)
+                        <span class="settings-hint">Pause length before auto-stop</span>
+                    </label>
+                    <input type="number" id="set-silence-ms" class="settings-input" min="300" max="5000"
+                        step="100">
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="set-speech-threshold">VAD speech threshold
+                        <span class="settings-hint">Higher = needs louder voice (0.005 – 0.1)</span>
+                    </label>
+                    <input type="number" id="set-speech-threshold" class="settings-input" min="0.005" max="0.1"
+                        step="0.005">
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="set-max-tokens">Max new tokens</label>
+                    <input type="number" id="set-max-tokens" class="settings-input" min="16" max="2048"
+                        step="16">
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="set-instruction">Default audio instruction</label>
+                    <textarea id="set-instruction" class="settings-input" rows="2"></textarea>
+                </div>
+            </div>
+
+            <div class="settings-danger">
+                <span class="label">Clear server-side conversation context (current session only).</span>
+                <button id="clear-context-btn" class="btn btn-destructive" type="button">Clear context</button>
+            </div>
+
+            <div class="modal-actions">
+                <button id="settings-reset" class="btn btn-secondary" type="button">Reset</button>
+                <button id="settings-close" class="btn btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="model-config-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true"
+        aria-labelledby="model-config-title">
+        <div class="modal modal-wide">
+            <h2 id="model-config-title" class="modal-title">Model config</h2>
+            <p class="modal-description">
+                <span id="model-config-path" class="settings-hint"></span>
+            </p>
+            <div class="stats-card">
+                <div class="stats-card-label">config.json</div>
+                <pre class="stats-card-body" id="model-config-body">…</pre>
+            </div>
+            <div class="modal-actions">
+                <button id="model-config-copy" class="btn btn-secondary" type="button">Copy</button>
+                <button id="model-config-close" class="btn btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="server-stats-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true"
+        aria-labelledby="server-stats-title">
+        <div class="modal modal-wide">
+            <h2 id="server-stats-title" class="modal-title">Server status</h2>
+            <p class="modal-description">Live snapshot from <code>/healthz</code> + <code>/metrics</code>.
+                <span id="server-stats-updated" class="settings-hint"></span>
+            </p>
+
+            <div class="server-stats-grid">
+                <div class="stats-card">
+                    <div class="stats-card-label">/healthz</div>
+                    <pre class="stats-card-body" id="server-stats-health">…</pre>
+                </div>
+                <div class="stats-card">
+                    <div class="stats-card-label">/metrics</div>
+                    <pre class="stats-card-body" id="server-stats-metrics">…</pre>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="server-stats-refresh" class="btn btn-secondary" type="button">Refresh</button>
+                <button id="server-stats-close" class="btn btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <template id="suggested-prompts-template">
+        <div class="empty-state">
+            <div class="empty-state-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="3" y="10" width="2.5" height="4" rx="1"></rect>
+                    <rect x="7" y="7" width="2.5" height="10" rx="1"></rect>
+                    <rect x="11" y="4" width="2.5" height="16" rx="1"></rect>
+                    <rect x="15" y="8" width="2.5" height="8" rx="1"></rect>
+                    <rect x="19" y="11" width="2.5" height="2" rx="1"></rect>
+                </svg>
+            </div>
+            <h2 class="empty-state-title">How can I help today?</h2>
+            <p class="empty-state-description">A speech-aware assistant. Talk, type, or drop a file.</p>
+
+            <ul class="empty-state-tips" aria-label="What you can do">
+                <li>
+                    <span class="tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </span>
+                    <span><strong>Type</strong> a question and press Enter to chat.</span>
+                </li>
+                <li>
+                    <span class="tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </span>
+                    <span><strong>Talk</strong> hands-free — auto-stops when you pause, or hold-to-talk in
+                        settings.</span>
+                </li>
+                <li>
+                    <span class="tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </span>
+                    <span><strong>Drop</strong> an audio file anywhere on this screen to transcribe and
+                        answer.</span>
+                </li>
+                <li>
+                    <span class="tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                        </svg>
+                    </span>
+                    <span><strong>Customize</strong> theme, mic mode, and generation settings from the gear icon.</span>
+                </li>
+            </ul>
+        </div>
+    </template>
+
+    <script src="/static/client.js?v=37"></script>
 </body>
 
 </html>

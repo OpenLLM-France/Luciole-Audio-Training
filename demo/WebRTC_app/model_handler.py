@@ -5,10 +5,25 @@ import torch
 import os
 import logging
 
-import logging
 from threading import Thread
 import traceback
-from transformers import TextIteratorStreamer
+from transformers import TextIteratorStreamer, StoppingCriteria, StoppingCriteriaList
+
+
+class CallbackStoppingCriteria(StoppingCriteria):
+    """Lets the caller cancel an in-flight HF generate by setting a flag.
+    The callback is invoked between every generated token; returning True
+    aborts generation immediately, freeing the GPU for the next request.
+    """
+
+    def __init__(self, should_stop):
+        self.should_stop = should_stop
+
+    def __call__(self, input_ids, scores, **kwargs):
+        try:
+            return bool(self.should_stop())
+        except Exception:
+            return False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -137,53 +152,45 @@ class SALMModel:
             logger.error(f"Error processing audio: {e}")
             raise e
 
+    # Generation kwargs that discourage runaway loops. Passed to NeMo's
+    # underlying HF .generate() — extra kwargs the model doesn't recognize
+    # are silently ignored, so this is safe across versions.
+    _ANTI_LOOP_KWARGS = dict(
+        repetition_penalty=1.15,
+        no_repeat_ngram_size=4,
+    )
+
     def generate(self, audio_path=None, text_input=None, history=None, max_new_tokens=360):
         """
         Generates response from the model.
         history: List of dicts [{"role": "user", "content": ...}, {"role": "assistant", "content": ...}]
         """
-        
+
         # Start with existing history or empty list
         current_turn = []
         if history:
             current_turn.extend(history)
-        
-        import uuid
-        
+
         if audio_path:
-             # Assume audio_path is already processed/valid or process here without deletion?
-             # For better control, we'll assume the caller (app.py) handles processing/storage lifecycle
-             # so we can support multi-turn history with audio.
-             
-             # But to maintain backward compatibility if generate is called directly:
-             # We can check if we should process. 
-             # For now, let's just use the path provided. The prompts construction is what matters.
-                
             instruction = text_input if text_input else self.default_instruction
-            
-            # Construct the prompt exactly as needed by the model
             prompt_content = f"{instruction}\n{self.model.audio_locator_tag}\n"
-            
             current_turn.append({
                 "role": "user",
                 "content": prompt_content,
                 "audio": [audio_path],
             })
         else:
-            # Text-only interaction
             if not text_input:
                 return "Please provide text or audio input."
-                
             current_turn.append({
                 "role": "user",
                 "content": text_input,
             })
-            
+
         prompts = [current_turn]
 
         try:
-            # Generate response
-            answer_ids = self.model.generate(prompts=prompts, max_new_tokens=max_new_tokens)
+            answer_ids = self.model.generate(prompts=prompts, max_new_tokens=max_new_tokens, **self._ANTI_LOOP_KWARGS)
             response_text = self.model.tokenizer.ids_to_text(answer_ids[0].cpu())
             
             # Post-processing to remove tags and prompt
@@ -211,7 +218,9 @@ class SALMModel:
             # Clean up handled by caller
             pass
 
-    def generate_stream(self, audio_path=None, text_input=None, history=None, max_new_tokens=360):
+    def generate_stream(self, audio_path=None, text_input=None, history=None,
+                        max_new_tokens=360, stop_callback=None,
+                        min_new_tokens=None, temperature=None):
         """
         Generates response from the model in a streaming fashion.
         history: List of dicts [{"role": "user", "content": ...}, {"role": "assistant", "content": ...}]
@@ -248,8 +257,19 @@ class SALMModel:
             generation_kwargs = dict(
                 prompts=prompts,
                 max_new_tokens=max_new_tokens,
-                streamer=streamer
+                streamer=streamer,
+                **self._ANTI_LOOP_KWARGS,
             )
+            if min_new_tokens is not None and min_new_tokens > 0:
+                # Cap min_new_tokens at max_new_tokens to avoid contradictions
+                generation_kwargs["min_new_tokens"] = min(int(min_new_tokens), int(max_new_tokens))
+            if temperature is not None:
+                generation_kwargs["temperature"] = float(temperature)
+                generation_kwargs["do_sample"] = True
+            if stop_callback is not None:
+                generation_kwargs["stopping_criteria"] = StoppingCriteriaList([
+                    CallbackStoppingCriteria(stop_callback),
+                ])
             
             def run_generation():
                 try:
