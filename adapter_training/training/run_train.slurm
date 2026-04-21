@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=test_ddp-luciol-8B-LoRA
+#SBATCH --job-name=test_training
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=96
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=24
 #SBATCH --time=00:30:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --hint=nomultithread
@@ -55,7 +55,11 @@ PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
 DATA_VERSION=${DATA_VERSION:-data_v2}
 
 # --- Config file
-CONFIG_NAME="${CONFIG_NAME:-config_multitask-v2.yaml}"  # set the config you want to use
+CONFIG_NAME="${CONFIG_NAME:-run/luciole}"  # Hydra config name (no .yaml); e.g. run/luciole, run/v2
+
+# --- Soft time cap for Lightning (Days:HH:MM:SS). slurm_launcher.py computes
+#     this as SLURM --time minus 15min (min 30min); fallback here is 15min.
+MAX_TIME_PER_RUN="${MAX_TIME_PER_RUN:-00:00:15:00}"
 
 # --- Training script
 TRAIN_SCRIPT="salm_train.py"
@@ -76,7 +80,7 @@ mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
 module purge
 module load arch/h100 nemo/2.4.0
 
-export PYTHONPATH="$NEMO_FORK:$PYTHONPATH"
+export PYTHONPATH="$NEMO_FORK:${PYTHONPATH:-}"
 
 # =====================================================
 # Check NeMo version
@@ -92,7 +96,7 @@ EOF
 INPUT_CFG="${CONFIG_PATH}/data/${DATA_VERSION}/input_cfg_train_weighted_randomorder_sharded.yaml"
 
 # The materialized slurm file is snapshotted by slurm_launcher.py into SAVE_DIR/<job_name>_<jobid>.slurm.
-cp "${CONFIG_PATH}/${CONFIG_NAME}" \
+cp "${CONFIG_PATH}/${CONFIG_NAME}.yaml" \
    "${SAVE_DIR}/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.yaml"
 
 cp "$INPUT_CFG" \
@@ -182,4 +186,5 @@ torchrun ${DISTRIBUTED_ARGS} \
   ++data.train_ds.input_cfg="$INPUT_CFG"\
   ++trainer.num_nodes="$NNODES" \
   ++exp_manager.exp_dir="$EXPERIMENT_FOLDER" \
-  ++exp_manager.name="$EXPERIMENT_NAME"
+  ++exp_manager.name="$EXPERIMENT_NAME" \
+  ++exp_manager.max_time_per_run="$MAX_TIME_PER_RUN"
