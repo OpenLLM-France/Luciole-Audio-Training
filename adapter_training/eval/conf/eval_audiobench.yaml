@@ -1,0 +1,105 @@
+ckpt_xp_path: ${oc.env:ALL_CCFRSCRATCH}/audio/training/speechlm2_experiments/${oc.env:XP}
+ckpt: null
+ckpt_class: nemo.collections.speechlm2.models.SALM
+ckpt_every_n_steps: 5000
+min_duration: 1
+max_duration: 30
+batch_size: 32
+data_type: asr
+max_new_tokens: 128
+show_examples: 1
+limit_val_batches: 100
+inputs:
+  - name: FLEURS_FR
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/context/FLEURS/test.jsonl.gz
+    user_prompt: "Transcris ce fichier audio"
+    metric: "wer"
+    lang: fr
+    data_type: asr
+    limit_val_batches: 20
+  - name: FLEURS_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/en/context/FLEURS/test.jsonl.gz
+    user_prompt: "Transcribe this audio file"
+    metric: "wer"
+    lang: en
+    data_type: asr
+    limit_val_batches: 20
+  - name: mTEDx_FR
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/context/Multilingual_TEDx/test.jsonl.gz
+    user_prompt: "Transcris ce fichier audio"
+    metric: "wer"
+    lang: fr
+    data_type: asr
+    limit_val_batches: 20
+
+  - name: mTEDx_FR-EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/fr-en/context/Multilingual_TEDx/test.jsonl.gz
+    user_prompt: "Traduis ce fichier audio en anglais"
+    metric: ["bleu", "meteor"]
+    show_examples: 2
+    data_type: ast
+    lang: fr-en
+    limit_val_batches: 20
+  - name: mTEDx_ES-FR
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/ast/es-fr/context/Multilingual_TEDx/test.jsonl.gz
+    user_prompt: "Traduis ce fichier audio en français"
+    metric: ["bleu", "meteor"]
+    show_examples: 2
+    data_type: ast
+    lang: es-fr
+    limit_val_batches: 20
+
+  - name: VoxPopuli-QA_FR
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/test.jsonl.gz
+    lang: fr
+    data_type: qa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120
+  - name: Vigogne--Alpaca_FR
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/test.jsonl.gz
+    lang: fr
+    data_type: qa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120
+  - name: Public-sg-speech-qa_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/question-answering/qa_audio-context-text-question/en/AudioLLMs--public_sg_speech_qa_test/test.jsonl.gz
+    lang: en
+    data_type: qa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120
+  - name: fisher_AIR-Bench_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/misc/en/context/AIR_bench/Chat/speech/fisher/test.jsonl.gz
+    lang: en
+    data_type: qa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120
+  - name: MusicCaps-QA_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/music/music-question-answering/en/MusicCaps/test.jsonl.gz
+    lang: en
+    data_type: mqa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120
+  - name: Clotho-AQA_EN
+    manifest: ${oc.env:DATA_FOLDER}/lhotse/sounds/audio-question-answering/en/context/clotho_aqa_improved/test.jsonl.gz
+    lang: en
+    data_type: aqa
+    metric: ["bert", "flow_judge"]
+    batch_size: 1
+    max_new_tokens: 256
+    limit_val_batches: 50
+    max_duration: 120

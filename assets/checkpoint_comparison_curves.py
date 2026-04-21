@@ -65,41 +65,40 @@ def plot_metric_curves(results, datasets, metric, title, steps, ax, lower_is_bet
     if lower_is_better:
         ax.invert_yaxis()
 
-def plot_average_performance(results, steps, ax):
-    """Plot average performance across all metrics."""
-    # Calculate average BLEU and WER for each checkpoint
-    avg_bleu = []
-    avg_wer = []
-    
-    for step in steps:
-        bleu_scores = []
-        wer_scores = []
-        
-        for dataset, metrics in results[step].items():
-            if 'bleu' in metrics:
-                bleu_scores.append(metrics['bleu'])
-            if 'wer' in metrics:
-                wer_scores.append(metrics['wer'])
-        
-        avg_bleu.append(np.mean(bleu_scores) if bleu_scores else 0)
-        avg_wer.append(np.mean(wer_scores) if wer_scores else 0)
-    
-    ax2 = ax.twinx()
-    
-    line1 = ax.plot(steps, avg_bleu, marker='o', color='#2ecc71', 
-                    linewidth=3, markersize=10, label='Avg BLEU')
-    line2 = ax2.plot(steps, avg_wer, marker='s', color='#e74c3c', 
-                     linewidth=3, markersize=10, label='Avg WER')
-    
+def plot_task_summary(results, asr_datasets, ast_datasets, qa_datasets, steps, ax):
+    """Plot one averaged curve per task as % change from the first checkpoint.
+
+    WER is a lower-is-better metric, so its sign is flipped: a WER drop shows as a
+    positive % change. All three curves start at 0% by construction.
+    """
+    tasks = [
+        ('ASR (WER)',       asr_datasets, 'wer',        True),
+        ('AST (METEOR)',    ast_datasets, 'meteor',     False),
+        ('QA (flow_judge)', qa_datasets,  'flow_judge', False),
+    ]
+    for label, datasets, metric, lower_better in tasks:
+        avg = []
+        for s in steps:
+            vals = [results[s][d][metric]
+                    for d in datasets
+                    if d in results[s] and metric in results[s][d]]
+            avg.append(np.mean(vals) if vals else np.nan)
+        arr = np.array(avg, dtype=float)
+        if np.all(np.isnan(arr)):
+            continue
+        baseline = next((v for v in arr if not np.isnan(v)), np.nan)
+        if np.isnan(baseline) or baseline == 0:
+            continue
+        pct = (arr - baseline) / baseline * 100.0
+        if lower_better:
+            pct = -pct
+        ax.plot(steps, pct, marker='o', linewidth=2.5, markersize=8, label=label)
+
+    ax.axhline(0.0, color='gray', linewidth=1, linestyle='--', alpha=0.6)
     ax.set_xlabel('Training Steps', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Average BLEU', fontsize=12, fontweight='bold', color='#2ecc71')
-    ax2.set_ylabel('Average WER', fontsize=12, fontweight='bold', color='#e74c3c')
-    ax.set_title('Average Performance Evolution', fontsize=14, fontweight='bold')
-    
-    # Combine legends
-    lines = line1 + line2
-    labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, fontsize=10, loc='best')
+    ax.set_ylabel('% change from first checkpoint (higher = better)', fontsize=12, fontweight='bold')
+    ax.set_title('Task Summary — Relative Improvement', fontsize=14, fontweight='bold')
+    ax.legend(fontsize=10, loc='best')
     ax.grid(True, alpha=0.3)
 
 def analyze_trends(results):
@@ -110,12 +109,15 @@ def analyze_trends(results):
     print("📈 TRAINING TRENDS ANALYSIS")
     print("="*80)
     
-    # Get all datasets
-    datasets = list(results[steps[0]].keys())
-    
+    # Get all datasets across all checkpoints
+    datasets = sorted({d for step in steps for d in results[step].keys()})
+
     for dataset in datasets:
         print(f"\n{dataset}:")
-        metrics = list(results[steps[0]][dataset].keys())
+        metrics = set()
+        for step in steps:
+            if dataset in results[step]:
+                metrics.update(results[step][dataset].keys())
         metrics = [m for m in metrics if m not in ['data_type', 'lang']]
         
         for metric in metrics:
@@ -133,90 +135,99 @@ def analyze_trends(results):
                 change = abs(values[-1] - values[0])
                 print(f"  {metric}: {trend} ({values[0]:.3f} → {values[-1]:.3f}, Δ={change:.3f})")
 
+def _classify_datasets(results):
+    """Group datasets by `data_type` field: ASR, AST, QA (qa/mqa/aqa)."""
+    asr, ast, qa = [], [], []
+    all_datasets = sorted({d for r in results.values() for d in r})
+    for dataset in all_datasets:
+        for step in results:
+            entry = results[step].get(dataset)
+            if entry and 'data_type' in entry:
+                dt = entry['data_type']
+                if dt == 'asr':
+                    asr.append(dataset)
+                elif dt == 'ast':
+                    ast.append(dataset)
+                elif dt in ('qa', 'mqa', 'aqa'):
+                    qa.append(dataset)
+                break
+    return asr, ast, qa
+
+
 def create_curve_plots(results, plot_folder="plots", plot_name="checkpoint_curves.png"):
-    """Create comprehensive curve plots for all metrics."""
+    """Create a 2x2 curve plot: ASR/WER, AST/METEOR, QA/flow_judge, and a normalized task summary."""
 
     plot_folder = Path(plot_folder)
     plot_folder.mkdir(exist_ok=True, parents=True)
     if not plot_name.endswith(".png"):
         plot_name = f"{plot_name}.png"
-    
+
     steps = list(results.keys())
-    datasets = list(results[steps[0]].keys())
-    
-    # Group datasets by task type
-    qa_datasets = []
-    asr_datasets = []
-    translation_datasets = []
-    
-    for dataset in datasets:
-        metrics = list(results[steps[0]][dataset].keys())
-        if 'bleu' in metrics and 'bert_p' in metrics:
-            qa_datasets.append(dataset)
-        elif 'wer' in metrics and 'bleu' not in metrics:
-            asr_datasets.append(dataset)
-        elif 'wer' in metrics and 'bleu' in metrics:
-            translation_datasets.append(dataset)
-    
-    # Create main figure with subplots
-    fig = plt.figure(figsize=(24, 16))
-    
-    # 1. QA Tasks - BLEU scores
-    if qa_datasets:
-        ax1 = plt.subplot(3, 3, 1)
-        plot_metric_curves(results, qa_datasets, 'bleu', 'BLEU Score Evolution - QA Tasks', steps, ax1)
-    
-    # 2. QA Tasks - BERT F1 scores  
-    if qa_datasets:
-        ax2 = plt.subplot(3, 3, 2)
-        plot_metric_curves(results, qa_datasets, 'bert_f1', 'BERT F1 Evolution - QA Tasks', steps, ax2)
-    
-    # 3. QA Tasks - BERT Precision
-    if qa_datasets:
-        ax3 = plt.subplot(3, 3, 3)
-        plot_metric_curves(results, qa_datasets, 'bert_p', 'BERT Precision Evolution - QA Tasks', steps, ax3)
-    
-    # 4. ASR Tasks - WER
-    if asr_datasets:
-        ax4 = plt.subplot(3, 3, 4)
-        plot_metric_curves(results, asr_datasets, 'wer', 'WER Evolution - ASR Tasks', steps, ax4, lower_is_better=True)
-    
-    # 5. Translation Tasks - BLEU
-    if translation_datasets:
-        ax5 = plt.subplot(3, 3, 5)
-        plot_metric_curves(results, translation_datasets, 'bleu', 'BLEU Evolution - Translation Tasks', steps, ax5)
-    
-    # 6. Translation Tasks - WER
-    if translation_datasets:
-        ax6 = plt.subplot(3, 3, 6)
-        plot_metric_curves(results, translation_datasets, 'wer', 'WER Evolution - Translation Tasks', steps, ax6, lower_is_better=True)
-    
-    # 7. All BLEU scores combined
-    ax7 = plt.subplot(3, 3, 7)
-    all_bleu_datasets = [d for d in datasets if 'bleu' in results[5000][d]]
-    plot_metric_curves(results, all_bleu_datasets, 'bleu', 'All BLEU Scores Evolution', steps, ax7)
-    
-    # 8. All WER scores combined
-    ax8 = plt.subplot(3, 3, 8)
-    all_wer_datasets = [d for d in datasets if 'wer' in results[5000][d]]
-    plot_metric_curves(results, all_wer_datasets, 'wer', 'All WER Scores Evolution', steps, ax8, lower_is_better=True)
-    
-    # 9. Performance summary - Average improvement
-    ax9 = plt.subplot(3, 3, 9)
-    plot_average_performance(results, steps, ax9)
-    
+    asr_datasets, ast_datasets, qa_datasets = _classify_datasets(results)
+
+    fig = plt.figure(figsize=(16, 10))
+
+    ax_asr = plt.subplot(2, 2, 1)
+    plot_metric_curves(results, asr_datasets, 'wer', 'ASR — WER', steps, ax_asr, lower_is_better=True)
+
+    ax_ast = plt.subplot(2, 2, 2)
+    plot_metric_curves(results, ast_datasets, 'meteor', 'AST — METEOR', steps, ax_ast)
+
+    ax_qa = plt.subplot(2, 2, 3)
+    plot_metric_curves(results, qa_datasets, 'flow_judge', 'QA — Flow Judge', steps, ax_qa)
+
+    ax_sum = plt.subplot(2, 2, 4)
+    plot_task_summary(results, asr_datasets, ast_datasets, qa_datasets, steps, ax_sum)
+
     plt.tight_layout(pad=3.0)
     plt.savefig(plot_folder / Path(plot_name), dpi=300, bbox_inches='tight')
     plt.close()
+
+def _is_experiment_folder(path: Path) -> bool:
+    """True if `path` directly contains at least one `step=*/results.json`."""
+    if not path.is_dir():
+        return False
+    for child in path.iterdir():
+        if child.is_dir() and child.name.startswith("step=") and (child / "results.json").exists():
+            return True
+    return False
+
+
+def load_concatenated_results(paths):
+    """Load and chain results from multiple experiments.
+
+    Step numbers of each subsequent experiment are offset by the max step of
+    the previous one, so the whole curriculum renders as one continuous curve.
+    """
+    combined = {}
+    offset = 0
+    for path in paths:
+        if not _is_experiment_folder(Path(path)):
+            print(f"⚠ Skipping '{path}': no step=*/results.json found.")
+            continue
+        results = load_results(experiment_folder=str(path))
+        if not results:
+            print(f"⚠ Skipping '{path}': no results loaded.")
+            continue
+        for step, data in results.items():
+            combined[offset + step] = data
+        offset += max(results.keys())
+    return dict(sorted(combined.items()))
+
 
 def main():
     """Main function."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "experiment_folder",
+        "experiment_folders",
         type=str,
-        help="Path to the experiment folder containing results from the evaluation script."
+        nargs='+',
+        help=(
+            "One or more paths. A single path can be an experiment folder or a parent "
+            "folder containing many experiments. Multiple paths are chained into a "
+            "single curriculum curve (e.g. path/to/exp1 path/to/exp2)."
+        )
     )
     parser.add_argument(
         "--plot_folder",
@@ -224,20 +235,54 @@ def main():
         default="plots",
         help="Path to save the plots."
     )
-    args = parser.parse_args()    
+    args = parser.parse_args()
 
-    print("Loading evaluation results for curve analysis...")
-    results = load_results(experiment_folder=args.experiment_folder)
-    
-    print("Creating curve plots...")
-    create_curve_plots(results, plot_folder=args.plot_folder, plot_name=str(Path(args.experiment_folder).name))
-    
-    print("Analyzing trends...")
-    analyze_trends(results)
-    
+    if len(args.experiment_folders) > 1:
+        paths = [Path(p) for p in args.experiment_folders]
+        name = '+'.join(p.name for p in paths)
+        print("\n" + "=" * 80)
+        print(f"Chained experiment: {name}")
+        for p in paths:
+            print(f"  - {p}")
+        print("=" * 80)
+        print("Loading and concatenating evaluation results...")
+        results = load_concatenated_results(paths)
+        if not results:
+            print("No results found for chained experiments.")
+            return
+        print("Creating curve plots...")
+        create_curve_plots(results, plot_folder=args.plot_folder, plot_name=name)
+        print("Analyzing trends...")
+        analyze_trends(results)
+        print(f"\n✅ Analysis complete!")
+        print(f"📊 Curve plots saved under '{args.plot_folder}/'")
+        return
+
+    root = Path(args.experiment_folders[0])
+    if _is_experiment_folder(root):
+        experiments = [root]
+    else:
+        experiments = sorted(p for p in root.iterdir() if _is_experiment_folder(p))
+        if not experiments:
+            print(f"No experiment folders (step=*/results.json) found under {root}")
+            return
+        print(f"Found {len(experiments)} experiments under {root}")
+
+    for exp in experiments:
+        print("\n" + "=" * 80)
+        print(f"Experiment: {exp.name}")
+        print("=" * 80)
+        print("Loading evaluation results for curve analysis...")
+        results = load_results(experiment_folder=str(exp))
+
+        print("Creating curve plots...")
+        create_curve_plots(results, plot_folder=args.plot_folder, plot_name=exp.name)
+
+        print("Analyzing trends...")
+        analyze_trends(results)
+
     print(f"\n✅ Analysis complete!")
-    print(f"📊 Curve plots saved as 'checkpoint_curves.png'")
-    print(f"📈 Check the trends to see which metrics improve over training")
+    print(f"📊 Curve plots saved under '{args.plot_folder}/'")
 
 if __name__ == "__main__":
     main()

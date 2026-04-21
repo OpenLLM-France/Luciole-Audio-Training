@@ -36,7 +36,7 @@ from nemo.collections.common.data.lhotse.cutset import guess_parse_cutset
 from nemo.collections.speechlm2 import SALM, SALMDataset
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
-from to_hf import load_model as load_checkpoint
+from nemo.utils.model_utils import import_class_by_path
 
 from nemo.utils import logging as nemo_logging
 nemo_logging.set_verbosity(nemo_logging.ERROR)
@@ -74,6 +74,11 @@ class SalmEvalConfig:
     limit_val_batches: int = 100
     data_type: str = "asr"
     dataset_filter: Optional[Any] = None  # Filter datasets by index (int) or name (str)
+    min_duration: Optional[float] = None
+    max_duration: Optional[float] = None
+    trim_to_supervisions: bool = True
+    shuffle: bool = True
+    seed: int = 42
 
 @dataclass
 class SalmDatasetInfer:
@@ -88,6 +93,11 @@ class SalmDatasetInfer:
     show_examples: bool
     lang: str
     data_type: str
+    min_duration: Optional[float] = None
+    max_duration: Optional[float] = None
+    trim_to_supervisions: bool = True
+    shuffle: bool = True
+    seed: int = 42
 
     @classmethod
     def from_config(cls, dataset: Any, cfg: Any, i: int):
@@ -109,6 +119,11 @@ class SalmDatasetInfer:
             show_examples = cfg.show_examples
             lang = cfg.lang
             data_type = cfg.data_type
+            min_duration = cfg.min_duration
+            max_duration = cfg.max_duration
+            trim_to_supervisions = cfg.trim_to_supervisions
+            shuffle = cfg.shuffle
+            seed = cfg.seed
 
         # Case 2: dataset is a dict
         else:
@@ -122,6 +137,11 @@ class SalmDatasetInfer:
             show_examples = dataset.get("show_examples", cfg.show_examples)
             lang = dataset.get("lang", cfg.lang)
             data_type = dataset.get("data_type", cfg.data_type)
+            min_duration = dataset.get("min_duration", cfg.min_duration)
+            max_duration = dataset.get("max_duration", cfg.max_duration)
+            trim_to_supervisions = dataset.get("trim_to_supervisions", cfg.trim_to_supervisions)
+            shuffle = dataset.get("shuffle", cfg.shuffle)
+            seed = dataset.get("seed", cfg.seed)
 
         # Normalize metrics to a list
         if isinstance(metrics, (list, tuple, omegaconf.listconfig.ListConfig)):
@@ -140,7 +160,12 @@ class SalmDatasetInfer:
             verbose=verbose,
             show_examples=show_examples,
             lang=lang,
-            data_type=data_type
+            data_type=data_type,
+            min_duration=min_duration,
+            max_duration=max_duration,
+            trim_to_supervisions=trim_to_supervisions,
+            shuffle=shuffle,
+            seed=seed,
         )
 
 def get_output_manifest_path(cfg, name):
@@ -156,7 +181,7 @@ def get_output_manifest_path(cfg, name):
     else: 
         return None
 
-def evaluate(hyps, refs, dataset_config, results, name):
+def evaluate(hyps, refs, prompts, dataset_config, results, name):
     if "wer" in dataset_config.metrics:
         wer, _, nins, ndel, nsub = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)
         print(f"WER: {wer:.2%} [ins={nins:.2%} del={ndel:.2%} sub={nsub:.2%}]")
@@ -167,6 +192,12 @@ def evaluate(hyps, refs, dataset_config, results, name):
         score = bleu(hyps, [[ref] for ref in refs]).item()*100
         results[name].update(dict(bleu=score))
         print(f"BLEU: {score:.3f}")
+    if "meteor" in dataset_config.metrics:
+        import evaluate
+        meteor = evaluate.load("meteor")
+        score = float(meteor.compute(predictions=hyps, references=refs)["meteor"]) * 100
+        results[name].update(dict(meteor=score))
+        print(f"METEOR: {score:.3f}")
     if "rouge" in dataset_config.metrics:
         from torchmetrics.text.rouge import ROUGEScore
         rouge = ROUGEScore()
@@ -190,11 +221,33 @@ def evaluate(hyps, refs, dataset_config, results, name):
         else:
             # Default to multilingual BERT for fr and other languages
             model = "google-bert/bert-base-multilingual-cased"
-        P, R, F1 = score(hyps, refs, 
-                         lang=dataset_config.lang, 
+        P, R, F1 = score(hyps, refs,
+                         lang=dataset_config.lang,
                          model_type=model,
                          num_layers=12)
         results[name].update(dict(bert_p=P.mean().item()*100, bert_r=R.mean().item()*100, bert_f1=F1.mean().item()*100))
+    if "flow_judge" in dataset_config.metrics:
+        from flow_judge import Vllm, FlowJudge, EvalInput
+        from flow_judge.metrics import RESPONSE_CORRECTNESS_5POINT
+        def _extract_query(p):
+            for msg in reversed(p):
+                if msg.get("role") == "user":
+                    return msg.get("content", "")
+            return ""
+        queries = [_extract_query(p) for p in prompts]
+        judge = FlowJudge(metric=RESPONSE_CORRECTNESS_5POINT, model=Vllm(quantized=True, gpu_memory_utilization=0.4, max_num_seqs=10))
+        eval_inputs = [
+            EvalInput(
+                inputs=[{"query": q}, {"reference_answer": r}],
+                output={"response": h},
+            )
+            for q, r, h in zip(queries, refs, hyps)
+        ]
+        fj_results = judge.batch_evaluate(eval_inputs, use_tqdm=True, save_results=False, fail_on_parse_error=False)
+        scores = [r.score for r in fj_results if r is not None and r.score is not None]
+        avg = (sum(scores) / len(scores)) if scores else 0.0
+        results[name].update(dict(flow_judge=avg))
+        print(f"FlowJudge (5-point): {avg:.3f} (n={len(scores)}/{len(eval_inputs)})")
     return results
 
 def infer(model, cfg, dataset_config):
@@ -204,6 +257,29 @@ def infer(model, cfg, dataset_config):
         else:
             model = load_model(model, cfg.device) 
     cuts = guess_parse_cutset(dataset_config.manifest_path)#.sort_by_duration()
+    raw = list(cuts)
+    kept = [c for c in raw if len(c.supervisions) > 0]
+    if len(kept) < len(raw):
+        print(f"Dropped {len(raw) - len(kept)}/{len(raw)} cuts with empty supervisions")
+    cuts = CutSet.from_cuts(kept)
+    if dataset_config.trim_to_supervisions:
+        before = len(cuts)
+        cuts = cuts.trim_to_supervisions(keep_overlapping=False, keep_all_channels=True).to_eager()
+        cuts = cuts.filter(lambda c: len(c.supervisions) > 0).to_eager()
+        print(f"Trimmed {before} cuts -> {len(cuts)} supervision-level cuts")
+    mn, mx = dataset_config.min_duration, dataset_config.max_duration
+    if mn is not None or mx is not None:
+        lo = mn if mn is not None else float("-inf")
+        hi = mx if mx is not None else float("inf")
+        before = len(cuts)
+        cuts = cuts.filter(lambda c: lo <= c.duration <= hi).to_eager()
+        after = len(cuts)
+        print(f"Duration filter [{mn}, {mx}]: kept {after}/{before} cuts")
+    if dataset_config.shuffle:
+        cuts_list = list(cuts)
+        random.Random(dataset_config.seed).shuffle(cuts_list)
+        cuts = CutSet.from_cuts(cuts_list)
+        print(f"Shuffled {len(cuts)} cuts with seed={dataset_config.seed}")
     dloader = torch.utils.data.DataLoader(
         dataset=ToAudio(),
         sampler=lhotse.dataset.DynamicCutSampler(cuts, max_cuts=dataset_config.batch_size),
@@ -249,10 +325,13 @@ def infer(model, cfg, dataset_config):
         batch_prompt = []
         if dataset_config.batch_size==1:
             for cut in batch["cuts"]:
-                if cut.supervisions[0].custom:
-                    batch_prompt.append([{"role": "user", "content": f"{cut.supervisions[0].custom.get('context', '')} {model.audio_locator_tag}"}])
-                else:
-                    batch_prompt.append([{"role": "user", "content": f"{model.audio_locator_tag}"}])
+                try:
+                    if cut.supervisions[0].custom:
+                        batch_prompt.append([{"role": "user", "content": f"{cut.supervisions[0].custom.get('context', '')} {model.audio_locator_tag}"}])
+                    else:
+                        batch_prompt.append([{"role": "user", "content": f"{model.audio_locator_tag}"}])
+                except Exception as e:
+                    raise Exception(f"Error cut {cut.id} : {cut}") from e
         else:
             batch_prompt = [prompt] * len(batch["cuts"])
         prompts.extend(batch_prompt)
@@ -316,6 +395,24 @@ def load_predictions(dataset_config):
         durations.append(row["duration"])
     dataset_results = dict(hyps=hyps, refs=refs, prompts=prompts, ids=ids, durations=durations)
     return dataset_results
+
+def _load_checkpoint_weights(model: torch.nn.Module, checkpoint_path):
+    if Path(checkpoint_path).is_dir():
+        from torch.distributed.checkpoint import load
+
+        state_dict = {"state_dict": model.state_dict()}
+        load(state_dict, checkpoint_id=checkpoint_path)
+        model.load_state_dict(state_dict["state_dict"])
+    else:
+        ckpt_data = torch.load(checkpoint_path, map_location="cpu")
+        model.load_state_dict(ckpt_data["state_dict"])
+
+def load_checkpoint(ckpt_path, ckpt_class, ckpt_config):
+    model_cfg = OmegaConf.load(ckpt_config).model
+    cls = import_class_by_path(ckpt_class)
+    model = cls(OmegaConf.to_container(model_cfg, resolve=True))
+    _load_checkpoint_weights(model, ckpt_path)
+    return model
 
 def load_model(ckpt, device, ckpt_class=None, ckpt_xp_path=None):
     with torch.device(device):
@@ -447,7 +544,7 @@ def main(cfg: SalmEvalConfig):
             else:
                 dataset_results, model = infer(model, cfg, dataset_config)
             print()
-            results = evaluate(dataset_results["refs"], dataset_results["hyps"], dataset_config, results, dataset_config.name)
+            results = evaluate(dataset_results["hyps"], dataset_results["refs"], dataset_results["prompts"], dataset_config, results, dataset_config.name)
             print_data(dataset_results, dataset_config)
             # Save results after each dataset (in case of parallel execution)
             print(f"Writing results to {output_result_path}")
