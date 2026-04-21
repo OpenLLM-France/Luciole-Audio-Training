@@ -1,0 +1,5 @@
+defaults:
+  - /base
+  - /recipe: luciole
+  - /phase: curriculum_encoder
+  - _self_

@@ -1,0 +1,5 @@
+defaults:
+  - /base
+  - /recipe: luciole
+  - /phase: curriculum_adapter
+  - _self_

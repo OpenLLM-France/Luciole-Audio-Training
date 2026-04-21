@@ -1,0 +1,15 @@
+# @package _global_
+# Phase: adapter only. LoRA disabled, encoder frozen (inherits base 4-pattern freeze),
+# short run (max_steps=5000). lr=2e-4, same bucketing as a luciole-family recipe.
+model:
+  lora: null        # disable LoRA for pure-adapter training
+  optimizer:
+    lr: 2e-4
+
+trainer:
+  max_steps: 5_000
+  limit_train_batches: 5_000
+
+data:
+  train_ds:
+    num_workers: 2

@@ -26,15 +26,49 @@ QOS_MAP = {
 
 CPUS_PER_GPU = 24
 
+# exp_manager.max_time_per_run = SLURM --time minus this many minutes, clamped to >= MIN
+MAX_TIME_MARGIN_MIN = 15
+MAX_TIME_FLOOR_MIN = 30
 
-def parse_job_name(script_path: Path) -> str:
+
+def parse_slurm_time_to_minutes(s):
+    """Parse a SLURM --time string (HH:MM:SS, MM:SS, MM, or DD-HH:MM:SS) to minutes."""
+    days = 0
+    if "-" in s:
+        days_str, s = s.split("-", 1)
+        days = int(days_str)
+    parts = s.split(":")
+    if len(parts) == 3:
+        h, m, sec = (int(x) for x in parts)
+    elif len(parts) == 2:
+        h, (m, sec) = 0, (int(parts[0]), int(parts[1]))
+    elif len(parts) == 1:
+        h, m, sec = 0, int(parts[0]), 0
+    else:
+        raise ValueError(f"Unsupported SLURM time format: {s!r}")
+    return days * 24 * 60 + h * 60 + m + (sec // 60)
+
+
+def minutes_to_lightning_time(mins):
+    """DD:HH:MM:SS for Lightning's exp_manager.max_time_per_run."""
+    d, rem = divmod(mins, 24 * 60)
+    h, m = divmod(rem, 60)
+    return f"{d:02d}:{h:02d}:{m:02d}:00"
+
+
+def parse_slurm_time_from_template(script_path):
+    m = re.search(r"^#SBATCH\s+--time=(\S+)", script_path.read_text(), re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def parse_job_name(script_path):
     m = re.search(r"^#SBATCH\s+--job-name=(\S+)", script_path.read_text(), re.MULTILINE)
     if not m:
         sys.exit(f"Could not find '#SBATCH --job-name=...' in {script_path}")
     return m.group(1)
 
 
-def rewrite_sbatch(lines: list[str], key: str, value: str) -> None:
+def rewrite_sbatch(lines, key, value):
     """Replace the value of `#SBATCH --<key>=...`, or insert after last #SBATCH if missing."""
     pattern = re.compile(rf"^(#SBATCH\s+--{re.escape(key)}=)\S+.*$")
     new_line = f"#SBATCH --{key}={value}\n"
@@ -49,7 +83,7 @@ def rewrite_sbatch(lines: list[str], key: str, value: str) -> None:
     lines.insert(last_sbatch + 1, new_line)
 
 
-def inject_exports(lines: list[str], env: dict[str, str]) -> None:
+def inject_exports(lines, env):
     """Insert an `export` block right after the last #SBATCH directive."""
     last_sbatch = max(i for i, l in enumerate(lines) if l.startswith("#SBATCH"))
     block = ["\n# ---- Overrides injected by slurm_launcher.py ----\n",
@@ -60,8 +94,7 @@ def inject_exports(lines: list[str], env: dict[str, str]) -> None:
     lines[last_sbatch + 1:last_sbatch + 1] = block
 
 
-def materialize(template: Path, out_path: Path, job_name: str, save_dir: str,
-                sbatch_overrides: dict[str, str], env_overrides: dict[str, str]) -> None:
+def materialize(template, out_path, job_name, save_dir, sbatch_overrides, env_overrides):
     lines = template.read_text().splitlines(keepends=True)
 
     # These #SBATCH directives are always set by the launcher
@@ -79,22 +112,23 @@ def materialize(template: Path, out_path: Path, job_name: str, save_dir: str,
     out_path.chmod(0o755)
 
 
-def parse_job_id(sbatch_stdout: str) -> str:
+def parse_job_id(sbatch_stdout):
     m = re.search(r"Submitted batch job (\d+)", sbatch_stdout)
     if not m:
         sys.exit(f"Could not parse job id from sbatch output: {sbatch_stdout!r}")
     return m.group(1)
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     g_train = parser.add_argument_group("training knobs (env vars)")
-    g_train.add_argument("--config", default="config_multitask-v2.yaml",
-                         help="Hydra config filename under conf/ (default: %(default)s)")
+    g_train.add_argument("--config", default="run/luciole",
+                         help="Hydra config name under conf/ (default: %(default)s). "
+                              "Use 'run/<name>' to pick a composed run file.")
     g_train.add_argument("--data-version", default="data_v2",
                          help="Subfolder under conf/data/ (default: %(default)s)")
     g_train.add_argument("--experiment-folder", default=None,
@@ -135,7 +169,7 @@ def main() -> None:
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(parents=True, exist_ok=True)
 
-    env_overrides: dict[str, str] = {
+    env_overrides = {
         "CONFIG_NAME":  args.config,
         "DATA_VERSION": args.data_version,
         "OVERWRITE":    "true" if args.overwrite else "false",
@@ -152,7 +186,7 @@ def main() -> None:
         if value is not None:
             env_overrides[name] = value
 
-    sbatch_overrides: dict[str, str] = {}
+    sbatch_overrides = {}
     if args.gpus is not None:
         sbatch_overrides["gres"]          = f"gpu:{args.gpus}"
         sbatch_overrides["cpus-per-task"] = str(CPUS_PER_GPU * args.gpus)
@@ -162,6 +196,13 @@ def main() -> None:
         sbatch_overrides["time"]  = args.time
     if args.nodes is not None:
         sbatch_overrides["nodes"] = str(args.nodes)
+
+    # Derive exp_manager.max_time_per_run = SLURM time - 15min, min 30min.
+    slurm_time_str = args.time or parse_slurm_time_from_template(SLURM_SCRIPT)
+    if slurm_time_str is not None:
+        slurm_mins = parse_slurm_time_to_minutes(slurm_time_str)
+        max_time_mins = max(slurm_mins - MAX_TIME_MARGIN_MIN, MAX_TIME_FLOOR_MIN)
+        env_overrides["MAX_TIME_PER_RUN"] = minutes_to_lightning_time(max_time_mins)
 
     submitted = save_dir_path / f"{job_name}_submitted.slurm"
     materialize(SLURM_SCRIPT, submitted, job_name, save_dir, sbatch_overrides, env_overrides)
@@ -186,7 +227,7 @@ def main() -> None:
         print(f"(dry run — not submitted; inspect: {dryrun_path})")
         return
 
-    result = subprocess.run(["sbatch", str(submitted)], capture_output=True, text=True)
+    result = subprocess.run(["sbatch", "--export=ALL", str(submitted)], capture_output=True, text=True)
     print(result.stdout.strip())
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)

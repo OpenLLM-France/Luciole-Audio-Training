@@ -1,0 +1,28 @@
+# @package _global_
+# Recipe: LoRA r=128, lr=5e-4, no bucketing. batch_size=2 (not batch_tokens), max_tokens=2048.
+# Sized for 23B LLMs on 4×H100 — memory-limited, so batch_size mode instead of batch_tokens.
+model:
+  lora:
+    r: 128
+  optimizer:
+    lr: 5e-4
+
+trainer:
+  max_steps: 10_000_000
+  limit_train_batches: 250_000
+
+data:
+  train_ds:
+    num_workers: 4
+    max_duration: 45
+    min_tokens: 2
+    use_bucketing: false
+    batch_size: 2
+    max_tokens: 2048
+
+  validation_ds:
+    num_workers: 4
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 1000
