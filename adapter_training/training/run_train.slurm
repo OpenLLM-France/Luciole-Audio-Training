@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=96
 #SBATCH --time=00:30:00
-#SBATCH --output=Luciole_exp/logs/%x_%j.out
+#SBATCH --output=logs/%x_%j.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-dev
 #SBATCH --account=wuh@h100
@@ -36,21 +36,20 @@
 # =====================================================
 
 # --- Logging / saving scripts
-SAVE_DIR="Luciole_exp"
-LOG_DIR="${SAVE_DIR}/logs"
+SAVE_DIR="$ALL_CCFRSCRATCH/audio/training/logs/${SLURM_JOB_NAME}/job_${SLURM_JOB_ID}"
 
 # --- Cache / experiment base folder
 CACHE_ROOT="$SCRATCH/speechlm"
-TMP_CACHE="${CACHE_ROOT}/.cache"
-EXPERIMENT_FOLDER="${CACHE_ROOT}/nemo_experiments"
+TMP_CACHE="$SCRATCH/.cache"
+EXPERIMENT_FOLDER="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
 
 # --- NeMo fork
-NEMO_FORK="$HOME/Work-folder/NeMo.luciole.2.8.0-rc0" # This is the last version of NeMo we found for now (1/2/2026)
+NEMO_FORK="$HOME/NeMo"
 
 # --- Models / data
 LLM_MODEL="${TMP_CACHE}/Luciole-8B-hf"
 SPEECH_ENCODER_MODEL="$SCRATCH/speechlm/models/canary-1b-v2.nemo"
-DATA_FOLDER="$SCRATCH/../commun/audio"
+DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="qwen"
 
 # --- Data version (override with: DATA_VERSION=data_v3 sbatch run_train.slurm)
@@ -72,7 +71,7 @@ LOCAL_FOLDER="$(pwd)"
 CONFIG_PATH="${LOCAL_FOLDER}/conf"
 EXPERIMENT_NAME="${SLURM_JOB_NAME}"
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$SAVE_DIR"
 mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
 
 # =====================================================
@@ -81,7 +80,7 @@ mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
 module purge
 module load arch/h100 nemo/2.4.0
 
-export PYTHONPATH="$PYTHONPATH:$NEMO_FORK"
+export PYTHONPATH="$NEMO_FORK:$PYTHONPATH"
 
 # =====================================================
 # Check NeMo version
