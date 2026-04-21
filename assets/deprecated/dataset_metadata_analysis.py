@@ -148,6 +148,9 @@ def flatten_manifests(yaml_path: str) -> list:
     with open(yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
+    if isinstance(cfg, list):
+        cfg = {"input_cfg": cfg}
+
     entries = []
 
     def count_conversations(cfg_list: list) -> int:

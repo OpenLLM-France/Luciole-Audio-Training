@@ -1,85 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=test_ddp-luciol-8B-LoRA
+#SBATCH --job-name=test_training
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=96
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=24
 #SBATCH --time=00:30:00
-#SBATCH --output=Luciole_exp/logs/%x_%j.out
+#SBATCH --output=logs/%x_%j.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-dev
 #SBATCH --account=wuh@h100
 #SBATCH --constraint=h100
 
-# =====================================================
-# Safety bash mode
-# =====================================================
-# set -euo pipefail
-
-# =====================================================
-# USER CONFIG (edit only this section)
-# =====================================================
-
-# --- Logging / saving scripts
-SAVE_DIR="Luciole_exp"
-LOG_DIR="${SAVE_DIR}/logs"
-
-# --- Cache / experiment base folder
-CACHE_ROOT="$SCRATCH/speechlm"
-TMP_CACHE="${CACHE_ROOT}/.cache"
-EXPERIMENT_FOLDER="${CACHE_ROOT}/nemo_experiments"
-
-# --- NeMo fork
-NEMO_FORK="$HOME/Work-folder/NeMo.luciole.2.7.0-rc0" # This is the last version of NeMo we found for now (1/2/2026)
-
-# --- Models / data
-LLM_MODEL="${TMP_CACHE}/Luciole-8B-hf"
-SPEECH_ENCODER_MODEL="$SCRATCH/speechlm/models/canary-1b-v2.nemo"
-DATA_FOLDER="$SCRATCH/../commun/audio"
-PROMPT_FORMAT="qwen"
-
-# --- Training hyperparams
-MAX_DURATION=45
-MAX_TOKENS=4096
-ACCUMULATE_GRAD_BATCHES=1
-
-# Choose ONE:
-BATCH_TOKENS=1024
-#BATCH_SIZE=2
-
-# --- LoRA control
-USE_LORA=true   # set false to disable LoRA
-
-# --- Config file
-CONFIG_NAME="config_multitask-v2.yaml"  # set the config you want to use
-
-# --- Training script
-TRAIN_SCRIPT="salm_train.py"
-
-# --- Optional pip installs (not recommended to enable in job)
-INSTALL_DEPS=false
-
-# =====================================================
-# Derived variables (DO NOT EDIT)
-# =====================================================
-LOCAL_FOLDER="$(pwd)"
-CONFIG_PATH="${LOCAL_FOLDER}/conf"
-EXPERIMENT_NAME="${SLURM_JOB_NAME}"
-
-mkdir -p "$LOG_DIR"
-mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
-
-# =====================================================
-# Load environment
-# =====================================================
-module purge
-module load arch/h100 nemo/2.4.0
-
-export PYTHONPATH="$PYTHONPATH:$NEMO_FORK"
-
-# =====================================================
-# Optional dependencies (NOT executed by default)
-# =====================================================
 # Some dependencies are needed to run newer NeMo versions
 # inside the NeMo 2.4.0 environment.
 #
@@ -93,18 +24,63 @@ export PYTHONPATH="$PYTHONPATH:$NEMO_FORK"
 #
 # TIP: better to install in user space:
 #   pip install --user ...
-#
-# OR enable INSTALL_DEPS=true (not recommended)
 
-if [[ "$INSTALL_DEPS" == "true" ]]; then
-    echo "⚠️ Installing pip dependencies..."
 
-    pip install --user nv-one-logger-core==2.3.1 \
-                     nv-one-logger-pytorch-lightning-integration==2.3.1 \
-                     nv-one-logger-training-telemetry==2.3.1
+# =====================================================
+# Safety bash mode
+# =====================================================
+set -euo pipefail
 
-    pip install --user kaldialign==0.9.1
-fi
+# =====================================================
+# USER CONFIG (edit only this section)
+# =====================================================
+
+# --- Logging / saving scripts
+SAVE_DIR="${SAVE_DIR:-$ALL_CCFRSCRATCH/audio/training/logs/${SLURM_JOB_NAME}}"
+
+# --- Cache / experiment base folder
+TMP_CACHE="$SCRATCH/.cache"
+EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}"
+
+# --- NeMo fork
+NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
+
+# --- Models / data
+LLM_MODEL="${LLM_MODEL:-${TMP_CACHE}/Luciole-8B-hf}"
+SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/canary-1b-v2.nemo}"
+DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
+PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
+
+# --- Data version (override with: DATA_VERSION=v3 sbatch run_train.slurm)
+DATA_VERSION=${DATA_VERSION:-v2}
+
+# --- Config file
+CONFIG_NAME="${CONFIG_NAME:-run/luciole}"  # Hydra config name (no .yaml); e.g. run/luciole, run/v2
+
+# --- Soft time cap for Lightning (Days:HH:MM:SS). slurm_launcher.py computes
+#     this as SLURM --time minus 15min (min 30min); fallback here is 15min.
+MAX_TIME_PER_RUN="${MAX_TIME_PER_RUN:-00:00:15:00}"
+
+# --- Training script
+TRAIN_SCRIPT="salm_train.py"
+
+# =====================================================
+# Derived variables (DO NOT EDIT)
+# =====================================================
+LOCAL_FOLDER="${LOCAL_FOLDER:-$(pwd)}"
+CONFIG_PATH="${LOCAL_FOLDER}/conf"
+EXPERIMENT_NAME="${SLURM_JOB_NAME}"
+
+mkdir -p "$SAVE_DIR"
+mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
+
+# =====================================================
+# Load environment
+# =====================================================
+module purge
+module load arch/h100 nemo/2.4.0
+
+export PYTHONPATH="$NEMO_FORK:${PYTHONPATH:-}"
 
 # =====================================================
 # Check NeMo version
@@ -117,11 +93,14 @@ EOF
 # =====================================================
 # Save SLURM + config for reproducibility
 # =====================================================
-cp "${LOCAL_FOLDER}/run_train.slurm" \
-   "${SAVE_DIR}/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.slurm"
+INPUT_CFG="${CONFIG_PATH}/data/${DATA_VERSION}/input_cfg_train_weighted_randomorder_sharded.yaml"
 
-cp "${CONFIG_PATH}/${CONFIG_NAME}" \
+# The materialized slurm file is snapshotted by slurm_launcher.py into SAVE_DIR/<job_name>_<jobid>.slurm.
+cp "${CONFIG_PATH}/${CONFIG_NAME}.yaml" \
    "${SAVE_DIR}/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.yaml"
+
+cp "$INPUT_CFG" \
+   "${SAVE_DIR}/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.input_cfg.yaml"
 
 # =====================================================
 # Export training environment variables
@@ -144,32 +123,18 @@ export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE="$TMP_CACHE"
 
 # =====================================================
-# Batch method selection
-# =====================================================
-if [[ -n "${BATCH_TOKENS:-}" ]]; then
-    batch_method="batch_tokens"
-    batch_value="$BATCH_TOKENS"
-elif [[ -n "${BATCH_SIZE:-}" ]]; then
-    batch_method="batch_size"
-    batch_value="$BATCH_SIZE"
-else
-    echo "❌ Error: set either BATCH_TOKENS or BATCH_SIZE"
-    exit 1
-fi
-
-# =====================================================
-# LoRA toggle
-# =====================================================
-if [[ "$USE_LORA" == "true" ]]; then
-    LORA_ARG=""
-else
-    LORA_ARG="~model.lora"
-fi
-
-# =====================================================
 # Experiment folder cleanup
 # =====================================================
-rm -rf "${EXPERIMENT_FOLDER:?}/${EXPERIMENT_NAME}"
+if [[ -d "${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}" ]]; then
+    if [[ "${OVERWRITE:-false}" == "true" ]]; then
+        echo "⚠ OVERWRITE=true — wiping ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
+        rm -rf "${EXPERIMENT_FOLDER:?}/${EXPERIMENT_NAME}"
+    else
+        echo "❌ Experiment folder already exists: ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
+        echo "   Re-submit with OVERWRITE=true sbatch run_train.slurm, or change SLURM --job-name."
+        exit 1
+    fi
+fi
 
 # =====================================================
 # Distributed setup (torchrun)
@@ -200,11 +165,15 @@ echo " Nodes          : $NNODES"
 echo " GPUs per node  : $NPROC_PER_NODE"
 echo " Master Addr    : $MASTER_ADDR"
 echo " Master Port    : $MASTER_PORT"
-echo " Batch method   : $batch_method"
-echo " Batch value    : $batch_value"
-echo " LoRA enabled   : $USE_LORA"
 echo " Config         : $CONFIG_NAME"
 echo " Train script   : $TRAIN_SCRIPT"
+echo " Data version   : $DATA_VERSION"
+echo " Experiment fd  : $EXPERIMENT_FOLDER"
+echo " Save dir       : $SAVE_DIR"
+echo " LLM model      : $LLM_MODEL"
+echo " Speech encoder : $SPEECH_ENCODER_MODEL"
+echo " Prompt format  : $PROMPT_FORMAT"
+echo " NeMo fork      : $NEMO_FORK"
 echo "======================================"
 
 # =====================================================
@@ -214,12 +183,8 @@ torchrun ${DISTRIBUTED_ARGS} \
   "${LOCAL_FOLDER}/${TRAIN_SCRIPT}" \
   --config-path="$CONFIG_PATH" \
   --config-name="$CONFIG_NAME" \
-  ++data.train_ds.${batch_method}="$batch_value" \
-  ++data.train_ds.max_tokens="$MAX_TOKENS" \
-  ++data.train_ds.max_duration="$MAX_DURATION" \
-  ++data.train_ds.input_cfg="$CONFIG_PATH/data/input_cfg_train_weighted_randomorder_sharded.yaml"\
-  ++trainer.accumulate_grad_batches="$ACCUMULATE_GRAD_BATCHES" \
+  ++data.train_ds.input_cfg="$INPUT_CFG"\
   ++trainer.num_nodes="$NNODES" \
   ++exp_manager.exp_dir="$EXPERIMENT_FOLDER" \
   ++exp_manager.name="$EXPERIMENT_NAME" \
-  $LORA_ARG
+  ++exp_manager.max_time_per_run="$MAX_TIME_PER_RUN"

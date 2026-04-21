@@ -53,6 +53,9 @@ def parse_input_weights(yaml_path: str) -> tuple:
     with open(yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
+    if isinstance(cfg, list):
+        cfg = {"input_cfg": cfg}
+
     task_weights = {}
     lang_weights = {}
 
@@ -336,7 +339,7 @@ def write_yaml(df: pd.DataFrame,
     def size_label(dur_h, n_samples):
         return f"{fmt_hours(dur_h * 3600)}, {fmt_num(n_samples)} samples"
 
-    lines = ["input_cfg:"]
+    lines = []
 
     for _, tr in task_agg.iterrows():
         task = tr["task_type"]
@@ -346,10 +349,10 @@ def write_yaml(df: pd.DataFrame,
         t_n   = t_sub["total_samples"].sum()
 
         lines += [
-            f"  - type: group",
-            f"    weight: {tw:.4f}   # L1 — {task.upper()} ({size_label(t_h, t_n)})",
-            f"    tags: {{task: {task}}}",
-            f"    input_cfg:",
+            f"- type: group",
+            f"  weight: {tw:.4f}   # L1 — {task.upper()} ({size_label(t_h, t_n)})",
+            f"  tags: {{task: {task}}}",
+            f"  input_cfg:",
         ]
 
         for _, lr in t_sub.iterrows():
@@ -365,10 +368,10 @@ def write_yaml(df: pd.DataFrame,
                 tags_str = f"{{task: {task}, lang: {lang}}}"
 
             lines += [
-                f"      - type: group",
-                f"        weight: {lw:.4f}   # L2 — {lang} ({size_label(l_h, l_n)})",
-                f"        tags: {tags_str}",
-                f"        input_cfg:",
+                f"    - type: group",
+                f"      weight: {lw:.4f}   # L2 — {lang} ({size_label(l_h, l_n)})",
+                f"      tags: {tags_str}",
+                f"      input_cfg:",
             ]
 
             ds_sub = (df[(df["task_type"] == task) & (df["_lkey"] == lang)]
@@ -383,15 +386,15 @@ def write_yaml(df: pd.DataFrame,
 
                 if len(ds_sub) > 1:
                     lines += [
-                        f"          - type: multimodal_conversation",
-                        f"            weight: {dw:.4f}   # L3 — {dr['dataset_name']} ({d_size})",
-                        f"            manifest_filepath: {m_path}",
+                        f"        - type: multimodal_conversation",
+                        f"          weight: {dw:.4f}   # L3 — {dr['dataset_name']} ({d_size})",
+                        f"          manifest_filepath: {m_path}",
                     ]
                 else:
                     lines += [
-                        f"          - type: multimodal_conversation",
-                        f"            # {dr['dataset_name']} ({d_size})",
-                        f"            manifest_filepath: {m_path}",
+                        f"        - type: multimodal_conversation",
+                        f"          # {dr['dataset_name']} ({d_size})",
+                        f"          manifest_filepath: {m_path}",
                     ]
 
         lines.append("")  # blank line between tasks

@@ -1,0 +1,4 @@
+defaults:
+  - /base
+  - /recipe: luciole-23b
+  - _self_

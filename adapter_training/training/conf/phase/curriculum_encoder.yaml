@@ -1,0 +1,28 @@
+# @package _global_
+# Phase: encoder thaws. Warm-start from adapter-phase checkpoint (CHECKPOINT env var).
+# LoRA disabled, perception.encoder NOT frozen (3-pattern freeze), lower lr.
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}
+  lora: null
+  freeze_params:    # drop the "^perception\.encoder\..+$" pattern → encoder trains
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+  optimizer:
+    lr: 2e-5
+  lr_scheduler:
+    min_lr: 1e-7
+
+trainer:
+  max_steps: 500_000
+  limit_train_batches: 100_000
+
+data:
+  train_ds:
+    max_tokens: 2048   # curriculum encoder uses 2048 (vs luciole's 3072)
+    num_workers: 2
+    # encoder-phase has its own 22-bucket config (distinct from luciole's 26)
+    bucket_duration_bins: [83,100,114,129,148,166,198,222,245,267,290,312,335,369,432,475,525,666,732,1024,2048,4096]
+    bucket_batch_size:    [44, 37, 32, 28, 25, 22, 18, 16, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  3,   2,   1,   1]
+    num_buckets: 22
+    bucket_buffer_size: 20000

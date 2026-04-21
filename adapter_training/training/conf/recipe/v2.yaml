@@ -1,0 +1,24 @@
+# @package _global_
+# Recipe: LoRA r=128, alpha=256, lr=5e-4, no bucketing. batch_tokens=4096, max_tokens=2048.
+# Same LoRA/lr as qwen recipe but uses batch_tokens mode instead of bucketing.
+model:
+  lora:
+    r: 128
+    lora_alpha: 256
+  optimizer:
+    lr: 5e-4
+
+trainer:
+  max_steps: 600_000
+  limit_train_batches: 100_000
+
+data:
+  train_ds:
+    num_workers: 2
+    max_tokens: 2048
+    batch_tokens: 4096
+    use_bucketing: false
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 2500

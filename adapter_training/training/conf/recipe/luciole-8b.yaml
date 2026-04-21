@@ -1,0 +1,29 @@
+# @package _global_
+# Recipe: LoRA r=128, lr=5e-4, no bucketing. batch_tokens=1024, max_tokens=2048.
+# Sized for 8B LLMs on 4×H100; trained with max_steps=10M, limit=250k. lora_dropout not set.
+model:
+  lora:
+    r: 128
+    # lora_alpha and lora_dropout left at their base values (alpha unset → NeMo default; dropout=0.0)
+  optimizer:
+    lr: 5e-4
+
+trainer:
+  max_steps: 10_000_000
+  limit_train_batches: 250_000
+
+data:
+  train_ds:
+    num_workers: 4
+    max_duration: 60
+    min_tokens: 2
+    use_bucketing: false
+    batch_tokens: 1024
+    max_tokens: 2048
+
+  validation_ds:
+    num_workers: 4
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 1000
