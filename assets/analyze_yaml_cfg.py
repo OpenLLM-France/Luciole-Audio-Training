@@ -120,6 +120,8 @@ def _task_level_weights(yaml_path: str) -> dict:
     """Extract task-level weights from the YAML (top-level groups)."""
     with open(yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    if isinstance(cfg, list):
+        cfg = {"input_cfg": cfg}
     task_w = {}
     for node in cfg.get("input_cfg", []):
         if not isinstance(node, dict):
