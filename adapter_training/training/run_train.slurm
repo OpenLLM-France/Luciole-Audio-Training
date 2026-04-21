@@ -51,8 +51,8 @@ SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/canary-1b
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
 
-# --- Data version (override with: DATA_VERSION=data_v3 sbatch run_train.slurm)
-DATA_VERSION=${DATA_VERSION:-data_v2}
+# --- Data version (override with: DATA_VERSION=v3 sbatch run_train.slurm)
+DATA_VERSION=${DATA_VERSION:-v2}
 
 # --- Config file
 CONFIG_NAME="${CONFIG_NAME:-run/luciole}"  # Hydra config name (no .yaml); e.g. run/luciole, run/v2
