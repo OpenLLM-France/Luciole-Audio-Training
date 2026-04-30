@@ -13,7 +13,7 @@ from pathlib import Path
 from to_hf import load_model
 
 LLM_MATCH = "Luciole-1B-SFT-1.1"
-LLM_REPLACE = "Luciole-1B-SFT-1.1"
+LLM_REPLACE = "OpenLLM-France/Luciole-1B-SFT-1.1"
 ASR_MATCH = "canary-1b-v2.nemo"
 ASR_REPLACE = "nvidia/canary-1b-v2"
 
