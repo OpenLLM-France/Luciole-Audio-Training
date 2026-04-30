@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - /base
+  - /recipe: luciole
+  - _self_
+
+trainer:
+  max_steps: 15_000
+  limit_train_batches: 10_000

@@ -1,0 +1,30 @@
+- type: group
+  weight: 0.75
+  tags: {task: new_task}
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/answer_with_source_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/answer_with_time_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/format_answer_json_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/format_timestampted_transcription_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/time2sentence_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/time2word_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/word2sentence_audio_text/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slu-phase-2-sqa5/word2time_audio_text/train.jsonl
+- type: group
+  weight: 0.25
+  tags: {task: asr-qa}
+  input_cfg:
+    - type: multimodal_conversation
+      weight: 0.5   # L3 — Multilingual_LibriSpeech (44,660 h, 10.81M samples)
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train_subsampled_shards_audio_text/train_subsampled__OP_0..540_CL_.jsonl
+    - type: multimodal_conversation
+      weight: 0.5   # L3 — VoxPopuli-QA (4,540 h, 568.0K samples)
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train_shards_audio_text/train__OP_0..113_CL_.jsonl
