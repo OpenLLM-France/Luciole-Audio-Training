@@ -36,11 +36,12 @@ warnings.filterwarnings("ignore")
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def seconds_to_dhms(total_seconds: float) -> str:
     total_seconds = int(total_seconds)
     d, rem = divmod(total_seconds, 86400)
     h, rem = divmod(rem, 3600)
-    m, s   = divmod(rem, 60)
+    m, s = divmod(rem, 60)
     return f"{d}d {h:02d}h {m:02d}m {s:02d}s"
 
 
@@ -54,15 +55,21 @@ def _infer_lang_from_path(path_str: str) -> str:
     if not path_str:
         return ""
     codes = {"en", "fr", "ar", "de", "es", "it", "nl", "pt", "ru", "zh"}
-    for part in str(path_str).split("/"):
+    for part in reversed(str(path_str).split("/")):
         if part.strip().lower() in codes:
             return part.strip().lower()
+    special = {"Nvidia": "en"}
+    for part in reversed(str(path_str).split("/")):
+        for k, v in special.items():
+            if part == k:
+                return v
     return ""
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # YAML flattening
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def flatten_manifests(yaml_path: str) -> list:
     """
@@ -78,15 +85,18 @@ def flatten_manifests(yaml_path: str) -> list:
     entries = []
 
     def count_conversations(cfg_list: list) -> int:
-        return sum(
-            1 for c in cfg_list
-            if isinstance(c, dict) and c.get("type") == "multimodal_conversation"
-        )
+        return sum(1 for c in cfg_list if isinstance(c, dict) and c.get("type") == "multimodal_conversation")
 
-    def recurse(node,
-                inherited_task="", inherited_lang="", inherited_subtask="",
-                inherited_weight=1.0, group_weight=None,
-                inherited_src_lang="", inherited_tgt_lang=""):
+    def recurse(
+        node,
+        inherited_task="",
+        inherited_lang="",
+        inherited_subtask="",
+        inherited_weight=1.0,
+        group_weight=None,
+        inherited_src_lang="",
+        inherited_tgt_lang="",
+    ):
         if not isinstance(node, dict):
             return
 
@@ -100,43 +110,59 @@ def flatten_manifests(yaml_path: str) -> list:
                     f"Add a space after the colon: '{k}: <value>' instead of '{k}<value>'"
                 )
 
-        task     = tags.get("task",        inherited_task)
-        lang     = tags.get("lang",        inherited_lang)
-        if not lang:
-            lang = _infer_lang_from_path(node.get("manifest_filepath", ""))
-        sub_task = tags.get("sub_task",    inherited_subtask)
+        task = tags.get("task", inherited_task)
+        lang = tags.get("lang", inherited_lang)
+        sub_task = tags.get("sub_task", inherited_subtask)
         src_lang = tags.get("source_lang", inherited_src_lang)
         tgt_lang = tags.get("target_lang", inherited_tgt_lang)
+        if not lang:
+            if src_lang and tgt_lang:
+                lang = f"{src_lang}-{tgt_lang}"
+            else:
+                lang = _infer_lang_from_path(node.get("manifest_filepath", ""))
         node_weight = node.get("weight")
         if node_weight is not None:
             weight = inherited_weight * float(node_weight)
         else:
             weight = inherited_weight
-        ntype    = node.get("type", "")
+        ntype = node.get("type", "")
 
         if ntype == "multimodal_conversation":
-            entries.append({
-                "manifest_filepath": node.get("manifest_filepath", ""),
-                "raw_manifest_path": node.get("manifest_filepath", ""),
-                "task_type":         task,
-                "sub_task":          sub_task,
-                "language":          lang,
-                "source_lang":       src_lang,
-                "target_lang":       tgt_lang,
-                "weight_dataset":    None,
-                "weight_group":      group_weight if group_weight is not None else weight,
-            })
+            if not isinstance(lang, str) or not lang.strip():
+                raise ValueError(
+                    f"Manifest has no language (lang/source_lang+target_lang/path inference) "
+                    f"in any ancestor: {node.get('manifest_filepath', '')}"
+                )
+            entries.append(
+                {
+                    "manifest_filepath": node.get("manifest_filepath", ""),
+                    "raw_manifest_path": node.get("manifest_filepath", ""),
+                    "task_type": task,
+                    "sub_task": sub_task,
+                    "language": lang,
+                    "source_lang": src_lang,
+                    "target_lang": tgt_lang,
+                    "weight_dataset": None,
+                    "weight_group": group_weight if group_weight is not None else weight,
+                }
+            )
             return
 
         if ntype == "group":
-            children   = node.get("input_cfg", [])
+            children = node.get("input_cfg", [])
             n_datasets = count_conversations(children)
-            start_idx  = len(entries)
+            start_idx = len(entries)
             for child in children:
-                recurse(child, task, lang, sub_task, weight,
-                        group_weight=weight,
-                        inherited_src_lang=src_lang,
-                        inherited_tgt_lang=tgt_lang)
+                recurse(
+                    child,
+                    task,
+                    lang,
+                    sub_task,
+                    weight,
+                    group_weight=weight,
+                    inherited_src_lang=src_lang,
+                    inherited_tgt_lang=tgt_lang,
+                )
             if n_datasets > 0:
                 for entry in entries[start_idx:]:
                     if entry["weight_dataset"] is None:
@@ -156,16 +182,24 @@ def flatten_manifests(yaml_path: str) -> list:
 # JSONL parsing
 # ──────────────────────────────────────────────────────────────────────────────
 
-def parse_manifest(manifest_paths: list,
-                   task_type: str, sub_task: str,
-                   language: str, source_lang: str, target_lang: str,
-                   dataset_name: str, split: str, note: str) -> dict | None:
+
+def parse_manifest(
+    manifest_paths: list,
+    task_type: str,
+    sub_task: str,
+    language: str,
+    source_lang: str,
+    target_lang: str,
+    dataset_name: str,
+    split: str,
+    note: str,
+) -> dict | None:
 
     durations, instruction_wc, response_wc = [], [], []
     speaker_ids, sampling_rates, channels_list = set(), [], []
-    num_samples  = 0
+    num_samples = 0
     num_segments = 0
-    paths_used   = []
+    paths_used = []
 
     for mpath in manifest_paths:
         p = Path(mpath)
@@ -197,7 +231,7 @@ def parse_manifest(manifest_paths: list,
                             if dur is not None:
                                 break
                         val = str(turn.get("value", ""))
-                        if any(val.endswith(e) for e in (".wav",".mp3",".flac",".ogg",".opus",".m4a")):
+                        if any(val.endswith(e) for e in (".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a")):
                             dur = turn.get("duration") or turn.get("audio_duration")
                             if dur is not None:
                                 break
@@ -219,21 +253,34 @@ def parse_manifest(manifest_paths: list,
 
                 # sample rate / channels / speaker
                 ctx = rec.get("context") or {}
-                sr  = (rec.get("sample_rate") or rec.get("sampling_rate")
-                       or (ctx.get("sample_rate") if isinstance(ctx, dict) else None))
+                sr = (
+                    rec.get("sample_rate")
+                    or rec.get("sampling_rate")
+                    or (ctx.get("sample_rate") if isinstance(ctx, dict) else None)
+                )
                 if sr:
-                    try: sampling_rates.append(int(sr))
-                    except (ValueError, TypeError): pass
+                    try:
+                        sampling_rates.append(int(sr))
+                    except (ValueError, TypeError):
+                        pass
 
-                ch = (rec.get("num_channels") or rec.get("channels")
-                      or (ctx.get("num_channels") if isinstance(ctx, dict) else None))
+                ch = (
+                    rec.get("num_channels")
+                    or rec.get("channels")
+                    or (ctx.get("num_channels") if isinstance(ctx, dict) else None)
+                )
                 if ch:
-                    try: channels_list.append(int(ch))
-                    except (ValueError, TypeError): pass
+                    try:
+                        channels_list.append(int(ch))
+                    except (ValueError, TypeError):
+                        pass
 
-                spk = (rec.get("speaker") or rec.get("speaker_id")
-                       or rec.get("speaker_id_str")
-                       or (ctx.get("speaker_id") if isinstance(ctx, dict) else None))
+                spk = (
+                    rec.get("speaker")
+                    or rec.get("speaker_id")
+                    or rec.get("speaker_id_str")
+                    or (ctx.get("speaker_id") if isinstance(ctx, dict) else None)
+                )
                 if spk:
                     speaker_ids.add(str(spk))
 
@@ -241,9 +288,9 @@ def parse_manifest(manifest_paths: list,
                 conversations = rec.get("conversations", rec.get("conversation", []))
                 if isinstance(conversations, list) and conversations:
                     for turn in conversations:
-                        role  = turn.get("role", turn.get("from", "")).lower()
+                        role = turn.get("role", turn.get("from", "")).lower()
                         value = turn.get("value", turn.get("content", turn.get("text", "")))
-                        wc    = word_count(value)
+                        wc = word_count(value)
                         if role in ("user", "human", "instruction", "input"):
                             instruction_wc.append(wc)
                         elif role in ("assistant", "gpt", "system", "output", "response", "bot"):
@@ -252,11 +299,13 @@ def parse_manifest(manifest_paths: list,
                     for key in ("question", "instruction", "input"):
                         v = rec.get(key)
                         if v:
-                            instruction_wc.append(word_count(str(v))); break
+                            instruction_wc.append(word_count(str(v)))
+                            break
                     for key in ("answer", "response", "output", "text"):
                         v = rec.get(key)
                         if v:
-                            response_wc.append(word_count(str(v))); break
+                            response_wc.append(word_count(str(v)))
+                            break
 
     if num_samples == 0:
         return None
@@ -265,57 +314,77 @@ def parse_manifest(manifest_paths: list,
         return round(fn(arr), 3) if arr else None
 
     return {
-        "dataset_name":                dataset_name,
-        "split":                       split,
-        "note":                        note,
-        "task_type":                   task_type,
-        "sub_task":                    sub_task,
-        "language":                    language,
-        "source_lang":                 source_lang,
-        "target_lang":                 target_lang,
-        "num_audio_segments":          num_segments,
-        "num_samples":                 num_samples,
-        "total_duration_sec":          round(sum(durations), 2) if durations else None,
-        "total_duration_dhms":         seconds_to_dhms(sum(durations)) if durations else None,
-        "min_segment_duration_sec":    ss(durations, min),
-        "max_segment_duration_sec":    ss(durations, max),
-        "avg_segment_duration_sec":    ss(durations, lambda x: sum(x)/len(x)),
+        "dataset_name": dataset_name,
+        "split": split,
+        "note": note,
+        "task_type": task_type,
+        "sub_task": sub_task,
+        "language": language,
+        "source_lang": source_lang,
+        "target_lang": target_lang,
+        "num_audio_segments": num_segments,
+        "num_samples": num_samples,
+        "total_duration_sec": round(sum(durations), 2) if durations else None,
+        "total_duration_dhms": seconds_to_dhms(sum(durations)) if durations else None,
+        "min_segment_duration_sec": ss(durations, min),
+        "max_segment_duration_sec": ss(durations, max),
+        "avg_segment_duration_sec": ss(durations, lambda x: sum(x) / len(x)),
         "median_segment_duration_sec": ss(durations, lambda x: float(np.median(x))),
-        "std_segment_duration_sec":    ss(durations, lambda x: float(np.std(x))),
-        "avg_instruction_words":       ss(instruction_wc, lambda x: sum(x)/len(x)),
-        "min_instruction_words":       ss(instruction_wc, min),
-        "max_instruction_words":       ss(instruction_wc, max),
-        "avg_response_words":          ss(response_wc, lambda x: sum(x)/len(x)),
-        "min_response_words":          ss(response_wc, min),
-        "max_response_words":          ss(response_wc, max),
-        "num_unique_speakers":         len(speaker_ids) if speaker_ids else None,
-        "avg_audio_sampling_rate":     round(sum(sampling_rates)/len(sampling_rates)) if sampling_rates else None,
-        "avg_audio_channels":          round(sum(channels_list)/len(channels_list), 2) if channels_list else None,
+        "std_segment_duration_sec": ss(durations, lambda x: float(np.std(x))),
+        "avg_instruction_words": ss(instruction_wc, lambda x: sum(x) / len(x)),
+        "min_instruction_words": ss(instruction_wc, min),
+        "max_instruction_words": ss(instruction_wc, max),
+        "avg_response_words": ss(response_wc, lambda x: sum(x) / len(x)),
+        "min_response_words": ss(response_wc, min),
+        "max_response_words": ss(response_wc, max),
+        "num_unique_speakers": len(speaker_ids) if speaker_ids else None,
+        "avg_audio_sampling_rate": round(sum(sampling_rates) / len(sampling_rates)) if sampling_rates else None,
+        "avg_audio_channels": round(sum(channels_list) / len(channels_list), 2) if channels_list else None,
     }
 
 
 def _worker(args_tuple):
     key, paths, e_first = args_tuple
-    stats = parse_manifest(
-        paths, key[3], key[4], key[5], key[6], key[7], key[0], key[1], key[2]
-    )
+    stats = parse_manifest(paths, key[3], key[4], key[5], key[6], key[7], key[0], key[1], key[2])
     base = {
-        "dataset_name":    key[0], "split":        key[1], "note":         key[2],
-        "task_type":       key[3], "sub_task":      key[4], "language":     key[5],
-        "source_lang":     key[6], "target_lang":   key[7],
-        "weight_dataset":  e_first["weight_dataset"] or 1.0,
-        "weight_group":    e_first.get("weight_group", e_first["weight_dataset"]) or 1.0,
+        "dataset_name": key[0],
+        "split": key[1],
+        "note": key[2],
+        "task_type": key[3],
+        "sub_task": key[4],
+        "language": key[5],
+        "source_lang": key[6],
+        "target_lang": key[7],
+        "weight_dataset": e_first["weight_dataset"] or 1.0,
+        "weight_group": e_first.get("weight_group", e_first["weight_dataset"]) or 1.0,
         "raw_manifest_path": key[8],
     }
     if stats is None:
-        base.update({k: None for k in [
-            "num_audio_segments","num_samples","total_duration_sec","total_duration_dhms",
-            "min_segment_duration_sec","max_segment_duration_sec","avg_segment_duration_sec",
-            "median_segment_duration_sec","std_segment_duration_sec",
-            "avg_instruction_words","min_instruction_words","max_instruction_words",
-            "avg_response_words","min_response_words","max_response_words",
-            "num_unique_speakers","avg_audio_sampling_rate","avg_audio_channels",
-        ]})
+        base.update(
+            {
+                k: None
+                for k in [
+                    "num_audio_segments",
+                    "num_samples",
+                    "total_duration_sec",
+                    "total_duration_dhms",
+                    "min_segment_duration_sec",
+                    "max_segment_duration_sec",
+                    "avg_segment_duration_sec",
+                    "median_segment_duration_sec",
+                    "std_segment_duration_sec",
+                    "avg_instruction_words",
+                    "min_instruction_words",
+                    "max_instruction_words",
+                    "avg_response_words",
+                    "min_response_words",
+                    "max_response_words",
+                    "num_unique_speakers",
+                    "avg_audio_sampling_rate",
+                    "avg_audio_channels",
+                ]
+            }
+        )
         base["file_exists"] = False
     else:
         stats.update(base)
@@ -329,46 +398,64 @@ def _worker(args_tuple):
 # ──────────────────────────────────────────────────────────────────────────────
 
 COL_ORDER = [
-    "dataset_name","split","note","task_type","sub_task","language",
-    "source_lang","target_lang","num_audio_segments","num_samples",
-    "total_duration_sec","total_duration_dhms",
-    "min_segment_duration_sec","max_segment_duration_sec",
-    "avg_segment_duration_sec","median_segment_duration_sec","std_segment_duration_sec",
-    "avg_instruction_words","min_instruction_words","max_instruction_words",
-    "avg_response_words","min_response_words","max_response_words",
-    "num_unique_speakers","avg_audio_sampling_rate","avg_audio_channels",
-    "weight_group","weight_dataset","file_exists","raw_manifest_path",
+    "dataset_name",
+    "split",
+    "note",
+    "task_type",
+    "sub_task",
+    "language",
+    "source_lang",
+    "target_lang",
+    "num_audio_segments",
+    "num_samples",
+    "total_duration_sec",
+    "total_duration_dhms",
+    "min_segment_duration_sec",
+    "max_segment_duration_sec",
+    "avg_segment_duration_sec",
+    "median_segment_duration_sec",
+    "std_segment_duration_sec",
+    "avg_instruction_words",
+    "min_instruction_words",
+    "max_instruction_words",
+    "avg_response_words",
+    "min_response_words",
+    "max_response_words",
+    "num_unique_speakers",
+    "avg_audio_sampling_rate",
+    "avg_audio_channels",
+    "weight_group",
+    "weight_dataset",
+    "file_exists",
+    "raw_manifest_path",
 ]
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Parse NeMo YAML(s) → metadata CSV.")
-    parser.add_argument("yaml_paths", nargs="+",
-                        help="One or more YAML config files.")
-    parser.add_argument("--output_dir",   default=None,
-                        help="Output directory (default: next to first YAML).")
-    parser.add_argument("--output_csv",   default="metadata.csv",
-                        help="Output CSV filename (default: metadata.csv).")
-    parser.add_argument("--data_root",    default="",
-                        help="Root path to replace ${oc.env:DATA_FOLDER}.")
-    parser.add_argument("--skip_missing", action="store_true",
-                        help="Ignore manifests that don't exist on disk.")
-    parser.add_argument("--workers",      type=int, default=8,
-                        help="Parallel workers (default: 8).")
-    parser.add_argument("--include_weights", action="store_true",
-                        help="Include weight_group and weight_dataset columns in the output CSV.")
-    parser.add_argument("--force_overwrite", action="store_true",
-                        help="Recompute all rows even if the output CSV already exists.")
+    parser = argparse.ArgumentParser(description="Parse NeMo YAML(s) → metadata CSV.")
+    parser.add_argument("yaml_paths", nargs="+", help="One or more YAML config files.")
+    parser.add_argument("--output_dir", default=None, help="Output directory (default: next to first YAML).")
+    parser.add_argument("--output_csv", default="metadata.csv", help="Output CSV filename (default: metadata.csv).")
+    parser.add_argument("--data_root", default="", help="Root path to replace ${oc.env:DATA_FOLDER}.")
+    parser.add_argument("--skip_missing", action="store_true", help="Ignore manifests that don't exist on disk.")
+    parser.add_argument("--workers", type=int, default=8, help="Parallel workers (default: 8).")
+    parser.add_argument(
+        "--include_weights",
+        action="store_true",
+        help="Include weight_group and weight_dataset columns in the output CSV.",
+    )
+    parser.add_argument(
+        "--force_overwrite", action="store_true", help="Recompute all rows even if the output CSV already exists."
+    )
     args = parser.parse_args()
 
     first_yaml = Path(args.yaml_paths[0])
-    out_dir    = Path(args.output_dir) if args.output_dir else first_yaml.parent
+    out_dir = Path(args.output_dir) if args.output_dir else first_yaml.parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
     DATA_FOLDER = args.data_root or os.environ.get("DATA_FOLDER", "")
 
-    all_tasks = []   # (key, paths, e_first)
+    all_tasks = []  # (key, paths, e_first)
 
     for yaml_path in args.yaml_paths:
         print(f"\n📂 Parsing YAML: {yaml_path}")
@@ -380,31 +467,40 @@ def main():
             path = e["manifest_filepath"]
             if DATA_FOLDER:
                 path = path.replace("${oc.env:DATA_FOLDER}", DATA_FOLDER)
-            p    = Path(path)
+            p = Path(path)
             name = p.parent.name
             stem = p.stem
             split = "train" if stem.startswith("train") else stem
-            note  = []
-            if "recasepunc" in stem: note.append("with punctuations")
-            if "max30"      in stem: note.append("max duration is 30s")
-            e.update({
-                "path":             path,
-                "dataset_name":     name,
-                "split":            split,
-                "note":             ", ".join(note),
-                "raw_manifest_path": e.get("raw_manifest_path", path),
-            })
+            note = []
+            if "recasepunc" in stem:
+                note.append("with punctuations")
+            if "max30" in stem:
+                note.append("max duration is 30s")
+            e.update(
+                {
+                    "path": path,
+                    "dataset_name": name,
+                    "split": split,
+                    "note": ", ".join(note),
+                    "raw_manifest_path": e.get("raw_manifest_path", path),
+                }
+            )
             key = (
-                name, split, ", ".join(note),
-                e["task_type"], e["sub_task"],
-                e["language"], e["source_lang"], e["target_lang"],
+                name,
+                split,
+                ", ".join(note),
+                e["task_type"],
+                e["sub_task"],
+                e["language"],
+                e["source_lang"],
+                e["target_lang"],
                 e.get("raw_manifest_path", ""),
             )
             groups.setdefault(key, []).append(e)
 
         print(f"   Aggregated into {len(groups)} distinct groups.")
         for key, group_entries in groups.items():
-            paths   = [ge["path"] for ge in group_entries]
+            paths = [ge["path"] for ge in group_entries]
             e_first = group_entries[0]
             all_tasks.append((key, paths, e_first))
 
@@ -414,17 +510,24 @@ def main():
     existing_paths = set()
     if csv_path.exists() and not args.force_overwrite:
         existing_df = pd.read_csv(csv_path)
+        if "language" in existing_df.columns:
+            lang_series = existing_df["language"].astype("string").str.strip()
+            valid_mask = lang_series.notna() & (lang_series != "")
+            n_dropped = int((~valid_mask).sum())
+            if n_dropped:
+                print(f"   Dropping {n_dropped} existing row(s) with no language (will recompute).")
+            existing_df = existing_df[valid_mask].reset_index(drop=True)
         existing_paths = set(existing_df["raw_manifest_path"].dropna())
         print(f"\n   Existing CSV: {csv_path} ({len(existing_df)} rows)")
 
     new_tasks = [t for t in all_tasks if t[0][8] not in existing_paths]
-    skipped   = len(all_tasks) - len(new_tasks)
+    skipped = len(all_tasks) - len(new_tasks)
     if skipped:
         print(f"   Skipping {skipped} already-computed groups, {len(new_tasks)} new to parse.")
 
     parsed_rows = []
-    missing     = 0
-    total       = len(new_tasks)
+    missing = 0
+    total = len(new_tasks)
 
     if new_tasks:
         try:
@@ -436,15 +539,13 @@ def main():
                         missing += len(paths)
                         if not args.skip_missing:
                             key = futures[future][0]
-                            raise RuntimeError(
-                                f"Missing manifests for {key[0]} {key[1]}: {paths}"
-                            )
+                            raise RuntimeError(f"Missing manifests for {key[0]} {key[1]}: {paths}")
                     parsed_rows.append(base)
                     pct = (i + 1) / total * 100
-                    print(f"\r  [{i+1}/{total}] {pct:3.0f}% | {base['dataset_name'][:35]:<35}",
-                          end="", flush=True)
+                    print(f"\r  [{i + 1}/{total}] {pct:3.0f}% | {base['dataset_name'][:35]:<35}", end="", flush=True)
         except KeyboardInterrupt:
-            print("\n\n❗ Interrupted."); sys.exit(1)
+            print("\n\n❗ Interrupted.")
+            sys.exit(1)
 
         print(f"\n\n   Parsed: {total - missing}  |  Missing: {missing}")
     else:
@@ -462,21 +563,25 @@ def main():
         cols = [c for c in cols if c not in ("weight_group", "weight_dataset")]
     sort_cols = ["dataset_name", "task_type", "sub_task", "language", "num_samples", "raw_manifest_path"]
     df = df[cols].sort_values(
-        sort_cols, key=lambda s: s.fillna(""), ignore_index=True,
+        sort_cols,
+        key=lambda s: s.fillna(""),
+        ignore_index=True,
     )
 
     df.to_csv(csv_path, index=False)
 
     # Quick summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     total_h = df["total_duration_sec"].sum(skipna=True) / 3600
     print(f"  Rows  : {len(df)}")
     print(f"  YAMLs : {len(args.yaml_paths)}")
     print(f"  Hours : {total_h:,.1f} h")
     for task, sub in df.groupby("task_type"):
-        print(f"    {task:<20} {int(sub['num_samples'].sum()):>10,} samples  "
-              f"{sub['total_duration_sec'].sum(skipna=True)/3600:>8.1f} h")
-    print("="*60)
+        print(
+            f"    {task:<20} {int(sub['num_samples'].sum()):>10,} samples  "
+            f"{sub['total_duration_sec'].sum(skipna=True) / 3600:>8.1f} h"
+        )
+    print("=" * 60)
     print(f"\n✅ CSV → {csv_path}\n")
 
 
