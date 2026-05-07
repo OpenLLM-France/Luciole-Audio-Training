@@ -239,7 +239,7 @@ class Reverberation(BaseWaveformTransform):
                 print(f"WARNING: {rir_file} not found")
             else:
                 self.wavs += self._parse_rir_list(rir_file)
-        assert self.wavs, f"Could not find any RIR files in {self.path=}"
+        assert self.wavs, f"Could not find any RIR files in {self.path=} {rir_list_files=}"
 
     def apply(self, waveform, sampling_rate):
         # Cast waveform object type to torch tensor
@@ -690,7 +690,9 @@ def reverberation_factory(
         if path_parent is None:
             for rir_path in [
                 "/data-server/datasets/audio/noise",
+                "/media/storage1/audio/noise",
                 "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise",
+                "/lustre/fsn1/projects/rech/qgz/commun/audio/noise",
             ]:
                 if os.path.isdir(rir_path):
                     path_parent = rir_path
@@ -727,7 +729,9 @@ class SpeechAugment:
             if noise_dir is None:
                 for noise_path in [
                     "/data-server/datasets/audio/noise/distant_noises",
+                    "/media/storage1/audio/noise/distant_noises",
                     "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise/distant_noises",
+                    "/lustre/fsn1/projects/rech/qgz/commun/audio/noise/distant_noises",
                 ]:
                     if os.path.isdir(noise_path):
                         noise_dir = noise_path
@@ -740,7 +744,7 @@ class SpeechAugment:
         self.transforms = Compose([
             OneOf([
                 AddGaussianNoise(min_amplitude=0.0001, max_amplitude=0.0015, p=1.0),
-                ClippingDistortion(min_percentile_threshold=5, max_percentile_threshold=15, p=1.0),
+                ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=10, p=1.0),
             ], p=0.1),
             BandStopFilter(min_bandwidth_fraction=0.05, max_bandwidth_fraction=0.2, p=0.1),
             OneOf([
@@ -752,8 +756,8 @@ class SpeechAugment:
                 min_snr_in_db=10, max_snr_in_db=40, p=0.1  # Lower SNRs simulate tougher environments
             ),
             reverberation_factory(path_parent=rir_dir, rir_lists=rir_lists,
-                rir_scale_factor = (0.5, 1.0),
-                gain_scaling_factor = (-20, 6),
+                rir_scale_factor = (0.01, 0.5),
+                # gain_scaling_factor = (-20, 6),
                 p=0.1
             ),
             Gain(min_gain_in_db=-6, max_gain_in_db=6, p=0.1),  # Mild gain changes only occasionally
