@@ -56,6 +56,12 @@ def parse_args():
         help="Probability of switching language between two consecutive turns in a conversation",
     )
     p.add_argument(
+        "--first_language",
+        nargs="+",
+        default=["fr", "en"],
+        help="Restrict the language(s) allowed for the first turn of a new conversation",
+    )
+    p.add_argument(
         "--verbose",
         action="store_true",
         help="Print each generated conversation turn by turn (long text is truncated to 150 chars)",
@@ -79,24 +85,28 @@ _LANG_CODES = ("en", "fr", "es", "it", "de", "pt", "nl", "ar")
 
 
 def _infer_lang_from_path(path):
-    """Return a language code if a `/<code>/` segment is found in *path*, else None."""
-    parts = path.split("/")
-    for code in _LANG_CODES:
-        if code in parts:
-            return code
+    """Return a language code if a `/<code>/` segment is found in *path*, else None.
+
+    Iterates path segments from leaf to root, so a language code closer to the
+    file name takes precedence over one higher up the directory tree.
+    """
+    codes = set(_LANG_CODES)
+    for part in reversed(path.split("/")):
+        if part in codes:
+            return part
     return None
 
 
 def compute_manifest_probs(yaml_path, data_root):
-    """Parse YAML and return a list of (manifest_path, probability, lang, task).
+    """Parse YAML and return a list of (manifest_path, probability, langs, task).
 
     Weights are normalised among siblings at each level, then multiplied down
     the hierarchy to give a probability per leaf manifest. All probabilities
-    sum to 1. *lang* is taken from the nearest ancestor's ``tags.lang``; if
-    absent but both ``tags.source_lang`` and ``tags.target_lang`` are set
-    (e.g. AST), they are combined as ``"<src>-<tgt>"``. *task* comes from the
-    nearest ancestor's ``tags.task``. Raises if any leaf has no language
-    assigned after those rules and a path-based fallback.
+    sum to 1. *langs* is a tuple of language codes: a single element for
+    monolingual manifests, or both ``(source_lang, target_lang)`` for AST
+    manifests (one of them is randomly chosen at sample time). *task* comes
+    from the nearest ancestor's ``tags.task``. Raises if any leaf has no
+    language assigned after those rules and a path-based fallback.
     """
     with open(yaml_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -121,12 +131,14 @@ def compute_manifest_probs(yaml_path, data_root):
             if tags.get("lang"):
                 node_lang = tags["lang"]
             elif tags.get("source_lang") and tags.get("target_lang"):
-                node_lang = f"{tags['source_lang']}-{tags['target_lang']}"
+                node_lang = (tags["source_lang"], tags["target_lang"])
             else:
                 node_lang = lang
             node_task = tags.get("task") or task
             if w == 1.0 and len(weights) > 1:
-                print(f"WARNING: missing weight for node with manifest {node.get('manifest_filepath', '[no manifest]')} (treating as 1.0)")
+                print(
+                    f"WARNING: missing weight for node with manifest {node.get('manifest_filepath', '[no manifest]')} (treating as 1.0)"
+                )
             p_here = prob_prefix * (w / total)
             if "manifest_filepath" in node:
                 path = node["manifest_filepath"]
@@ -135,17 +147,21 @@ def compute_manifest_probs(yaml_path, data_root):
                 node_lang_check = _infer_lang_from_path(path)
                 if not node_lang:
                     node_lang = node_lang_check
-                elif node_lang_check and node_lang_check != node_lang:
-                    print(
+                elif isinstance(node_lang, str) and node_lang_check and node_lang_check != node_lang:
+                    raise RuntimeError(
                         f"WARNING: inferred language {node_lang_check} from path {path} "
                         f"does not match node language {node_lang}"
                     )
-                if not node_lang or not isinstance(node_lang, str):
+                if isinstance(node_lang, str):
+                    langs_tuple = (node_lang,)
+                elif isinstance(node_lang, tuple) and node_lang and all(isinstance(x, str) and x for x in node_lang):
+                    langs_tuple = node_lang
+                else:
                     raise ValueError(
                         f"Manifest has no language (lang/source_lang tag) in any ancestor "
                         f"and none could be inferred from the path: {path}"
                     )
-                manifests.append((path, p_here, node_lang, node_task))
+                manifests.append((path, p_here, langs_tuple, node_task))
             elif "input_cfg" in node:
                 _recurse(node["input_cfg"], p_here, node_lang, node_task)
             else:
@@ -230,7 +246,7 @@ def validate_conversation(sub_conv, manifest_path):
         frm = t.get("from")
         if frm not in ("User", "Assistant"):
             raise ValueError(
-                f"Turn {i} has invalid 'from'={frm!r}; expected 'User' or 'Assistant' " f"(manifest: {manifest_path})"
+                f"Turn {i} has invalid 'from'={frm!r}; expected 'User' or 'Assistant' (manifest: {manifest_path})"
             )
     n_assist = sum(1 for t in sub_conv if t["from"] == "Assistant")
     if n_assist == 0:
@@ -278,20 +294,28 @@ def main():
     probs = [m[1] for m in manifests]
     langs = [m[2] for m in manifests]
     tasks = [m[3] for m in manifests]
-    all_langs = sorted(set(langs))
+    all_langs = sorted({lg for tup in langs for lg in tup})
     all_tasks = sorted({t for t in tasks if t})
-    print(
-        f"Loaded {len(paths)} manifests from {args.yaml} "
-        f"(languages: {all_langs}, tasks: {all_tasks})"
-    )
+    print(f"Loaded {len(paths)} manifests from {args.yaml} (languages: {all_langs}, tasks: {all_tasks})")
 
     same_lang_dist = {}
     other_lang_dist = {}
     for lg in all_langs:
-        same_idxs = [i for i, li in enumerate(langs) if li == lg]
-        other_idxs = [i for i, li in enumerate(langs) if li != lg]
+        same_idxs = [i for i, tup in enumerate(langs) if lg in tup]
+        other_idxs = [i for i, tup in enumerate(langs) if lg not in tup]
         same_lang_dist[lg] = (same_idxs, [probs[i] for i in same_idxs])
         other_lang_dist[lg] = (other_idxs, [probs[i] for i in other_idxs])
+
+    first_lang_set = set(args.first_language)
+    unknown = first_lang_set - set(all_langs)
+    if unknown:
+        raise ValueError(
+            f"--first_language contains language(s) not present in the YAML: {sorted(unknown)} (available: {all_langs})"
+        )
+    first_lang_idxs = [i for i, tup in enumerate(langs) if any(lg in first_lang_set for lg in tup)]
+    if not first_lang_idxs:
+        raise ValueError(f"No manifest matches --first_language={args.first_language}")
+    first_lang_probs = [probs[i] for i in first_lang_idxs]
 
     n_vals, n_probs = truncated_geom_pmf(p=0.1, n_min=2, n_max=args.max_num_turns)
 
@@ -299,6 +323,7 @@ def main():
     turn_counts = []
     durations = []
     n_restarts = 0
+    n_skipped_only_asr_ast = 0
     n_attempts = 0
 
     out_path = Path(args.output_file)
@@ -318,12 +343,17 @@ def main():
             conv_assist_count = 0
             exceeded = False
             current_lang = None
+            current_langs = None
             current_task = None
+            conv_tasks = set()
+            verbose_lines = []
             while conv_assist_count < target_n:
                 pbar.set_postfix_str(f"collecting turn {min(conv_assist_count + 1, target_n)}/{target_n}")
                 n_attempts += 1
-                # sample manifest (conditioned on current_lang for turns 2+)
-                if current_lang is None or not same_lang_dist.get(current_lang, ([], []))[0]:
+                # sample manifest (first turn uses --first_language; turns 2+ are conditioned on current_lang)
+                if current_lang is None:
+                    sel_idx = random.choices(first_lang_idxs, weights=first_lang_probs, k=1)[0]
+                elif not same_lang_dist.get(current_lang, ([], []))[0]:
                     sel_idx = random.choices(range(len(paths)), weights=probs, k=1)[0]
                 else:
                     switch = random.random() < args.proba_lang_switch
@@ -332,7 +362,14 @@ def main():
                         pool_idxs, pool_probs = same_lang_dist[current_lang]
                     sel_idx = random.choices(pool_idxs, weights=pool_probs, k=1)[0]
                 mpath = paths[sel_idx]
-                sel_lang = langs[sel_idx]
+                sel_langs = langs[sel_idx]
+                sel_lang_options = sel_langs
+                # for the first turn, restrict AST source/target to languages in --first_language
+                if current_lang is None:
+                    allowed = [lg for lg in sel_lang_options if lg in first_lang_set]
+                    if allowed:
+                        sel_lang_options = tuple(allowed)
+                sel_lang = sel_lang_options[0] if len(sel_lang_options) == 1 else random.choice(sel_lang_options)
                 sel_task = tasks[sel_idx]
                 # sample random line and validate
                 line, line_no = read_random_line(mpath, cache, max_lines=args.max_lines_per_jsonl)
@@ -348,17 +385,18 @@ def main():
                 # drop redundant user text instructions
                 skipped_instructions = []
                 if args.proba_avoid_instruct_repetition > 0:
-                    strip_all_text = (
-                        sel_task in ("asr", "ast") and sel_task == current_task and sel_lang == current_lang
-                    )
+                    if sel_task == "ast":
+                        # for AST, the (source, target) pair must match the previous AST turn
+                        same_lang_ctx = current_langs is not None and tuple(sel_langs) == tuple(current_langs)
+                    else:
+                        same_lang_ctx = sel_lang == current_lang
+                    strip_all_text = sel_task in ("asr", "ast") and sel_task == current_task and same_lang_ctx
                     kept = []
                     for t in sub_conv:
                         is_instruction = (
                             t.get("from") == "User"
                             and t.get("type") == "text"
-                            and (
-                                strip_all_text or t.get("value") == "Listen to the audio and answer the question."
-                            )
+                            and (strip_all_text or t.get("value") == "Listen to the audio and answer the question.")
                         )
                         if is_instruction and random.random() < args.proba_avoid_instruct_repetition:
                             if args.verbose:
@@ -373,28 +411,37 @@ def main():
                 d = audio_user_duration(sub_conv)
                 # reject if total would exceed max_duration
                 if sum(durs) + d > args.max_duration:
-                    if args.verbose:
-                        pbar.write("[give up conversation because max_duration was exceeded]")
                     exceeded = True
                     break
                 if args.verbose:
                     if current_lang is not None and sel_lang != current_lang:
-                        pbar.write("[language switch]")
+                        verbose_lines.append("[language switch]")
                     dataset_name = Path(mpath).parent.name
-                    pbar.write(f"📜 {dataset_name} (task={sel_task}, lang={sel_lang})")
+                    verbose_lines.append(f"📜 {dataset_name} (task={sel_task}, lang={sel_lang})")
                     for instr in skipped_instructions:
-                        pbar.write(f"[skip instruction {{{instr}}}]")
+                        verbose_lines.append(f"[skip instruction {{{instr}}}]")
                     for t in sub_conv:
-                        pbar.write(f"— {_format_turn(t)}")
+                        verbose_lines.append(f"— {_format_turn(t)}")
                 conv.extend(sub_conv)
                 ids.append(turn_id)
                 durs.append(d)
                 conv_assist_count += n_assist
+                conv_tasks.add(sel_task)
                 current_lang = sel_lang
+                current_langs = sel_langs
                 current_task = sel_task
 
             if exceeded:
+                if args.verbose:
+                    pbar.write("[skipped a conversation because max_duration was exceeded]")
                 n_restarts += 1
+                continue
+
+            # skip conversations that only involve asr and/or ast
+            if conv_tasks and conv_tasks.issubset({"asr", "ast"}):
+                if args.verbose:
+                    pbar.write(f"[skipped a conversation because only {sorted(conv_tasks)} tasks]")
+                n_skipped_only_asr_ast += 1
                 continue
 
             # write and move on
@@ -405,6 +452,8 @@ def main():
             durations.append(sum(durs))
             pbar.update(1)
             if args.verbose:
+                for line in verbose_lines:
+                    pbar.write(line)
                 pbar.write("═" * 80)
 
     pbar.close()
@@ -419,6 +468,7 @@ def main():
     print(f"  min / max turns                    : {min(turn_counts)} / {max(turn_counts)}")
     print(f"  total sample draws                 : {n_attempts}")
     print(f"  restarts (over max_duration)       : {n_restarts}")
+    print(f"  skipped (only asr/ast tasks)       : {n_skipped_only_asr_ast}")
 
 
 if __name__ == "__main__":
