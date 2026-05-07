@@ -1,12 +1,12 @@
 # ============================================================
-# ASR — 45%
+# ASR — 35%
 # ============================================================
 - type: group
-  weight: 0.45
-  tags: {pnc: yes, task: asr}
+  weight: 0.35
+  tags: {task: asr}
   input_cfg:
 
-    # FR — 30% of ASR (0.45 × 0.30 = 0.135)
+    # FR — 32% of ASR
     - type: group
       weight: 0.32
       tags: {lang: fr}
@@ -70,7 +70,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
 
-    # EN — 30% of ASR (0.45 × 0.30 = 0.135)
+    # EN — 32% of ASR
     - type: group
       weight: 0.32
       tags: {lang: en}
@@ -86,7 +86,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/VoxPopuli/train.jsonl # max_dur=42.36
 
-    # DE — 8% of ASR
+    # DE — 9% of ASR
     - type: group
       weight: 0.09
       tags: {lang: de}
@@ -102,7 +102,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/VoxPopuli/train.jsonl
 
-    # ES — 8% of ASR
+    # ES — 9% of ASR
     - type: group
       weight: 0.09
       tags: {lang: es}
@@ -118,7 +118,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/VoxPopuli/train.jsonl
 
-    # IT — 8% of ASR
+    # IT — 7% of ASR
     - type: group
       weight: 0.07
       tags: {lang: it}
@@ -134,7 +134,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train.jsonl
 
-    # NL — 8% of ASR
+    # NL — 6% of ASR
     - type: group
       weight: 0.06
       tags: {lang: nl}
@@ -148,7 +148,7 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/VoxPopuli/train.jsonl
 
-    # PT — 8% of ASR
+    # PT — 5% of ASR
     - type: group
       weight: 0.05
       tags: {lang: pt}
@@ -163,11 +163,11 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
 
 # ============================================================
-# AST — 15%
+# AST — 14%
 # ============================================================
 - type: group
-  tags: {pnc: yes, task: ast}
-  weight: 0.15
+  tags: {task: ast}
+  weight: 0.14
   input_cfg:
     # AST EN→X
     - type: multimodal_conversation
@@ -269,11 +269,11 @@
       tags: {source_lang: pt, target_lang: en}
 
 # ============================================================
-# QA — 25%
+# QA — 30%
 # ============================================================
 - type: group
-  tags: {pnc: yes, task: qa}
-  weight: 0.25
+  tags: {task: qa}
+  weight: 0.3
   input_cfg:
     # EN QA
     - type: group
@@ -332,74 +332,86 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
 
 # ============================================================
-# AQA — 10%
+# AQA — 15%
 # ============================================================
 - type: group
-  tags: {pnc: yes, task: aqa}
-  weight: 0.10
+  tags: {task: aqa}
+  weight: 0.15
   input_cfg:
-    # EN AQA
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
-      tags: {sub_task: aqa}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
-      tags: {sub_task: aqa}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
-      tags: {sub_task: aqa}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
-      tags: {sub_task: aqa}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
-      tags: {sub_task: audio_captioning}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
-      tags: {sub_task: audio_captioning}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
-      tags: {sub_task: audio_captioning}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
-      tags: {sub_task: music_captioning}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
-      tags: {sub_task: music_captioning}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
-      tags: {sub_task: mqa} 
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
-      tags: {sub_task: mqa}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/FMA_GenreQA/train.jsonl
-      tags: {sub_task: mqa}
-    # NVidia - AF-Think AQA datasets
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/af_cot_train/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/not_af_cot_train/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/af_cot_train_fma/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/musiccaps/train.jsonl
-    # Nvidia - AudioSkils AQA datasets
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/combined_small_ds/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/combined_small_ds/train.jsonl
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/fma/train.jsonl
+    - type: group
+      weight: 0.5
+      tags: {task: sound}
+      input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
+        tags: {sub_task: audio_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption2FR/train.jsonl
+        tags: {sub_task: audio_captioning}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/af_cot_train/train.jsonl
+      #   tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/not_af_cot_train/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
+        tags: {sub_task: aqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
+        tags: {sub_task: aqa}
+    - type: group
+      weight: 0.5
+      tags: {task: music}
+      input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
+        tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
+        tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/FMA_GenreQA/train.jsonl
+        tags: {sub_task: mqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/af_cot_train_fma/train.jsonl
+      #   tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/musiccaps/train.jsonl
+        tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+        tags: {sub_task: mqa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/fma/train.jsonl
+        tags: {sub_task: mqa}
+
 # ============================================================
 # OTHER — 5%
-# ============================================================  
+# ============================================================
 - type: group
-  tags: {pnc: yes, task: other}
+  tags: {task: other}
   weight: 0.05
   input_cfg:
     - type: group
@@ -424,6 +436,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
           tags: {sub_task: Emotion recognition}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+          tags: {sub_task: Voice description}
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl
           tags: {sub_task: Sentence Stress Detection}
@@ -496,6 +511,11 @@
           tags: {sub_task: Sentence Stress Detection}
 
 # ============================================================
-# Summary: ASR=45% | AST=15% | QA=30% | AQA=5% | OTHER=5%
-# Within ASR: FR=30% | EN=30% | AR+DE+ES+IT+NL+PT=6.7% each
+# MISC MULTITURN CONVERSATIONS — 1%
 # ============================================================
+- type: group
+  tags: {task: misc, lang: misc}
+  weight: 0.01
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train.jsonl
