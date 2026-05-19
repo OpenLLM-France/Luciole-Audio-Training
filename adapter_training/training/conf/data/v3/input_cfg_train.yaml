@@ -367,9 +367,6 @@
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
       # - type: multimodal_conversation
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
-      # - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/train.jsonl
-        tags: {sub_task: voice_captioning}
     - type: group
       weight: 0.5
       tags: {task: music}
@@ -432,9 +429,6 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
           tags: {sub_task: Emotion recognition}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
-          tags: {sub_task: Voice description}
-        - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl
           tags: {sub_task: Sentence Stress Detection}
         - type: multimodal_conversation
@@ -470,6 +464,12 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
           tags: {sub_task: Formatted Timestamped Transcription}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/train.jsonl
+          tags: {sub_task: voice_captioning}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+          tags: {sub_task: voice_captioning}
     - type: group
       tags: {lang: fr}
       weight: 0.4
