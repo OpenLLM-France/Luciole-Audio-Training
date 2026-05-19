@@ -302,20 +302,20 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
-        # Nvidia - LongAudio QA datasets
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/daily_talk/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/iemocap/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/librispeech/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/meld/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/multidialogue/train.jsonl
-        # Nvidia - AF-Think QA datasets
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/AF-Think/meld/train.jsonl
+        # # Nvidia - LongAudio QA datasets
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/daily_talk/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/iemocap/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/librispeech/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/meld/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/multidialogue/train.jsonl
+        # # Nvidia - AF-Think QA datasets
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/AF-Think/meld/train.jsonl
         
     # FR QA
     - type: group
@@ -340,20 +340,16 @@
   input_cfg:
     - type: group
       weight: 0.5
-      tags: {task: sound}
+      tags: {task: sound, sub_task: aqa}
       input_cfg:
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
-        tags: {sub_task: aqa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
-        tags: {sub_task: aqa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
-        tags: {sub_task: aqa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
-        tags: {sub_task: aqa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
         tags: {sub_task: audio_captioning}
@@ -363,18 +359,17 @@
       # - type: multimodal_conversation
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/af_cot_train/train.jsonl
       #   tags: {sub_task: aqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/not_af_cot_train/train.jsonl
-        tags: {sub_task: aqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/combined_small_ds/train.jsonl
-        tags: {sub_task: aqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
-        tags: {sub_task: aqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
-        tags: {sub_task: aqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/not_af_cot_train/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
+      # - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/train.jsonl
+        tags: {sub_task: voice_captioning}
     - type: group
       weight: 0.5
       tags: {task: music}
@@ -397,15 +392,15 @@
       # - type: multimodal_conversation
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/af_cot_train_fma/train.jsonl
       #   tags: {sub_task: mqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/musiccaps/train.jsonl
-        tags: {sub_task: mqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/combined_small_ds/train.jsonl
-        tags: {sub_task: mqa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/fma/train.jsonl
-        tags: {sub_task: mqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/musiccaps/train.jsonl
+      #   tags: {sub_task: mqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+      #   tags: {sub_task: mqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/fma/train.jsonl
+      #   tags: {sub_task: mqa}
 
 # ============================================================
 # OTHER — 5%
