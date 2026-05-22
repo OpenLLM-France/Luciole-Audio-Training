@@ -159,9 +159,9 @@ if __name__ == "__main__":
             ),
             config=config,
             records_per_chunk=5000,
-            checkpoints_local_dir=f"{output_path}/checkpoints",
+            checkpoints_local_dir=f"{output_path}/checkpoints/{dataset_name}",
             output_writer=JsonlWriter(
-                f"{output_path}/data",
+                f"{output_path}/data/{dataset_name}",
                 output_filename="${rank}_chunk_${chunk_index}.jsonl",
             ),
         ),
@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     inference_executor = LocalPipelineExecutor(
         pipeline=pipeline,
-        logging_dir=f"{output_path}/logs",
+        logging_dir=f"{output_path}/logs/{dataset_name}",
         tasks=1,
         skip_completed=False,
     )
@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
     pipeline = [
         JsonlReader(
-            f"{output_path}/data",
+            f"{output_path}/data/{dataset_name}",
         ),
         LambdaFilter(filter_data),
         fix_data,
@@ -241,11 +241,40 @@ if __name__ == "__main__":
 
     post_process = LocalPipelineExecutor(
         pipeline=pipeline,
-        logging_dir=f"{output_path}/logs_cleaned",
+        logging_dir=f"{output_path}/logs_cleaned/{dataset_name}",
         tasks=1,
         skip_completed=False,
         depends=inference_executor,
     )
     post_process.run()
-    with open(os.path.join(args.output_dir, "completed.txt"), "w") as f:
+
+    def count_jsonl_lines(path: Path) -> int:
+        if path.is_file():
+            files = [path]
+        else:
+            files = list(path.rglob("*.jsonl"))
+        total = 0
+        for f in files:
+            with open(f, "r") as fh:
+                total += sum(1 for _ in fh)
+        return total
+
+    input_lines = count_jsonl_lines(Path(args.data_path))
+    output_lines = count_jsonl_lines(Path(f"{output_path}/data_cleaned/{dataset_name}"))
+    if args.debug:
+        input_lines = min(input_lines, 10)
+
+    if output_lines > input_lines:
+        raise ValueError(
+            f"Output line count ({output_lines}) exceeds input line count ({input_lines})."
+        )
+    elif output_lines < input_lines:
+        print(
+            f"WARNING: output line count ({output_lines}) is smaller than input line count "
+            f"({input_lines}). Some rows may have been filtered out during generation."
+        )
+    else:
+        print(f"Output line count matches input line count ({input_lines}).")
+
+    with open(output_path / f"completed_{dataset_name}.txt", "w") as f:
         pass
