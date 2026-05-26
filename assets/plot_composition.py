@@ -7,11 +7,11 @@ computing data-driven weights from scratch.
 
 Outputs
 -------
-  [prefix]overall_<metric>.png              — before/after resampling side-by-side donuts (all tasks)
-  [prefix]subtasks_<task>_<metric>.png      — subtask breakdown within each task
-  [prefix]datasets_<task>[_<subtask>]_<metric>.png   — dataset breakdown within each (sub)task
-  [prefix]languages_<task>[_<subtask>]_<metric>.png  — language breakdown within each (sub)task
-  [prefix]length_distrib.png                — instruction / response word-count histograms
+  [prefix]overall_<metric>.png                         — before/after resampling side-by-side donuts (all tasks)
+  [prefix]subtasks/[prefix]subtasks_<task>_<metric>.png            — subtask breakdown within each task
+  [prefix]datasets/[prefix]datasets_<task>[_<subtask>]_<metric>.png   — dataset breakdown within each (sub)task
+  [prefix]languages/[prefix]languages_<task>[_<subtask>]_<metric>.png — language breakdown within each (sub)task
+  [prefix]length_distrib.png                           — instruction / response word-count histograms
 
 Usage
 -----
@@ -598,7 +598,13 @@ def plot_composition(
         title += f"\nColor = language  |  Hatch = {title_hatch_label}"
         fig.suptitle(title, fontsize=17, fontweight="bold", y=1.00)
 
-    out_path = out / f"{prefix}{filename_base}_{metric}.png"
+    category = filename_base.split("_", 1)[0]
+    if category in ("subtasks", "datasets", "languages"):
+        subdir = out / f"{prefix}{category}"
+        subdir.mkdir(parents=True, exist_ok=True)
+        out_path = subdir / f"{prefix}{filename_base}_{metric}.png"
+    else:
+        out_path = out / f"{prefix}{filename_base}_{metric}.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0)
     plt.close(fig)
     print(f"  ✓  {out_path}")
