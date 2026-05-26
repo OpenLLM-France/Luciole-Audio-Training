@@ -517,6 +517,26 @@ def main():
             if n_dropped:
                 print(f"   Dropping {n_dropped} existing row(s) with no language (will recompute).")
             existing_df = existing_df[valid_mask].reset_index(drop=True)
+
+        # Refresh task_type / sub_task from the YAML for already-computed rows
+        task_map = {key[8]: (key[3] or "") for key, _p, _e in all_tasks}
+        sub_map = {key[8]: (key[4] or "") for key, _p, _e in all_tasks}
+        if "task_type" not in existing_df.columns:
+            existing_df["task_type"] = ""
+        if "sub_task" not in existing_df.columns:
+            existing_df["sub_task"] = ""
+        new_task = existing_df["raw_manifest_path"].map(task_map)
+        new_sub = existing_df["raw_manifest_path"].map(sub_map)
+        has_yaml = new_task.notna()
+        old_task = existing_df["task_type"].fillna("").astype(str)
+        old_sub = existing_df["sub_task"].fillna("").astype(str)
+        diff_mask = has_yaml & ((new_task.fillna("") != old_task) | (new_sub.fillna("") != old_sub))
+        n_meta_updated = int(diff_mask.sum())
+        if n_meta_updated:
+            existing_df.loc[diff_mask, "task_type"] = new_task[diff_mask]
+            existing_df.loc[diff_mask, "sub_task"] = new_sub[diff_mask]
+            print(f"   Refreshed task_type/sub_task on {n_meta_updated} existing row(s) from YAML.")
+
         existing_paths = set(existing_df["raw_manifest_path"].dropna())
         print(f"\n   Existing CSV: {csv_path} ({len(existing_df)} rows)")
 
