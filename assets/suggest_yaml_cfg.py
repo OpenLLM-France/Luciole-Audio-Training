@@ -27,7 +27,11 @@ import pandas as pd
 import yaml
 
 from analyze_yaml_cfg import (
-    _EPSILON, _lang_key, fmt_hours, fmt_num, print_summary,
+    _EPSILON,
+    _lang_key,
+    fmt_hours,
+    fmt_num,
+    print_summary,
 )
 
 warnings.filterwarnings("ignore")
@@ -39,16 +43,29 @@ _TEMPERATURE = 2.0
 # Input weight parsing
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def parse_input_weights(yaml_path: str) -> tuple:
     """
-    Parse a NeMo YAML and extract the hierarchical weights.
+    Walk the YAML hierarchy fully and compute per-(task, lang) target
+    probabilities. At each level, sibling weights are normalised to sum to 1
+    and the cumulative product is taken down to each leaf manifest. Each leaf
+    is then bucketed by its LEAF-resolved (task, lang) tags (with overrides
+    applied).
+
+    This correctly handles:
+      - Duplicate (task, lang) sub-groups at intermediate levels — their
+        contributions are summed.
+      - Task or language overrides at the leaf level — the leaf's *resolved*
+        task/lang determines its destination bucket.
 
     Returns
     -------
     task_weights : dict[str, float]
-        {task_name: weight} as written in the YAML (not normalised).
+        {task_name: cumulative_probability}, summing to ~1.0 across all tasks
+        whose leaves appear in the YAML.
     lang_weights : dict[tuple[str, str], float]
-        {(task_name, lang_key): weight} for language sub-groups.
+        {(task_name, lang_key): cumulative_probability}. Within a task, these
+        sum to that task's total probability.
     """
     with open(yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -67,31 +84,37 @@ def parse_input_weights(yaml_path: str) -> tuple:
                     f"Add a space after the colon: '{k}: <value>' instead of '{k}<value>'"
                 )
 
-    for top in cfg.get("input_cfg", []):
-        if not isinstance(top, dict) or top.get("type") != "group":
-            continue
-        tags = top.get("tags", {}) or {}
-        _validate_tags(tags)
-        task = tags.get("task", "")
-        if not task:
-            continue
-        task_weights[task] = float(top.get("weight", 1.0) or 1.0)
+    def walk(nodes, prefix_prob, task, lang, src_lang, tgt_lang, ctx=""):
+        if not nodes:
+            return
+        weights = [float(n.get("weight", 1.0) or 1.0) if isinstance(n, dict) else 1.0 for n in nodes]
+        total = sum(weights) or 1.0
+        for node, w in zip(nodes, weights):
+            if not isinstance(node, dict):
+                continue
+            tags = node.get("tags") or {}
+            if isinstance(tags, str):
+                tags = {}
+            _validate_tags(tags, context=ctx)
+            t2 = tags.get("task", task)
+            l2 = tags.get("lang", lang)
+            s2 = tags.get("source_lang", src_lang)
+            tg2 = tags.get("target_lang", tgt_lang)
+            p = prefix_prob * (w / total)
+            if node.get("type") == "multimodal_conversation":
+                if t2 == "ast" and s2 and tg2:
+                    lkey = f"{s2}→{tg2}"
+                elif l2:
+                    lkey = l2
+                else:
+                    lkey = "unknown"
+                if t2:
+                    task_weights[t2] = task_weights.get(t2, 0.0) + p
+                    lang_weights[(t2, lkey)] = lang_weights.get((t2, lkey), 0.0) + p
+            elif node.get("input_cfg"):
+                walk(node["input_cfg"], p, t2, l2, s2, tg2, ctx=f" in task '{t2}'")
 
-        for child in top.get("input_cfg", []):
-            if not isinstance(child, dict) or child.get("type") != "group":
-                continue
-            ctags = child.get("tags", {}) or {}
-            _validate_tags(ctags, context=f" in task '{task}'")
-            lang = ctags.get("lang", "")
-            src  = ctags.get("source_lang", "")
-            tgt  = ctags.get("target_lang", "")
-            if src and tgt:
-                lkey = f"{src}→{tgt}"
-            elif lang:
-                lkey = lang
-            else:
-                continue
-            lang_weights[(task, lkey)] = float(child.get("weight", 1.0) or 1.0)
+    walk(cfg.get("input_cfg", []), 1.0, "", "", "", "")
 
     return task_weights, lang_weights
 
@@ -122,14 +145,17 @@ def parse_yaml_manifests(yaml_path: str) -> set:
 # Weight engine
 # ──────────────────────────────────────────────────────────────────────────────
 
-def compute_weights(df: pd.DataFrame,
-                    metric: str = "duration",
-                    temperature: float = _TEMPERATURE,
-                    min_weight: float = 0.0,
-                    max_passes: float = 0.0,
-                    input_task_w: dict = None,
-                    input_lang_w: dict = None,
-                    input_weights_mode: str = "hard") -> pd.DataFrame:
+
+def compute_weights(
+    df: pd.DataFrame,
+    metric: str = "duration",
+    temperature: float = _TEMPERATURE,
+    min_weight: float = 0.0,
+    max_passes: float = 0.0,
+    input_task_w: dict = None,
+    input_lang_w: dict = None,
+    input_weights_mode: str = "hard",
+) -> pd.DataFrame:
     """
     Three-level data-driven weights:
       L1 — task weight      (global)
@@ -156,13 +182,10 @@ def compute_weights(df: pd.DataFrame,
             val = row.get("num_samples")
             col = "num_samples"
         if val is None or (isinstance(val, float) and math.isnan(val)) or float(val) <= 0:
-            raise ValueError(
-                f"Dataset '{row.get('dataset_name', '?')}': "
-                f"invalid {col}={val!r} (metric={metric})"
-            )
+            raise ValueError(f"Dataset '{row.get('dataset_name', '?')}': invalid {col}={val!r} (metric={metric})")
         return float(val)
 
-    df["_size"]  = df.apply(_size, axis=1)
+    df["_size"] = df.apply(_size, axis=1)
     df["_score"] = df["_size"].apply(lambda x: x ** (1.0 / temperature))
 
     # When metric is duration, convert from duration-proportional scores to
@@ -175,10 +198,12 @@ def compute_weights(df: pd.DataFrame,
 
     # ── weighting mode: fold YAML weights into scores before computing levels
     if input_weights_mode == "weighting" and (input_task_w or input_lang_w):
+
         def _yaml_mult(row):
             tw = (input_task_w or {}).get(row["task_type"], 1.0)
             lw = (input_lang_w or {}).get((row["task_type"], row["_lkey"]), 1.0)
             return tw * lw
+
         df["_score"] = df["_score"] * df.apply(_yaml_mult, axis=1)
 
     # L3
@@ -186,8 +211,7 @@ def compute_weights(df: pd.DataFrame,
     df["dataset_w"] = df["_score"] / gs.replace(0, _EPSILON)
 
     # L2
-    tl = (df.groupby(["task_type", "_lkey"])["_score"].sum()
-            .reset_index(name="group_score"))
+    tl = df.groupby(["task_type", "_lkey"])["_score"].sum().reset_index(name="group_score")
     ts = tl.groupby("task_type")["group_score"].transform("sum")
     tl["lang_w"] = tl["group_score"] / ts.replace(0, _EPSILON)
 
@@ -200,12 +224,11 @@ def compute_weights(df: pd.DataFrame,
     if input_weights_mode in ("hard", "soft") and (input_task_w or input_lang_w):
         _apply_input_weights(ta, tl, input_task_w, input_lang_w, input_weights_mode)
 
-    tl = tl.merge(ta[["task_type","task_w"]], on="task_type", how="left")
+    tl = tl.merge(ta[["task_type", "task_w"]], on="task_type", how="left")
 
-    df = df.merge(tl[["task_type","_lkey","lang_w","task_w"]],
-                  on=["task_type","_lkey"], how="left")
+    df = df.merge(tl[["task_type", "_lkey", "lang_w", "task_w"]], on=["task_type", "_lkey"], how="left")
 
-    df["effective_prob"]     = df["task_w"] * df["lang_w"] * df["dataset_w"]
+    df["effective_prob"] = df["task_w"] * df["lang_w"] * df["dataset_w"]
     df["effective_prob_pct"] = df["effective_prob"] * 100.0
 
     if min_weight > 0:
@@ -219,9 +242,7 @@ def compute_weights(df: pd.DataFrame,
     if max_passes > 0:
         df = _cap_passes(df, total_n, max_passes)
 
-    df["expected_passes"] = (
-        (df["effective_prob"] * total_n) / df["num_samples"].clip(lower=1)
-    ).round(2)
+    df["expected_passes"] = ((df["effective_prob"] * total_n) / df["num_samples"].clip(lower=1)).round(2)
 
     return df
 
@@ -315,26 +336,25 @@ def _apply_input_weights(ta, tl, input_task_w, input_lang_w, mode):
 # YAML writer
 # ──────────────────────────────────────────────────────────────────────────────
 
-def write_yaml(df: pd.DataFrame,
-               metric: str,
-               temperature: float,
-               output_path: Path) -> None:
+
+def write_yaml(df: pd.DataFrame, metric: str, temperature: float, output_path: Path) -> None:
     """Write a NeMo-compatible input_cfg YAML from the weighted DataFrame."""
 
-    tl = (df.groupby(["task_type","_lkey"])
-            .agg(
-                total_dur_h   = ("total_duration_sec", lambda x: x.sum(skipna=True)/3600),
-                total_samples = ("num_samples",        "sum"),
-                lang_w        = ("lang_w",             "first"),
-                task_w        = ("task_w",             "first"),
-            )
-            .reset_index()
-            .sort_values(["task_w","lang_w"], ascending=[False, False]))
+    tl = (
+        df.groupby(["task_type", "_lkey"])
+        .agg(
+            total_dur_h=("total_duration_sec", lambda x: x.sum(skipna=True) / 3600),
+            total_samples=("num_samples", "sum"),
+            lang_w=("lang_w", "first"),
+            task_w=("task_w", "first"),
+        )
+        .reset_index()
+        .sort_values(["task_w", "lang_w"], ascending=[False, False])
+    )
 
-    task_agg = (df.groupby("task_type")
-                  .agg(task_w=("task_w","first"))
-                  .reset_index()
-                  .sort_values("task_w", ascending=False))
+    task_agg = (
+        df.groupby("task_type").agg(task_w=("task_w", "first")).reset_index().sort_values("task_w", ascending=False)
+    )
 
     def size_label(dur_h, n_samples):
         return f"{fmt_hours(dur_h * 3600)}, {fmt_num(n_samples)} samples"
@@ -343,10 +363,10 @@ def write_yaml(df: pd.DataFrame,
 
     for _, tr in task_agg.iterrows():
         task = tr["task_type"]
-        tw   = tr["task_w"]
+        tw = tr["task_w"]
         t_sub = tl[tl["task_type"] == task]
-        t_h   = t_sub["total_dur_h"].sum()
-        t_n   = t_sub["total_samples"].sum()
+        t_h = t_sub["total_dur_h"].sum()
+        t_n = t_sub["total_samples"].sum()
 
         lines += [
             f"- type: group",
@@ -356,10 +376,10 @@ def write_yaml(df: pd.DataFrame,
         ]
 
         for _, lr in t_sub.iterrows():
-            lang  = lr["_lkey"]
-            lw    = lr["lang_w"]
-            l_h   = lr["total_dur_h"]
-            l_n   = lr["total_samples"]
+            lang = lr["_lkey"]
+            lw = lr["lang_w"]
+            l_h = lr["total_dur_h"]
+            l_n = lr["total_samples"]
 
             if task == "ast" and "→" in lang:
                 src, tgt = lang.split("→", 1)
@@ -374,13 +394,12 @@ def write_yaml(df: pd.DataFrame,
                 f"      input_cfg:",
             ]
 
-            ds_sub = (df[(df["task_type"] == task) & (df["_lkey"] == lang)]
-                      .sort_values("dataset_w", ascending=False))
+            ds_sub = df[(df["task_type"] == task) & (df["_lkey"] == lang)].sort_values("dataset_w", ascending=False)
 
             for _, dr in ds_sub.iterrows():
-                dw     = dr["dataset_w"]
-                d_h    = (dr.get("total_duration_sec", 0) or 0) / 3600
-                d_n    = dr.get("num_samples", 0) or 0
+                dw = dr["dataset_w"]
+                d_h = (dr.get("total_duration_sec", 0) or 0) / 3600
+                d_n = dr.get("num_samples", 0) or 0
                 d_size = size_label(d_h, d_n)
                 m_path = dr.get("raw_manifest_path", "<path>")
 
@@ -407,37 +426,58 @@ def write_yaml(df: pd.DataFrame,
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="metadata CSV → suggested NeMo sampling YAML.")
-    parser.add_argument("csv_path",
-                        help="metadata.csv produced by generate_csv.py")
-    parser.add_argument("--output",      default=None,
-                        help="Output YAML path. If omitted, only print the summary.")
-    parser.add_argument("--metric",      default="duration",
-                        choices=["duration","samples"],
-                        help="Size metric for weighting (default: duration).")
-    parser.add_argument("--temperature", type=float, default=_TEMPERATURE,
-                        help=f"Smoothing temperature T>0 (default {_TEMPERATURE}). "
-                             "T=1→proportional, T=2→moderate, T→∞→uniform.")
-    parser.add_argument("--min_weight",  type=float, default=0.0001,
-                        help="Minimum effective probability floor (default: 0.0001).")
-    parser.add_argument("--max_passes",  type=float, default=0.0,
-                        help="Maximum expected passes per dataset (default: 0 = unlimited). "
-                             "Caps L3 weights and redistributes excess within each group.")
-    parser.add_argument("--skip_missing", action="store_true",
-                        help="Drop rows where file_exists=False before computing weights.")
-    parser.add_argument("--yaml", "--input_weights", default=None, dest="yaml",
-                        help="Optional NeMo YAML: used to extract task/language weights "
-                             "AND to filter the CSV to only datasets present in the YAML.")
-    parser.add_argument("--input_weights_mode", default="hard",
-                        choices=["hard", "soft", "weighting"],
-                        help="How --yaml weights are applied (default: hard). "
-                             "hard: impose YAML weights for L1/L2, L3 stays data-driven. "
-                             "soft: blend YAML and data-driven weights (product, renormalised). "
-                             "weighting: multiply each dataset score by its YAML task×lang weight.")
-    parser.add_argument("--ignore_missing_manifest", action="store_true",
-                        help="Only warn (instead of error) when YAML manifests are missing from CSV.")
+    parser = argparse.ArgumentParser(description="metadata CSV → suggested NeMo sampling YAML.")
+    parser.add_argument("csv_path", help="metadata.csv produced by generate_csv.py")
+    parser.add_argument("--output", default=None, help="Output YAML path. If omitted, only print the summary.")
+    parser.add_argument(
+        "--metric",
+        default="duration",
+        choices=["duration", "samples"],
+        help="Size metric for weighting (default: duration).",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=_TEMPERATURE,
+        help=f"Smoothing temperature T>0 (default {_TEMPERATURE}). T=1→proportional, T=2→moderate, T→∞→uniform.",
+    )
+    parser.add_argument(
+        "--min_weight", type=float, default=0.0001, help="Minimum effective probability floor (default: 0.0001)."
+    )
+    parser.add_argument(
+        "--max_passes",
+        type=float,
+        default=0.0,
+        help="Maximum expected passes per dataset (default: 0 = unlimited). "
+        "Caps L3 weights and redistributes excess within each group.",
+    )
+    parser.add_argument(
+        "--skip_missing", action="store_true", help="Drop rows where file_exists=False before computing weights."
+    )
+    parser.add_argument(
+        "--yaml",
+        "--input_weights",
+        default=None,
+        dest="yaml",
+        help="Optional NeMo YAML: used to extract task/language weights "
+        "AND to filter the CSV to only datasets present in the YAML.",
+    )
+    parser.add_argument(
+        "--input_weights_mode",
+        default="hard",
+        choices=["hard", "soft", "weighting"],
+        help="How --yaml weights are applied (default: hard). "
+        "hard: impose YAML weights for L1/L2, L3 stays data-driven. "
+        "soft: blend YAML and data-driven weights (product, renormalised). "
+        "weighting: multiply each dataset score by its YAML task×lang weight.",
+    )
+    parser.add_argument(
+        "--ignore_missing_manifest",
+        action="store_true",
+        help="Only warn (instead of error) when YAML manifests are missing from CSV.",
+    )
     args = parser.parse_args()
 
     print(f"\n📊 Loading CSV : {args.csv_path}")
@@ -477,13 +517,16 @@ def main():
 
     max_p = f"  max_passes={args.max_passes}" if args.max_passes > 0 else ""
     print(f"\n⚖️  metric={args.metric}  T={args.temperature}  min_weight={args.min_weight}{max_p}")
-    df = compute_weights(df, metric=args.metric,
-                         temperature=args.temperature,
-                         min_weight=args.min_weight,
-                         max_passes=args.max_passes,
-                         input_task_w=input_task_w,
-                         input_lang_w=input_lang_w,
-                         input_weights_mode=args.input_weights_mode)
+    df = compute_weights(
+        df,
+        metric=args.metric,
+        temperature=args.temperature,
+        min_weight=args.min_weight,
+        max_passes=args.max_passes,
+        input_task_w=input_task_w,
+        input_lang_w=input_lang_w,
+        input_weights_mode=args.input_weights_mode,
+    )
 
     print_summary(df, title=f"metric={args.metric}  T={args.temperature}")
     if args.output:
