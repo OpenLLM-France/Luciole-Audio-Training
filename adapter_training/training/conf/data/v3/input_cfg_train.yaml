@@ -443,8 +443,11 @@
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
         tags: {sub_task: sound_captioning}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption/train.jsonl
-        tags: {sub_task: sound_captioning}
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/Clotho/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/CompA-R/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/TACOS/train.jsonl
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/CLEAR_v1.0.0_improved/train.jsonl
       - type: multimodal_conversation
@@ -452,11 +455,16 @@
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/clotho_aqa_improved/train.jsonl
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/Clotho/train.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/mispeech_MECAT-QA/train.jsonl
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/CompA-R/train.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption/train.jsonl
+        tags: {sub_task: sound_captioning}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/TACOS/train.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/Clotho/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/CompA-R/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/TACOS/train.jsonl
       # - type: multimodal_conversation
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/af_cot_train/train.jsonl
       #   tags: {sub_task: aqa}
@@ -476,22 +484,13 @@
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
         tags: {sub_task: music_captioning}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
-        tags: {sub_task: music_captioning}
-      - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/JamendoMaxCaps/tmp.jsonl
         tags: {sub_task: music_captioning}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
         tags: {sub_task: music_qa}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
-        tags: {sub_task: music_qa}
-      - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/FMA_GenreQA/train.jsonl
-        tags: {sub_task: music_qa}
-      - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/FMA_GenreQA/train.jsonl
         tags: {sub_task: music_qa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train.jsonl
@@ -507,6 +506,30 @@
         tags: {sub_task: music_qa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MTG.Evaluation.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/FMA_GenreQA/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MusicCaps.Pretraining.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTT.Finetuning.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTG.Evaluation.jsonl
         tags: {sub_task: music_qa}
       # - type: multimodal_conversation
       #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/af_cot_train_fma/train.jsonl
