@@ -324,6 +324,18 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/ami/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/icsi/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/nutshell/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/slue-phase-2-ted/train.jsonl
+          tags: {sub_task: summarization}
         # # Nvidia - LongAudio QA datasets
         # - type: multimodal_conversation
         #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/daily_talk/train.jsonl
