@@ -40,7 +40,7 @@ export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 # Configuration
 # =====================================================
 export XP="${XP:-<model_name>}"
-CONFIG_NAME="${CONFIG_NAME:-hf_export_config}"
+CONFIG_NAME="${CONFIG_NAME:-eval_combined}"
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-4}
 
 echo "========================================"
