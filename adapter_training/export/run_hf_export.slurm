@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=64
 #SBATCH --time=02:00:00
-#SBATCH --output=log/%x.out
+#SBATCH --output=logs/%x.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-dev
 #SBATCH --account=wuh@h100
@@ -16,7 +16,6 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
-mkdir -p log
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"

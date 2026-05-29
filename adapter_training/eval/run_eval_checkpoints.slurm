@@ -2,8 +2,8 @@
 #SBATCH --job-name=eval_ckpt
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=64
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=24
 #SBATCH --time=02:00:00
 #SBATCH --output=log/%x_%j.out
 #SBATCH --hint=nomultithread
@@ -40,7 +40,7 @@ export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 # Configuration
 # =====================================================
 export XP="${XP:-<model_name>}"
-CONFIG_NAME="${CONFIG_NAME:-eval_combined}"
+CONFIG_NAME="${CONFIG_NAME:-hf_export_config}"
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-4}
 
 echo "========================================"
@@ -78,6 +78,7 @@ except ValueError:
     start_offset = 0
 
 checkpoints = []
+all_step_ckpts = []
 last_ckpt = None
 
 # regex to match step number: step=12345.ckpt
@@ -89,17 +90,18 @@ if os.path.isdir(ckpt_dir):
     for f in all_files:
         if not f.endswith(".ckpt"):
             continue
-        
+
         path = os.path.join(ckpt_dir, f)
-        
+
         # Identify last checkpoint
         if "last" in f:
             last_ckpt = path
             continue
-            
+
         match = pattern.search(f)
         if match:
             step = int(match.group(1))
+            all_step_ckpts.append((step, path))
             # Filter logic: step >= start AND (step - start) % interval == 0
             if step >= start_offset and (step - start_offset) % step_interval == 0:
                 checkpoints.append((step, path))
@@ -107,6 +109,12 @@ if os.path.isdir(ckpt_dir):
     # Sort by step
     checkpoints.sort(key=lambda x: x[0])
     final_paths = [p for _, p in checkpoints]
+
+    # Always include the earliest checkpoint on disk (even if it doesn't land on the modulo)
+    if all_step_ckpts:
+        first_step, first_path = min(all_step_ckpts, key=lambda x: x[0])
+        if first_path not in final_paths:
+            final_paths.insert(0, first_path)
 
     # Append last checkpoint if it exists and user wants it (default yes)
     if last_ckpt:
