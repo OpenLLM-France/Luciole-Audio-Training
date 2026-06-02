@@ -12,7 +12,6 @@ from pathlib import Path
 
 from template_qa_common import (
     ANSWER_JSON_SCHEMAS,
-    LANGUAGES,
     PURE_NEG_INVALID_TIME,
     PURE_NEG_NOT_FOUND,
     RANGE_MODE_PROB,
@@ -38,9 +37,14 @@ from template_qa_common import (
 
 
 TASKS = (
-    "word2time", "word2time_first", "time2sentence", "time2word", "word2sentence",
+    "word2time", "time2sentence", "time2word", "word2sentence",
     "answer_with_source", "answer_with_time", "format_json_answer",
 )
+
+# Probability that a `word2time` sample with multiple occurrences asks only for
+# the FIRST occurrence (the former standalone `word2time_first` task, now merged
+# in as a sub-variant) instead of reporting all timestamps.
+FIRST_SUBVARIANT_PROB = 0.4
 
 
 # ---------------------------------------------------------------------------
@@ -139,23 +143,25 @@ QUESTION_TEMPLATES = {
             ("Using the audio, answer this and give the timestamp of the answer: {question}", "any"),
         ],
         # Every prompt embeds {example} — the literal JSON shape picked from
-        # ANSWER_JSON_SCHEMAS — so the model always sees the expected format.
+        # ANSWER_JSON_SCHEMAS — and spells out that the answer, the timestamp
+        # where it's spoken, and the source sentence must all be filled in (the
+        # example alone wouldn't tell the model to actually retrieve them).
         "format_json_answer": [
-            ("Answer the following question using the audio and return your response as JSON in this shape: {example}. Question: \"{question}\"", "any"),
-            ("Listen to the audio and answer the question: {question}. Return the result as a JSON object like: {example}.", "any"),
-            ("Answer \"{question}\" based on the audio. Output JSON like: {example}.", "any"),
-            ("From the audio, answer this and return a JSON object like: {example}. Question: {question}", "any"),
-            ("Using the recording, answer the question: {question}. Format your response as JSON matching: {example}.", "any"),
-            ("Please answer '{question}' from the audio and output JSON: {example}.", "any"),
+            ("Answer the following question from the audio and return JSON containing the answer, the timestamp where it's spoken, and the source sentence, in this shape: {example}. Question: \"{question}\"", "any"),
+            ("Listen to the audio and answer: {question}. Return a JSON object with the answer, the time it is said, and the sentence it comes from, like: {example}.", "any"),
+            ("Answer \"{question}\" based on the audio. Output JSON with the answer, its timestamp, and the source sentence, like: {example}.", "any"),
+            ("From the audio, answer this and return a JSON object holding the answer, when it is spoken, and the supporting sentence, like: {example}. Question: {question}", "any"),
+            ("Using the recording, answer the question: {question}. Format your response as JSON with the answer, its timestamp, and the source sentence, matching: {example}.", "any"),
+            ("Please answer '{question}' from the audio and output JSON including the answer, the time it's spoken, and the sentence it comes from: {example}.", "any"),
             ("Answer this using the recording and return JSON matching this shape: {example}. Question: {question}", "any"),
-            ("Question: {question}. Answer this using the audio and return JSON in this exact shape: {example}.", "any"),
+            ("Question: {question}. Answer this from the audio and return JSON — with the answer, the timestamp it is said, and the full source sentence — in this exact shape: {example}.", "any"),
         ],
     },
     "fr": {
         "word2time": [
             ("À quel moment dans l'audio le mot \"{word}\" est-il prononcé ?", "word"),
             ("Quand le locuteur parle-t-il de {word} ?", "any"),
-            ("Trouve le mot {word} dans l'audio et donne-moi son timestamp.", "word"),
+            ("Trouve le mot '{word}' dans l'audio et donne-moi son timestamp.", "word"),
             ("Localise \"{word}\" dans l'enregistrement. À quel instant apparaît-il ?", "any"),
             ("À quelle seconde {word} est-il prononcé ?", "any"),
             ("Donne-moi le timestamp où '{word}' apparaît.", "any"),
@@ -168,14 +174,14 @@ QUESTION_TEMPLATES = {
         ],
         "word2time_first": [
             ("Quel est le premier timestamp auquel le mot \"{word}\" est prononcé ?", "word"),
-            ("Quand {word} est-il dit pour la première fois dans l'audio ?", "any"),
+            ("Quand '{word}' est-il dit pour la première fois dans l'audio ?", "any"),
             ("Trouve la première occurrence de {word} dans l'enregistrement.", "any"),
             ("À quel moment {word} apparaît-il pour la première fois ?", "any"),
             ("Donne-moi le premier timestamp auquel '{word}' apparaît.", "any"),
             ("Quand le mot {word} est-il prononcé pour la première fois ?", "word"),
             ("À quelle seconde \"{word}\" est-il prononcé pour la première fois ?", "any"),
             ("Indique le premier moment où {word} est prononcé.", "any"),
-            ("À quelle seconde le locuteur dit-il {word} pour la première fois ?", "any"),
+            ("À quelle seconde le locuteur dit-il: {word} pour la première fois ?", "any"),
             ("Mot cible : {word}. Quand apparaît-il pour la première fois ?", "word"),
         ],
         "time2sentence": [
@@ -209,7 +215,7 @@ QUESTION_TEMPLATES = {
         ],
         "word2sentence": [
             ("Quelle phrase de l'audio contient le mot \"{word}\" ?", "word"),
-            ("Trouve la phrase où {word} est prononcé et transcris-la.", "any"),
+            ("Trouve la phrase où '{word}' est prononcé et transcris-la.", "any"),
             ("Donne-moi la phrase complète qui contient {word}.", "any"),
             ("Dans quelle phrase le locuteur utilise-t-il \"{word}\" ?", "any"),
             ("Transcris la phrase contenant '{word}'.", "any"),
@@ -240,14 +246,14 @@ QUESTION_TEMPLATES = {
             ("À l'aide de l'audio, réponds à cela et donne le timestamp de la réponse : {question}", "any"),
         ],
         "format_json_answer": [
-            ("Réponds à la question suivante à l'aide de l'audio et renvoie ta réponse au format JSON ainsi : {example}. Question : \"{question}\"", "any"),
-            ("Écoute l'audio et réponds à la question : {question}. Renvoie le résultat sous forme d'objet JSON comme : {example}.", "any"),
-            ("Réponds à \"{question}\" à partir de l'audio. Sortie au format JSON : {example}.", "any"),
-            ("À partir de l'audio, réponds à cela et renvoie un objet JSON comme : {example}. Question : {question}", "any"),
-            ("À l'aide de l'enregistrement, réponds à la question : {question}. Formate ta réponse en JSON suivant ce schéma : {example}.", "any"),
-            ("Réponds s'il te plaît à '{question}' à partir de l'audio et renvoie un JSON : {example}.", "any"),
-            ("Réponds à cela à l'aide de l'enregistrement et renvoie un JSON correspondant à ce schéma : {example}. Question : {question}", "any"),
-            ("Question : {question}. Réponds à cela à l'aide de l'audio et renvoie un JSON dans ce schéma exact : {example}.", "any"),
+            ("Réponds à la question suivante à partir de l'audio et renvoie un JSON contenant la réponse, le timestamp où elle est prononcée et la phrase source, ainsi : {example}. Question : \"{question}\"", "any"),
+            ("Écoute l'audio et réponds : {question}. Renvoie un objet JSON avec la réponse, l'instant où elle est dite et la phrase d'où elle provient, comme : {example}.", "any"),
+            ("Réponds à \"{question}\" à partir de l'audio. Produis du JSON avec la réponse, son timestamp et la phrase source, comme : {example}.", "any"),
+            ("À partir de l'audio, réponds à cela et renvoie un objet JSON contenant la réponse, le moment où elle est prononcée et la phrase qui la soutient, comme : {example}. Question : {question}", "any"),
+            ("À l'aide de l'enregistrement, réponds à la question : {question}. Formate ta réponse en JSON avec la réponse, son timestamp et la phrase source, suivant ce schéma : {example}.", "any"),
+            ("Réponds s'il te plaît à '{question}' à partir de l'audio et renvoie un JSON incluant la réponse, l'instant où elle est prononcée et la phrase dont elle provient : {example}.", "any"),
+            ("Réponds à cela à l'aide de l'enregistrement et renvoie un JSON avec la réponse, son timestamp et la phrase source, correspondant à ce schéma : {example}. Question : {question}", "any"),
+            ("Question : {question}. Réponds à cela à partir de l'audio et renvoie un JSON — avec la réponse, le timestamp où elle est dite et la phrase source complète — dans ce schéma exact : {example}.", "any"),
         ],
     },
 }
@@ -783,7 +789,7 @@ def build_negative_variant(record, task, lang="en", style="chat"):
     document_audio, duration = get_document_audio(record.get("conversations", []))
     if document_audio is None:
         return None
-    if task in ("word2time", "word2time_first", "word2sentence"):
+    if task in ("word2time", "word2sentence"):
         oov = pick_oov_word(w2t, NEGATIVE_WORD_CANDIDATES[lang])
         if oov is None:
             return None
@@ -888,10 +894,25 @@ def build_variant(record, task, lang="en", style="chat"):
     elif task == "word2time":
         lookup_tokens = [t.lower() for t in phrase.split() if is_alnum_token(t)]
         occurrences = find_all_occurrences(lookup_tokens, w2t)
-        # Range mode: the question explicitly asks for both start and end
-        # timestamps. Limited to single-occurrence cases (rendering multiple
-        # ranges per answer would require a separate joiner).
-        if len(occurrences) <= 1 and random.random() < RANGE_MODE_PROB:
+        if len(occurrences) >= 2 and random.random() < FIRST_SUBVARIANT_PROB:
+            # `first` sub-variant (merged from the former word2time_first task):
+            # ask only for the earliest occurrence, with optional range mode.
+            first_idx, first_time = min(occurrences, key=lambda io: io[1])
+            if random.random() < RANGE_MODE_PROB:
+                first_end = phrase_end_time(w2t, first_idx, len(lookup_tokens)) or first_time
+                fmt = {"word": phrase, "time": first_time, "end_time": first_end}
+                question = choose_template(qtr["word2time_first"], single_token).format(**fmt)
+                answer = choose_template(atr["word2time_first"], single_token).format(**fmt)
+                pure_answer = f"{first_time:.1f}s-{first_end:.1f}s"
+            else:
+                fmt = {"word": phrase, "time": first_time}
+                question = choose_template(qt["word2time_first"], single_token).format(**fmt)
+                answer = choose_template(at["word2time_first"], single_token).format(**fmt)
+                pure_answer = f"{first_time:.1f}s"
+        elif len(occurrences) <= 1 and random.random() < RANGE_MODE_PROB:
+            # Range mode: the question explicitly asks for both start and end
+            # timestamps. Limited to single-occurrence cases (rendering multiple
+            # ranges per answer would require a separate joiner).
             fmt = {"word": phrase, "time": answer_start, "end_time": answer_end}
             question = choose_template(qtr[task], single_token).format(**fmt)
             answer = choose_template(atr[task], single_token).format(**fmt)
@@ -913,25 +934,6 @@ def build_variant(record, task, lang="en", style="chat"):
                 question = q_tpl.format(**fmt)
                 answer = a_tpl.format(**fmt)
                 pure_answer = f"{answer_start:.1f}s"
-    elif task == "word2time_first":
-        lookup_tokens = [t.lower() for t in phrase.split() if is_alnum_token(t)]
-        occurrences = find_all_occurrences(lookup_tokens, w2t)
-        if not occurrences:
-            return None
-        first_idx, first_time = min(occurrences, key=lambda io: io[1])
-        if random.random() < RANGE_MODE_PROB:
-            first_end = phrase_end_time(w2t, first_idx, len(lookup_tokens))
-            if first_end is None:
-                first_end = first_time
-            fmt = {"word": phrase, "time": first_time, "end_time": first_end}
-            question = choose_template(qtr[task], single_token).format(**fmt)
-            answer = choose_template(atr[task], single_token).format(**fmt)
-            pure_answer = f"{first_time:.1f}s-{first_end:.1f}s"
-        else:
-            fmt = {"word": phrase, "time": first_time}
-            question = choose_template(qt[task], single_token).format(**fmt)
-            answer = choose_template(at[task], single_token).format(**fmt)
-            pure_answer = f"{first_time:.1f}s"
     elif task == "word2sentence":
         lookup_tokens = [t.lower() for t in phrase.split() if is_alnum_token(t)]
         occurrences = find_all_occurrences(lookup_tokens, w2t)
@@ -982,11 +984,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tasks", type=str, nargs="+", choices=TASKS, default=list(TASKS),
     )
-    parser.add_argument(
-        "--language", type=str, choices=LANGUAGES, default="en",
-        help="Which language's prompt templates to use.",
-    )
+    # SLU is an English-only dataset, so prompts are always English here. The
+    # bilingual QUESTION_TEMPLATES / ANSWER_TEMPLATES (incl. their "fr" entries)
+    # are kept because template_timestamp_tasks.py imports them for the
+    # French-audio MLS generator, which does expose a --language flag.
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--pure_splits", type=str, nargs="*", default=["all"],
+        help="Split stems that also get a pure-answer version in the `<task>` "
+             "folder (chat-style answers always go to `<task>_chat`). Use 'all' "
+             "(the default) for every detected split, or list specific stems "
+             "(e.g. 'verified_test'). Each pure split is a full extra generation pass.",
+    )
     parser.add_argument(
         "--negative_rate", type=float, default=0.1,
         help="For word2time/word2sentence/time2word/time2sentence, fraction of "
@@ -1008,42 +1017,51 @@ if __name__ == "__main__":
 
     print(f"Splits detected: {[f.stem for f in split_files]}")
     print(f"Tasks:           {args.tasks}")
-    print(f"Language:        {args.language}")
 
-    negative_eligible = tuple(NEGATIVE_QUESTION_TEMPLATES[args.language].keys())
+    lang = "en"
+    negative_eligible = tuple(NEGATIVE_QUESTION_TEMPLATES[lang].keys())
+    pure_all = "all" in args.pure_splits
 
     total_trailing_skipped = 0
     for task in args.tasks:
+        # format_json_answer's answer IS the JSON object, so its chat and pure
+        # forms are identical -- emit it only once, into the canonical `<task>`
+        # folder, with no `<task>_chat` counterpart.
+        json_only = task == "format_json_answer"
         for split_file in split_files:
             split = split_file.stem
-            out_file = output_root / task / f"{split}.jsonl"
-            kept, dropped, neg, trailing_skipped = process_split(
-                split_file, out_file, task,
-                build_positive=build_variant,
-                build_negative=build_negative_variant,
-                negative_eligible_tasks=negative_eligible,
-                negative_rate=args.negative_rate,
-                lang=args.language,
-            )
-            total_trailing_skipped += trailing_skipped
-            print(
-                f"[{task}/{split}] kept={kept} negatives={neg} dropped={dropped} "
-                f"trailing_skipped={trailing_skipped} -> {out_file}"
-            )
-            # verified_test gets a second "pure" file with literal short-form
-            # answers (e.g. "10.2s,25.6s") for canonical eval comparison.
-            if split == "verified_test":
-                pure_file = output_root / task / f"{split}_pure.jsonl"
+            # Chat-style (natural-language) answers live in a `<task>_chat`
+            # folder; pure short-form answers live in `<task>`.
+            if not json_only:
+                chat_file = output_root / f"{task}_chat" / f"{split}.jsonl"
+                kept, dropped, neg, trailing_skipped = process_split(
+                    split_file, chat_file, task,
+                    build_positive=build_variant,
+                    build_negative=build_negative_variant,
+                    negative_eligible_tasks=negative_eligible,
+                    negative_rate=args.negative_rate,
+                    lang=lang,
+                )
+                total_trailing_skipped += trailing_skipped
+                print(
+                    f"[{task}_chat/{split}] kept={kept} negatives={neg} dropped={dropped} "
+                    f"trailing_skipped={trailing_skipped} -> {chat_file}"
+                )
+            # Selected splits also get a pure version (literal short-form answers
+            # like "10.2s,25.6s") for canonical eval comparison. format_json is
+            # always emitted here regardless of --pure_splits.
+            if json_only or pure_all or split in args.pure_splits:
+                pure_file = output_root / task / f"{split}.jsonl"
                 kept_p, dropped_p, neg_p, trailing_p = process_split(
                     split_file, pure_file, task,
                     build_positive=build_variant,
                     build_negative=build_negative_variant,
                     negative_eligible_tasks=negative_eligible,
                     negative_rate=args.negative_rate,
-                    lang=args.language, style="pure",
+                    lang=lang, style="pure",
                 )
                 print(
-                    f"[{task}/{split}_pure] kept={kept_p} negatives={neg_p} dropped={dropped_p} "
+                    f"[{task}/{split}] kept={kept_p} negatives={neg_p} dropped={dropped_p} "
                     f"trailing_skipped={trailing_p} -> {pure_file}"
                 )
 

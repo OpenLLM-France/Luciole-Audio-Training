@@ -294,23 +294,24 @@ JSON_SENTENCE_PROMPTS = {
     ],
 }
 
-# Mix presets: each maps the four modes to a weight. `no_json` excludes JSON
-# modes entirely, `full_json` emits only JSON, `mixed` is 15% JSON overall.
+# Mix presets: each maps the four modes to a weight. `timestamped_no_json`
+# excludes JSON modes entirely, `timestamped_full_json` emits only JSON,
+# `timestamped_mixed` is 15% JSON overall.
 # Weights per preset must sum to > 0; modes with weight 0 are never chosen.
 MIX_PRESETS = {
-    "no_json": {
+    "timestamped_no_json": {
         "default":          0.55,
         "format_specified": 0.45,
         "json_default":     0.0,
         "json_specified":   0.0,
     },
-    "mixed": {
+    "timestamped_mixed": {
         "default":          0.50,
         "format_specified": 0.35,
         "json_default":     0.05,
         "json_specified":   0.10,
     },
-    "full_json": {
+    "timestamped_full_json": {
         "default":          0.0,
         "format_specified": 0.0,
         "json_default":     0.40,
@@ -449,11 +450,11 @@ def build_variant(record, weights=None, lang="en"):
 
     `weights` is a dict mapping each mode (default, format_specified,
     json_default, json_specified) to a selection weight. If None, uses the
-    `mixed` preset. `lang` selects the prompt language ("en" or "fr"); the
+    `timestamped_mixed` preset. `lang` selects the prompt language ("en" or "fr"); the
     transcription answer is unaffected (it comes from the audio's alignment).
     """
     if weights is None:
-        weights = MIX_PRESETS["mixed"]
+        weights = MIX_PRESETS["timestamped_mixed"]
 
     cm = record.get("custom_metadata", {})
     w2t = cm.get("word2time", {})
