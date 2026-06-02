@@ -17,9 +17,13 @@ Unlike generate_slu_variants.py, this task does not depend on `answer_spans` —
 every record with `custom_metadata.word2time` and an audio turn produces one
 variant.
 
+Prompts come in English (default) or French (--language fr); the spoken content
+and the timestamped answer are unchanged either way, so the same audio yields a
+cross-lingual instruction pair.
+
 Run:
     python data/synthetic/generate_timestamped_transcription.py \\
-        /path/to/dir_with_train_dev_test --output_dir out
+        /path/to/dir_with_train_dev_test --output_dir out --language fr
 """
 
 import argparse
@@ -40,19 +44,21 @@ def _fmt_bracket_range(w, s, e): return f"{w} [{s:.1f}-{e:.1f}]"
 def _fmt_line_range(w, s, e):    return f"{s:.1f}s-{e:.1f}s: {w}"
 def _fmt_t_range(w, s, e):       return f"<t>{s:.1f}s-{e:.1f}</t> {w}"
 
+# `example` is language-keyed: only the demo words differ ("Hello world" /
+# "Bonjour le monde") — the timestamp format itself is identical across langs.
 FORMAT_SPECS = {
     # Word-level formats
-    "paren":              {"level": "word",     "render": _fmt_paren,         "joiner": " ",  "example": "Hello (0.0s) world (0.5s)"},
-    "line":               {"level": "word",     "render": _fmt_line,          "joiner": "\n", "example": "0.0s: Hello\n0.5s: world"},
-    "bracket_range":      {"level": "word",     "render": _fmt_bracket_range, "joiner": " ",  "example": "Hello [0.0-0.5] world [0.5-1.0]"},
-    "line_range":         {"level": "word",     "render": _fmt_line_range,    "joiner": "\n", "example": "0.0s-0.5s: Hello\n0.5s-1.0s: world"},
-    "t_range":            {"level": "word",     "render": _fmt_t_range,       "joiner": "\n", "example": "<t>0.0s-0.5</t>: Hello\n<t>0.5s-1.0</t>: world"},
+    "paren":              {"level": "word",     "render": _fmt_paren,         "joiner": " ",  "example": {"en": "Hello (0.0s) world (0.5s)",                      "fr": "Bonjour (0.0s) monde (0.5s)"}},
+    "line":               {"level": "word",     "render": _fmt_line,          "joiner": "\n", "example": {"en": "0.0s: Hello\n0.5s: world",                       "fr": "0.0s: Bonjour\n0.5s: monde"}},
+    "bracket_range":      {"level": "word",     "render": _fmt_bracket_range, "joiner": " ",  "example": {"en": "Hello [0.0-0.5] world [0.5-1.0]",                "fr": "Bonjour [0.0-0.5] monde [0.5-1.0]"}},
+    "line_range":         {"level": "word",     "render": _fmt_line_range,    "joiner": "\n", "example": {"en": "0.0s-0.5s: Hello\n0.5s-1.0s: world",            "fr": "0.0s-0.5s: Bonjour\n0.5s-1.0s: monde"}},
+    "t_range":            {"level": "word",     "render": _fmt_t_range,       "joiner": "\n", "example": {"en": "<t>0.0s-0.5</t>: Hello\n<t>0.5s-1.0</t>: world", "fr": "<t>0.0s-0.5</t>: Bonjour\n<t>0.5s-1.0</t>: monde"}},
     # Sentence-level formats (same renderers; the "token" passed in is a full sentence)
-    "bracket_sent":       {"level": "sentence", "render": _fmt_bracket,       "joiner": " ",  "example": "Hello world! [0.0] How are you? [0.5]"},
-    "line_sent":          {"level": "sentence", "render": _fmt_line,          "joiner": "\n", "example": "0.0s: Hello world!\n0.5s: How are you?"},
-    "paren_range_sent":   {"level": "sentence", "render": _fmt_paren_range,   "joiner": " ",  "example": "Hello world! (0.0s-0.5s) How are you? (0.5s-2.0s)"},
-    "line_range_sent":    {"level": "sentence", "render": _fmt_line_range,    "joiner": "\n", "example": "0.0s-0.5s: Hello world!\n0.5s-2.0s: How are you?"},
-    "t_range_sent":       {"level": "sentence", "render": _fmt_t_range,       "joiner": "\n", "example": "<t>0.0s-0.5</t>: Hello world!\n<t>0.5s-2.0</t>: How are you?"},
+    "bracket_sent":       {"level": "sentence", "render": _fmt_bracket,       "joiner": " ",  "example": {"en": "Hello world! [0.0] How are you? [0.5]",          "fr": "Bonjour le monde ! [0.0] Comment ça va ? [0.5]"}},
+    "line_sent":          {"level": "sentence", "render": _fmt_line,          "joiner": "\n", "example": {"en": "0.0s: Hello world!\n0.5s: How are you?",        "fr": "0.0s: Bonjour le monde !\n0.5s: Comment ça va ?"}},
+    "paren_range_sent":   {"level": "sentence", "render": _fmt_paren_range,   "joiner": " ",  "example": {"en": "Hello world! (0.0s-0.5s) How are you? (0.5s-2.0s)", "fr": "Bonjour le monde ! (0.0s-0.5s) Comment ça va ? (0.5s-2.0s)"}},
+    "line_range_sent":    {"level": "sentence", "render": _fmt_line_range,    "joiner": "\n", "example": {"en": "0.0s-0.5s: Hello world!\n0.5s-2.0s: How are you?", "fr": "0.0s-0.5s: Bonjour le monde !\n0.5s-2.0s: Comment ça va ?"}},
+    "t_range_sent":       {"level": "sentence", "render": _fmt_t_range,       "joiner": "\n", "example": {"en": "<t>0.0s-0.5</t>: Hello world!\n<t>0.5s-2.0</t>: How are you?", "fr": "<t>0.0s-0.5</t>: Bonjour le monde !\n<t>0.5s-2.0</t>: Comment ça va ?"}},
 }
 
 # Default format used when the prompt doesn't specify one. Kept fixed so the
@@ -95,26 +101,40 @@ def _render_list_of_sentences(sentences):
     )
 
 
+# `example` is language-keyed (demo values only); JSON field names are part of
+# the output schema and stay identical across languages.
 JSON_SCHEMAS = {
     "list_of_objects": {
         "level": "word",
         "render": _render_list_of_objects,
-        "example": '[{"word": "Hello", "time": 0.0}, {"word": "world", "time": 0.5}]',
+        "example": {
+            "en": '[{"word": "Hello", "time": 0.0}, {"word": "world", "time": 0.5}]',
+            "fr": '[{"word": "Bonjour", "time": 0.0}, {"word": "monde", "time": 0.5}]',
+        },
     },
     "list_of_objects_startend": {
         "level": "word",
         "render": _render_list_of_objects_startend,
-        "example": '[{"word": "Hello", "start": 0.0, "end": 0.5}, {"word": "world", "start": 0.5, "end": 1.0}]',
+        "example": {
+            "en": '[{"word": "Hello", "start": 0.0, "end": 0.5}, {"word": "world", "start": 0.5, "end": 1.0}]',
+            "fr": '[{"word": "Bonjour", "start": 0.0, "end": 0.5}, {"word": "monde", "start": 0.5, "end": 1.0}]',
+        },
     },
     "list_of_objects_timestamp": {
         "level": "word",
         "render": _render_list_of_objects_timestamp,
-        "example": '[{"word": "Hello", "timestamp": 0.0}, {"word": "world", "timestamp": 0.5}]',
+        "example": {
+            "en": '[{"word": "Hello", "timestamp": 0.0}, {"word": "world", "timestamp": 0.5}]',
+            "fr": '[{"word": "Bonjour", "timestamp": 0.0}, {"word": "monde", "timestamp": 0.5}]',
+        },
     },
     "sentence_level": {
         "level": "sentence",
         "render": _render_list_of_sentences,
-        "example": '[{"sentence": "Hello world!", "start": 0.0, "end": 0.5}, {"sentence": "How are you?", "start": 0.5, "end": 2.0}]',
+        "example": {
+            "en": '[{"sentence": "Hello world!", "start": 0.0, "end": 0.5}, {"sentence": "How are you?", "start": 0.5, "end": 2.0}]',
+            "fr": '[{"sentence": "Bonjour le monde !", "start": 0.0, "end": 0.5}, {"sentence": "Comment ça va ?", "start": 0.5, "end": 2.0}]',
+        },
     },
 }
 
@@ -123,80 +143,156 @@ DEFAULT_JSON_SCHEMA = "list_of_objects"
 
 # ---------- Prompts ---------------------------------------------------------
 
+# Prompt languages supported. English prompts over French (or any) audio are a
+# deliberate cross-lingual instruction-following setup; pass --language fr to
+# emit French-language prompts instead (the spoken content is unchanged).
+LANGUAGES = ("en", "fr")
+
 # Prompts used with DEFAULT_FORMAT. Entries containing `{example}` get the
-# canonical-format example substituted in at render time.
-DEFAULT_PROMPTS = [
-    "Transcribe the audio and include a timestamp for each word.",
-    "Give me a word-level transcription of the audio with timestamps, for instance `{example}`.",
-    "Transcribe the recording word by word, marking when each word starts.",
-    "Provide a timestamped transcription of the audio, e.g. `{example}`.",
-    "Write out the audio transcript and attach a timestamp to every word.",
-    "I need a transcription annotated with per-word start times - something like {example}.",
-    "Transcribe the clip and tell me when each word is pronounced.",
-    "Produce a word-by-word transcript, with the second at which each word begins.",
-    "Give me the transcript of the audio with per-word timestamps, for example {example}.",
-    "Transcribe the audio with the time at which each word is spoken.",
-]
+# canonical-format example substituted in at render time. Keyed by language.
+DEFAULT_PROMPTS = {
+    "en": [
+        "Transcribe the audio and include a timestamp for each word.",
+        "Give me a word-level transcription of the audio with timestamps, for instance `{example}`.",
+        "Transcribe the recording word by word, marking when each word starts.",
+        "Provide a timestamped transcription of the audio, e.g. `{example}`.",
+        "Write out the audio transcript and attach a timestamp to every word.",
+        "I need a transcription annotated with per-word start times - something like {example}.",
+        "Transcribe the clip and tell me when each word is pronounced.",
+        "Produce a word-by-word transcript, with the second at which each word begins.",
+        "Give me the transcript of the audio with per-word timestamps, for example {example}.",
+        "Transcribe the audio with the time at which each word is spoken.",
+    ],
+    "fr": [
+        "Transcris l'audio en incluant un horodatage pour chaque mot.",
+        "Donne-moi une transcription mot à mot de l'audio avec des horodatages, par exemple `{example}`.",
+        "Transcris l'enregistrement mot par mot en indiquant le début de chaque mot.",
+        "Fournis une transcription horodatée de l'audio, par exemple `{example}`.",
+        "Écris la transcription de l'audio et associe un horodatage à chaque mot.",
+        "J'ai besoin d'une transcription annotée avec l'instant de début de chaque mot — quelque chose comme {example}.",
+        "Transcris le clip et indique-moi quand chaque mot est prononcé.",
+        "Produis une transcription mot par mot, avec la seconde à laquelle chaque mot commence.",
+        "Donne-moi la transcription de l'audio avec un horodatage par mot, par exemple {example}.",
+        "Transcris l'audio avec l'instant auquel chaque mot est prononcé.",
+    ],
+}
 
 # Prompts that pin a specific format. {example} is filled from the chosen spec.
-FORMAT_PROMPTS = [
-    "Transcribe the audio with per-word timestamps. Use this format: `{example}`.",
-    "Give me a timestamped word-level transcription following the pattern: `{example}`.",
-    "Transcribe the audio. Format each word like this: {example}.",
-    "Produce a word-level transcript using the format `{example}`.",
-    "I need a per-word timestamped transcription written as: {example}.",
-    "Transcribe the audio with timestamps. Follow this example: {example}.",
-    "Write out a timestamped transcription using this format: {example}.",
-    "Transcribe the recording; each word should appear as `{example}`.",
-]
+FORMAT_PROMPTS = {
+    "en": [
+        "Transcribe the audio with per-word timestamps. Use this format: `{example}`.",
+        "Give me a timestamped word-level transcription following the pattern: `{example}`.",
+        "Transcribe the audio. Format each word like this: {example}.",
+        "Produce a word-level transcript using the format `{example}`.",
+        "I need a per-word timestamped transcription written as: {example}.",
+        "Transcribe the audio with timestamps. Follow this example: {example}.",
+        "Write out a timestamped transcription using this format: {example}.",
+        "Transcribe the recording; each word should appear as `{example}`.",
+    ],
+    "fr": [
+        "Transcris l'audio avec un horodatage par mot. Utilise ce format : `{example}`.",
+        "Donne-moi une transcription horodatée au niveau du mot suivant le modèle : `{example}`.",
+        "Transcris l'audio. Formate chaque mot ainsi : {example}.",
+        "Produis une transcription au niveau du mot en utilisant le format `{example}`.",
+        "J'ai besoin d'une transcription horodatée par mot écrite ainsi : {example}.",
+        "Transcris l'audio avec des horodatages. Suis cet exemple : {example}.",
+        "Écris une transcription horodatée en utilisant ce format : {example}.",
+        "Transcris l'enregistrement ; chaque mot doit apparaître comme `{example}`.",
+    ],
+}
 
 # Sentence-level counterpart. Used whenever a sentence-level format is picked,
 # so the question matches the granularity of the answer.
-FORMAT_SENTENCE_PROMPTS = [
-    "Transcribe the audio with per-sentence timestamps. Use this format: `{example}`.",
-    "Give me a sentence-level timestamped transcription following the pattern: `{example}`.",
-    "Transcribe the audio. Format each sentence like this: `{example}`.",
-    "Produce a sentence-level transcript using the format `{example}`.",
-    "I need a per-sentence timestamped transcription written as: `{example}`.",
-    "Transcribe the audio with sentence-level timestamps. Follow this example: `{example}`.",
-    "Write out a timestamped transcription split by sentence, using this format: `{example}`.",
-    "Transcribe the recording; each sentence should appear as `{example}`.",
-]
+FORMAT_SENTENCE_PROMPTS = {
+    "en": [
+        "Transcribe the audio with per-sentence timestamps. Use this format: `{example}`.",
+        "Give me a sentence-level timestamped transcription following the pattern: `{example}`.",
+        "Transcribe the audio. Format each sentence like this: `{example}`.",
+        "Produce a sentence-level transcript using the format `{example}`.",
+        "I need a per-sentence timestamped transcription written as: `{example}`.",
+        "Transcribe the audio with sentence-level timestamps. Follow this example: `{example}`.",
+        "Write out a timestamped transcription split by sentence, using this format: `{example}`.",
+        "Transcribe the recording; each sentence should appear as `{example}`.",
+    ],
+    "fr": [
+        "Transcris l'audio avec un horodatage par phrase. Utilise ce format : `{example}`.",
+        "Donne-moi une transcription horodatée au niveau de la phrase suivant le modèle : `{example}`.",
+        "Transcris l'audio. Formate chaque phrase ainsi : `{example}`.",
+        "Produis une transcription au niveau de la phrase en utilisant le format `{example}`.",
+        "J'ai besoin d'une transcription horodatée par phrase écrite ainsi : `{example}`.",
+        "Transcris l'audio avec des horodatages par phrase. Suis cet exemple : `{example}`.",
+        "Écris une transcription horodatée découpée par phrase, en utilisant ce format : `{example}`.",
+        "Transcris l'enregistrement ; chaque phrase doit apparaître comme `{example}`.",
+    ],
+}
 
 # JSON prompts used with DEFAULT_JSON_SCHEMA. Entries containing `{example}`
 # get the canonical-schema example substituted in at render time.
-JSON_DEFAULT_PROMPTS = [
-    "Transcribe the audio with per-word timestamps and return the result as JSON.",
-    "Give me a timestamped word-level transcription in JSON format, for instance `{example}`.",
-    "Transcribe the audio and return the transcription as JSON.",
-    "Transcribe the recording and format the output as JSON, e.g. `{example}`.",
-    "Give me the transcript as JSON, with a timestamp attached to every word.",
-    "Transcribe the clip and output the result as JSON — something like `{example}`.",
-    "Produce a JSON transcription of the audio with per-word start times.",
-    "Transcribe the audio with timestamps; format your answer as JSON.",
-]
+JSON_DEFAULT_PROMPTS = {
+    "en": [
+        "Transcribe the audio with per-word timestamps and return the result as JSON.",
+        "Give me a timestamped word-level transcription in JSON format, for instance `{example}`.",
+        "Transcribe the audio and return the transcription as JSON.",
+        "Transcribe the recording and format the output as JSON, e.g. `{example}`.",
+        "Give me the transcript as JSON, with a timestamp attached to every word.",
+        "Transcribe the clip and output the result as JSON — something like `{example}`.",
+        "Produce a JSON transcription of the audio with per-word start times.",
+        "Transcribe the audio with timestamps; format your answer as JSON.",
+    ],
+    "fr": [
+        "Transcris l'audio avec un horodatage par mot et renvoie le résultat en JSON.",
+        "Donne-moi une transcription horodatée au niveau du mot au format JSON, par exemple `{example}`.",
+        "Transcris l'audio et renvoie la transcription en JSON.",
+        "Transcris l'enregistrement et formate la sortie en JSON, par exemple `{example}`.",
+        "Donne-moi la transcription en JSON, avec un horodatage associé à chaque mot.",
+        "Transcris le clip et renvoie le résultat en JSON — quelque chose comme `{example}`.",
+        "Produis une transcription JSON de l'audio avec l'instant de début de chaque mot.",
+        "Transcris l'audio avec des horodatages ; formate ta réponse en JSON.",
+    ],
+}
 
 # JSON prompts that pin a specific shape. {example} is filled from the schema.
-JSON_SCHEMA_PROMPTS = [
-    "Transcribe the audio with per-word timestamps. Return JSON in this shape: `{example}`.",
-    "Give me the transcription as JSON following this exact schema: `{example}`.",
-    "Transcribe the audio and output JSON like: `{example}`.",
-    "Produce a JSON transcription matching this structure: `{example}`.",
-    "Output a JSON transcription; the result should look like: `{example}`.",
-    "Transcribe the recording as JSON in the following format: `{example}`.",
-    "Return the transcript as JSON, using this pattern: `{example}`.",
-]
+JSON_SCHEMA_PROMPTS = {
+    "en": [
+        "Transcribe the audio with per-word timestamps. Return JSON in this shape: `{example}`.",
+        "Give me the transcription as JSON following this exact schema: `{example}`.",
+        "Transcribe the audio and output JSON like: `{example}`.",
+        "Produce a JSON transcription matching this structure: `{example}`.",
+        "Output a JSON transcription; the result should look like: `{example}`.",
+        "Transcribe the recording as JSON in the following format: `{example}`.",
+        "Return the transcript as JSON, using this pattern: `{example}`.",
+    ],
+    "fr": [
+        "Transcris l'audio avec un horodatage par mot. Renvoie du JSON selon cette forme : `{example}`.",
+        "Donne-moi la transcription en JSON suivant exactement ce schéma : `{example}`.",
+        "Transcris l'audio et produis du JSON comme : `{example}`.",
+        "Produis une transcription JSON correspondant à cette structure : `{example}`.",
+        "Génère une transcription JSON ; le résultat doit ressembler à : `{example}`.",
+        "Transcris l'enregistrement en JSON au format suivant : `{example}`.",
+        "Renvoie la transcription en JSON, en utilisant ce modèle : `{example}`.",
+    ],
+}
 
 # Sentence-level JSON prompts. Used when a sentence-level schema is picked, so
 # the question text matches the granularity of the answer.
-JSON_SENTENCE_PROMPTS = [
-    "Transcribe the audio with per-sentence timestamps. Return JSON in this shape: `{example}`.",
-    "Give me a sentence-level transcription as JSON following this schema: `{example}`.",
-    "Transcribe the audio and output one JSON entry per sentence, like: `{example}`.",
-    "Produce a JSON transcription split by sentence matching this structure: `{example}`.",
-    "Transcribe the recording as a JSON list of sentences with start/end times: `{example}`.",
-    "Return the transcript as JSON, grouped into sentences: `{example}`.",
-]
+JSON_SENTENCE_PROMPTS = {
+    "en": [
+        "Transcribe the audio with per-sentence timestamps. Return JSON in this shape: `{example}`.",
+        "Give me a sentence-level transcription as JSON following this schema: `{example}`.",
+        "Transcribe the audio and output one JSON entry per sentence, like: `{example}`.",
+        "Produce a JSON transcription split by sentence matching this structure: `{example}`.",
+        "Transcribe the recording as a JSON list of sentences with start/end times: `{example}`.",
+        "Return the transcript as JSON, grouped into sentences: `{example}`.",
+    ],
+    "fr": [
+        "Transcris l'audio avec un horodatage par phrase. Renvoie du JSON selon cette forme : `{example}`.",
+        "Donne-moi une transcription au niveau de la phrase en JSON suivant ce schéma : `{example}`.",
+        "Transcris l'audio et produis une entrée JSON par phrase, comme : `{example}`.",
+        "Produis une transcription JSON découpée par phrase correspondant à cette structure : `{example}`.",
+        "Transcris l'enregistrement sous forme de liste JSON de phrases avec des temps de début/fin : `{example}`.",
+        "Renvoie la transcription en JSON, regroupée par phrases : `{example}`.",
+    ],
+}
 
 # Mix presets: each maps the four modes to a weight. `no_json` excludes JSON
 # modes entirely, `full_json` emits only JSON, `mixed` is 15% JSON overall.
@@ -348,12 +444,13 @@ def _pick_mode(weights):
     return random.choices(modes, weights=ws, k=1)[0]
 
 
-def build_variant(record, weights=None):
+def build_variant(record, weights=None, lang="en"):
     """Return a jsonl record with a timestamped transcription, or None if unsupported.
 
     `weights` is a dict mapping each mode (default, format_specified,
     json_default, json_specified) to a selection weight. If None, uses the
-    `mixed` preset.
+    `mixed` preset. `lang` selects the prompt language ("en" or "fr"); the
+    transcription answer is unaffected (it comes from the audio's alignment).
     """
     if weights is None:
         weights = MIX_PRESETS["mixed"]
@@ -382,26 +479,26 @@ def build_variant(record, weights=None):
 
     mode = _pick_mode(weights)
     if mode == "json_default":
-        example = JSON_SCHEMAS[DEFAULT_JSON_SCHEMA]["example"]
-        question = _fill(random.choice(JSON_DEFAULT_PROMPTS), example)
+        example = JSON_SCHEMAS[DEFAULT_JSON_SCHEMA]["example"][lang]
+        question = _fill(random.choice(JSON_DEFAULT_PROMPTS[lang]), example)
         transcription = render_json(pairs, DEFAULT_JSON_SCHEMA, w2t)
     elif mode == "json_specified":
         schema = random.choice(list(JSON_SCHEMAS))
         spec = JSON_SCHEMAS[schema]
-        example = spec["example"]
+        example = spec["example"][lang]
         prompts = JSON_SENTENCE_PROMPTS if spec.get("level") == "sentence" else JSON_SCHEMA_PROMPTS
-        question = random.choice(prompts).format(example=example)
+        question = random.choice(prompts[lang]).format(example=example)
         transcription = render_json(pairs, schema, w2t)
     elif mode == "format_specified":
         fmt_kind = random.choice(NON_DEFAULT_FORMATS)
         spec = FORMAT_SPECS[fmt_kind]
-        example = spec["example"]
+        example = spec["example"][lang]
         prompts = FORMAT_SENTENCE_PROMPTS if spec.get("level") == "sentence" else FORMAT_PROMPTS
-        question = random.choice(prompts).format(example=example)
+        question = random.choice(prompts[lang]).format(example=example)
         transcription = render_format(pairs, fmt_kind, w2t)
     else:  # default
-        example = FORMAT_SPECS[DEFAULT_FORMAT]["example"]
-        question = _fill(random.choice(DEFAULT_PROMPTS), example)
+        example = FORMAT_SPECS[DEFAULT_FORMAT]["example"][lang]
+        question = _fill(random.choice(DEFAULT_PROMPTS[lang]), example)
         transcription = render_format(pairs, DEFAULT_FORMAT, w2t)
 
     base_id = record.get("id") or record.get("_id") or ""
@@ -444,7 +541,7 @@ def _trailing_gap(record):
     return duration - last_end, duration, last_end
 
 
-def process_split(input_file: Path, output_file: Path, weights) -> tuple[int, int, int]:
+def process_split(input_file: Path, output_file: Path, weights, lang="en") -> tuple[int, int, int]:
     kept = dropped = trailing_skipped = 0
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with input_file.open("r", encoding="utf-8") as fin, output_file.open("w", encoding="utf-8") as fout:
@@ -465,7 +562,7 @@ def process_split(input_file: Path, output_file: Path, weights) -> tuple[int, in
                 # )
                 trailing_skipped += 1
                 continue
-            out = build_variant(record, weights)
+            out = build_variant(record, weights, lang)
             if out is None:
                 dropped += 1
                 continue
@@ -485,6 +582,10 @@ if __name__ == "__main__":
         default=list(MIX_PRESETS),
         help="Which mix preset(s) to emit. One subfolder per preset under --output_dir.",
     )
+    parser.add_argument(
+        "--language", type=str, choices=LANGUAGES, default="en",
+        help="Language of the prompts (the spoken/transcribed content is unchanged).",
+    )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -500,6 +601,7 @@ if __name__ == "__main__":
 
     print(f"Splits detected: {[f.stem for f in split_files]}")
     print(f"Mixes:           {args.mix}")
+    print(f"Language:        {args.language}")
 
     total_trailing_skipped = 0
     for mix_name in args.mix:
@@ -509,7 +611,7 @@ if __name__ == "__main__":
         for split_file in split_files:
             split = split_file.stem
             out_file = mix_dir / f"{split}.jsonl"
-            kept, dropped, trailing_skipped = process_split(split_file, out_file, weights)
+            kept, dropped, trailing_skipped = process_split(split_file, out_file, weights, args.language)
             total_trailing_skipped += trailing_skipped
             print(
                 f"[{mix_name}/{split}] kept={kept} dropped={dropped} "

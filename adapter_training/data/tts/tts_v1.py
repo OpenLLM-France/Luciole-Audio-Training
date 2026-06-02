@@ -135,7 +135,7 @@ if __name__ == "__main__":
     import argparse
     import os
 
-    from audio import save_audio
+    from adapter_training.data.audio import save_audio
     parser = argparse.ArgumentParser()
     parser.add_argument("words", type=str, nargs="+", help="Text to convert to speech")
     parser.add_argument("--device", type=str, default=None, help="Device to use for inference")

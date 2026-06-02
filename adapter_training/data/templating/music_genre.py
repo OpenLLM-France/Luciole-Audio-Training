@@ -1,110 +1,149 @@
 import os
-import re
 import random
-
-# Relative import
-import sys
 
 import datasets
 import pandas
+import slugify
 
-sys.path.append(os.path.dirname(__file__))
-from audio import (
+from adapter_training.data.audio import (
     combine_audios_factory,
     conform_audio,
     cut_audio,
     load_audio,
     reverberation_factory,
+    save_audio,
 )
-from tts import text_to_speech
-from transcribe import transcribe_with_cache
+from adapter_training.data.tts.tts_coqui import text_to_speech
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # This compiles several Musical Genre Classification datasets, building formatted instructions
-# - https://huggingface.co/datasets/gmenon/slt-lyrics-audio
+# - https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
+# - https://huggingface.co/datasets/lewtun/music_genres
+# - https://huggingface.co/datasets/mteb/music-genre
+# - https://huggingface.co/datasets/MahiA/GT-Music-Genre
+# - https://huggingface.co/datasets/ylacombe/music_genres_XXX (where XXX is Jazz, Punk, Country, ...)
 
-def music_lyrics_instruct_data_iterator(
+def music_genre_instruct_data_iterator(
     streaming=True,
     system_prompt=None,
     debug_folder=None,
     language="en",
-    only_empty=False,
     proba_vocal=0.5,
     **kwargs):
 
     instruction_file = os.path.join(
-        os.path.dirname(__file__),
+        _ROOT,
         "assets",
-        f"instruction_music_lyrics_{language}_written.txt"
-    )
-    assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
-    with open(instruction_file) as f:
-        instructions_written = [line.strip() for line in f.read().split("\n") if line.strip()]
-
-    instruction_file = os.path.join(
-        os.path.dirname(__file__),
-        "assets",
-        f"instruction_music_lyrics_{language}_spoken.txt"
+        f"instruction_music_genre_{language}_spoken.txt"
     )
     assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
     with open(instruction_file) as f:
         instructions_spoken = [line.strip() for line in f.read().split("\n") if line.strip()]
 
-    REPOS = [
-        (
-            "DynamicSuperb/MusicGenreClassification_FMA",
-            ["test"]
-        ),
-        (
-            "lewtun/music_genres",
-            ["train", "test"]
-        ),
+    instruction_file = os.path.join(
+        _ROOT,
+        "assets",
+        f"instruction_music_genre_{language}_written.txt"
+    )
+    assert os.path.exists(instruction_file), f"File not found: {instruction_file}"
+    with open(instruction_file) as f:
+        instructions_written = [line.strip() for line in f.read().split("\n") if line.strip()]
+
+    REPOS_INSTRUCTS = {
+        "en": [
+            (
+                "DynamicSuperb/MusicGenreClassification_FMA",
+                ["test"], "label",
+            )
+        ]
+    }.get(language, [])
+
+    # Already prepared dataset
+    for repo, splits, label in REPOS_INSTRUCTS:
+        for split in splits:
+            ds = datasets.load_dataset(
+                repo,
+                streaming=streaming,
+                split="test",
+                **kwargs
+            )
+
+            yield repo + "--" + split
+
+            for sample in ds:
+                if "unknown" in sample[label].lower():
+                    continue
+                yield make_data_instruct(repo,
+                    sample["instruction"],
+                    sample[label],
+                    sample["audio"],
+                    system_prompt=system_prompt,
+                    language=language,
+                    vocal=False,
+                    debug_folder=debug_folder,
+               )
+
+    REPOS_CLASSIFICATION_TASK = [
+        # (
+        #     "lewtun/music_genres",
+        #     ["train", "test"], "genre", None
+        # ),
         (
             "mteb/music-genre",
-            ["test"]
+            ["test"], "label", {
+                0: "Alternative",
+                1: "Blues",
+                2: "Electronic",
+                3: "Folk / Country",
+                4: "Soul / R&B", # Funk / ...?
+                5: "Jazz",
+                6: "Pop",
+                7: "Rap / Hip-Hop",
+                8: "Rock",
+            }
         ),
         (
             "MahiA/GT-Music-Genre",
-            ["train", "test"]
+            ["train", "test"], "classname", None
         ),
     ]
-    for lyrics in [
+    for genre in [
         "Punk", "Jazz", "Country", "Soul-RnB"
     ]:
-        REPOS.append(
+        REPOS_CLASSIFICATION_TASK.append(
             (
-                f"ylacombe/music_lyricss_{lyrics}",
-                ["train"]
+                f"ylacombe/music_genres_{genre}",
+                ["train"], "genre", None
             )
         )
 
-    for repo, splits in REPOS:
+    for repo, splits, label, label_dict in REPOS_CLASSIFICATION_TASK:
         for split in splits:
 
             yield repo + "--" + split
 
-            try:
-                ds = datasets.load_dataset(
-                    repo,
-                    streaming=streaming,
-                    split=split,
-                    **kwargs
-                )
-            except Exception as e:
-                raise RuntimeError(f"Could not load dataset {repo} split {split}") from e
+            ds = datasets.load_dataset(
+                repo,
+                streaming=streaming,
+                split=split,
+                **kwargs
+            )
             for sample in ds:
                 vocal = random.random() < proba_vocal
                 instruction = random.choice(instructions_written) if not vocal else random.choice(instructions_spoken)
-                data = make_data_instruct(repo,
+                if isinstance(sample[label], str) and "unknown" in sample[label].lower():
+                    continue
+                yield make_data_instruct(repo,
                     instruction,
+                    sample[label],
                     sample["audio"] if "audio" in sample else sample,
                     system_prompt=system_prompt,
                     language=language,
-                    only_empty=only_empty,
                     vocal=vocal,
                     debug_folder=debug_folder,
+                    label_dict=label_dict,
                 )
-                if data is not None:
-                    yield data
 
 
 global _add_reverb_to_clip
@@ -117,15 +156,17 @@ _audios_combiner = None
 def make_data_instruct(
     repo,
     instruction,
+    answer,
     audio,
     sampling_rate=16_000,
     system_prompt=None,
     language="en",
     vocal=False,
+    label_dict=None,
     debug_folder=None,
-    only_empty=False,
     ):
-    global _add_reverb_to_clip, _add_reverb_to_recording, _audios_combiner
+
+    answer = format_genre(answer, label_dict=label_dict, repo=repo, language=language)
 
     # Compile audio
     assert isinstance(audio, dict)
@@ -151,62 +192,19 @@ def make_data_instruct(
     assert sampling_rate
     assert len(music_clip)
 
-    music_clip = cut_audio(music_clip, sampling_rate, duration=(10, 90))
 
-    transcript = transcribe_with_cache(debug_folder, music_clip).strip()
-
-    # Remove all non word characters
-    transcript_norm = re.sub(r"[^\w\s'\-]", "", transcript).strip().lower()
-
-    num_words = len(transcript_norm.split())
-    num_lines = len(transcript_norm.split("\n"))
-
-    whisper_hallu = (num_lines == 1) and (
-        transcript_norm in [
-            "",
-            "we'll be right back",
-            "music", "música", "muzica",
-            "outro music", "music playing",
-            "the end", "to be continued",
-            "let's go",
-        ] or (num_words < 10 and any([
-            # example: "thank you [very/so much] [for joigning us/listening]",
-            transcript_norm.startswith(start)
-            for start in ["thank you", "this is a production", "welcome to", "music by", "subtitle", "sous-titr", "piano ", "guitar "]
-        ]))
-    )
-
-    if only_empty:
-        if not whisper_hallu:
-            return None
-        print(f"Caught Whisper Hallucination: '{transcript}'")
-        transcript = "[...]"
-    else:
-        whisper_maybe_hallu = (not whisper_hallu) and (num_lines == 1) and (
-            any(expr in transcript_norm for expr in ["thank", "music", "solo"])
-            or any([
-                # example: "thank you [very/so much] [for joigning us/listening]",
-                transcript_norm.startswith(start)
-                for start in ["thank you", "this is a production", "welcome to", "music by", "bye"]
-            ])
-        )
-        if whisper_hallu or whisper_maybe_hallu:
-            # Skip short transcripts that are probably not relevant (hallucinations of Whisper ASR)
-            print(f"Skipping short transcript: '{transcript}'")
-            return None
-        elif num_lines == 1:
-            print(f"Keeping short transcript: '{transcript}' ({transcript_norm})")
-
-
+    global _add_reverb_to_clip
     if _add_reverb_to_clip is None:
         _add_reverb_to_clip = reverberation_factory(
             rir_scale_factor = (0.5, 1.0),
             gain_scaling_factor = (-20, 6),
         )
+    global _add_reverb_to_recording
     if _add_reverb_to_recording is None:
         _add_reverb_to_recording = reverberation_factory(
             rir_scale_factor = (0.7, 1.0),
         )
+    global _audios_combiner
     if _audios_combiner is None:
         _audios_combiner = combine_audios_factory()
 
@@ -235,15 +233,31 @@ def make_data_instruct(
             ],
         }[language]
         description = random.choice(description)
-        audio_instruction = text_to_speech(instruction, description)
+        audio_instruction = text_to_speech(instruction, language=language) # , description)
+        music_clip = cut_audio(
+            music_clip,
+            sampling_rate=sampling_rate,
+            duration=(4 + len(audio_instruction), 12 + len(audio_instruction))
+        )
         music_clip = _add_reverb_to_clip(music_clip, sampling_rate)
         _audios_combiner.music_clip = music_clip
         final_waveform = _audios_combiner(audio_instruction, sampling_rate)
         add_reverb = _add_reverb_to_recording
-
     else:
-        final_waveform = music_clip
+        final_waveform = cut_audio(music_clip, sampling_rate, duration=(4, 12))
         add_reverb = _add_reverb_to_clip
+
+    if debug_folder:
+        filename = f"{Slugify(answer)}_{Slugify(instruction)}"
+        # Dump audio for manual inspection (debug, check, ...)
+        if vocal:
+            filename += f"_{Slugify(description)}"
+            debug_folder = os.path.join(debug_folder, "vocal")
+        else:
+            debug_folder = os.path.join(debug_folder, "textual")
+        os.makedirs(debug_folder, exist_ok=True)
+        audio_filename = os.path.join(debug_folder, filename + ".wav")
+        save_audio(audio_filename, final_waveform, sampling_rate=sampling_rate)
 
     final_waveform = add_reverb(final_waveform, sampling_rate)
 
@@ -266,10 +280,97 @@ def make_data_instruct(
         [{"role": "system", "content": [{"type": "text", "text": system_prompt}]}] if system_prompt else []
     ) + [
         {"role": "user", "content": full_instruction},
-        {"role": "assistant","content": [{"type": "text", "text": transcript}]}
+        {"role": "assistant","content": [{"type": "text", "text": answer}]}
     ]
 
     ########################################################
+
+
+def Slugify(s):
+    return slugify.slugify(s).capitalize()
+
+
+def format_genre(genre, proba_this_is=0, label_dict=None, repo="UNK", language="en"):
+    if isinstance(genre, int):
+        # https://huggingface.co/datasets/mteb/music-genre
+        assert label_dict, f"Missing label dictionary for {repo}"
+        genre_name = label_dict.get(genre)
+        assert genre_name, f"Unknown genre: {genre}"
+        genre = genre_name
+
+    genre = genre.replace("Soul-RnB", "Soul / R&B")
+    if " / " in genre:
+        genres = genre.split(" / ")
+        # # We could do things like "Glitch (or Chiptune)", "Historic (or Old-Time)"
+        # if len(genres) == 2:
+        #     genre1, genre2 = genres
+        #     if random.random() <= 0.5:
+        #         genre1, genre2 = genre2, genre1
+        #     genres.append(f"{genre1} (or {genre2})")
+        genre = random.choice(genres)
+    if proba_this_is and random.random() <= proba_this_is:
+        # We could do this, but it looks like a false good idea
+        # Having a LLM that produces short answers is ... good :D
+        return "This is " + genre.lower()
+    else: # Capitalize
+        genre = genre[0].upper() + genre[1:]
+
+    if language == "en":
+        pass
+    elif language in _genre_trad_dicts:
+        global _seen_genres
+
+        if genre not in _genre_trad_dicts[language] and genre not in _seen_genres:
+            _seen_genres.add(genre)
+            print(f'WARNING: new genre "{genre}"')
+
+        genre = _genre_trad_dicts[language].get(genre, genre)
+
+    return genre + "."
+
+global _seen_genres
+_seen_genres = set()
+
+_genre_trad_dicts = {
+    "fr": {
+        "Rock": "Du rock",
+        "Punk": "Du punk rock",
+        "R&B": "Du R&B",
+        "Pop": "De la pop",
+        "Country": "De la country",
+        "Hip-Hop": "Du hip-hop",
+        "Jazz": "Du jazz",
+        "Blues": "Du blues",
+        "Folk": "Du folk",
+        "Metal": "Du métal",
+        "Reggae": "Du reggae",
+        "Soul": "De la soul",
+        "Dubstep": "Du dubstep",
+        "Indie-Rock": "Du rock indé",
+        "House": "De la house",
+        "Techno": "De la techno",
+        "Drum-and-Bass": "De la drum and bass",
+        "Dub": "Du dub",
+        "Classical": "De la musique classique",
+        "Historic":  "De la musique baroque",
+        "Old-Time":  "De la musique baroque",
+        "International": "De la musique internationale",
+        "Instrumental": "De la musique instrumentale",
+        "Experimental": "De la musique expérimentale",
+        "Ambient Electronic": "De l'électro d'ambiance",
+        "Ambient": "De la musique d'ambiance",
+        "Chiptune": "De la chiptune",
+        "Glitch": "De la chiptune",
+        "Electronic": "De l'électro",
+        "Piano": "Du piano",
+        "Vocal": "De la musique vocale",
+        "Spoken": "Du parlé",
+        "Easy Listening": "De la musique d'ambiance",
+        "Acoustic": "De la musique acoustique",
+        "Acapella": "De la musique a cappella",
+    },
+}
+
 
 def string_to_integer(s: str) -> int:
     return abs(hash(s))
@@ -278,10 +379,9 @@ def string_to_integer(s: str) -> int:
 def main_dump_parquet():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Dump Music Genre Classification datasets")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="out", help="Output folder")
     parser.add_argument("--language", default="en", type=str, help="Language")
-    parser.add_argument("--only_empty", action="store_true", help="Only empty transcripts")
     parser.add_argument("--max_docs", default=None, type=int, help="Maximum number of documents")
     parser.add_argument("--num_docs_per_parquet", default=200, type=int, help="Number of documents per parquet")
     parser.add_argument("--debug_folder", default=None, help="Debug folder")
@@ -306,10 +406,10 @@ def main_dump_parquet():
             first_idx = last_idx
             messages = []
 
+    dataset_name = None
     for i, data in enumerate(
-        music_lyrics_instruct_data_iterator(
+        music_genre_instruct_data_iterator(
             language=args.language,
-            only_empty=args.only_empty,
             debug_folder=args.debug_folder
         )):
         if args.max_docs and i >= args.max_docs:
@@ -323,6 +423,7 @@ def main_dump_parquet():
                 # Reset indices
                 first_idx = last_idx = 0
                 # Pseudo-deterministic randomness for each dataset
+                print(f"Resetting random seed for dataset {dataset_name}")
                 random.seed(string_to_integer(dataset_name))
             continue
         messages.append(data)

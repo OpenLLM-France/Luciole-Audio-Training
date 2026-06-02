@@ -6,7 +6,7 @@ from datasets import Dataset, load_dataset, load_from_disk
 from tqdm import tqdm
 import soundfile as sf
 
-from utils.audio import conform_audio 
+from adapter_training.utils.audio import conform_audio 
 
 def _convert_bytes_to_audio(bytes_data):
     """Convert bytes data to audio array."""

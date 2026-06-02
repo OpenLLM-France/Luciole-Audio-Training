@@ -125,7 +125,7 @@ def load_model_checkpoint_peft(
     load_dir: str
 ) -> Tuple[torch.nn.Module, int, int, Any, Any]:
     """Load model checkpoint with PEFT adapter handling"""
-    from utils.config_utils import load_all_configs  # Local import to avoid circular dependencies
+    from adapter_training.utils.config_utils import load_all_configs  # Local import to avoid circular dependencies
 
     try:
         logger.info(f"--> Loading model checkpoint from {load_dir}")

@@ -17,7 +17,7 @@ import glob
 import argparse
 
 # Load prompt dictionary (ensure JSON format is correct)
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 dict_prompts = os.path.join(script_dir, "assets", "instruction_transcription_and_translation_fr-en.txt")
 assert os.path.exists(dict_prompts), f"File not found: {dict_prompts}"
 with open(dict_prompts, 'r', encoding='utf-8') as f:

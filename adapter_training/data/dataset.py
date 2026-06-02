@@ -12,7 +12,7 @@ import torch
 import whisper
 from torch.utils.data import Dataset
 
-from utils.audio import get_audio_duration, load_audio
+from adapter_training.utils.audio import get_audio_duration, load_audio
 
 
 def resolve_audio_path(relative_path: str, base_paths) -> str:

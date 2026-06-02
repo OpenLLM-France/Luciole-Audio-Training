@@ -1,17 +1,13 @@
 import os
 
-# Relative import
-import sys
-
 USE_FASTER_WHISPER = False
 
-sys.path.append(os.path.dirname(__file__))
-from audio import (
+from adapter_training.data.audio import (
     load_audio,
     save_audio,
 )
 
-from utils import array_signature
+from adapter_training.data.utils import array_signature
 
 
 

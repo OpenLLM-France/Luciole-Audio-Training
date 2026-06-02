@@ -5,8 +5,8 @@ import pandas
 import slugify
 import glob
 
-from tts_coqui import text_to_speech
-from audio import save_audio
+from adapter_training.data.tts.tts_coqui import text_to_speech
+from adapter_training.data.audio import save_audio
 
 
 

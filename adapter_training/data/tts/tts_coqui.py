@@ -3,7 +3,7 @@ import torch
 import random
 from TTS.api import TTS
 import torchaudio
-from audio import SpeechAugment
+from adapter_training.data.audio import SpeechAugment
 import numpy as np
 
 # Load a multilingual / French model with multi-speaker support
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     import os
     random.seed(1234)
 
-    from audio import save_audio
+    from adapter_training.data.audio import save_audio
     parser = argparse.ArgumentParser()
     parser.add_argument("words", type=str, nargs="+", help="Text to convert to speech")
     parser.add_argument("--device", type=str, default=None, help="Device to use for inference")
