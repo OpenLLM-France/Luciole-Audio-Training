@@ -595,31 +595,49 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
           tags: {sub_task: language_reco}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/answer_with_source/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/answer_with_time/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/time2sentence/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/time2word/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/word2sentence/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/word2time/train.jsonl
-          tags: {sub_task: information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train.jsonl
+          tags: {sub_task: temporal}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/word2time_first/train.jsonl
-          tags: {sub_task: information_extraction}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/format_json_answer/train.jsonl
-          tags: {sub_task: formatted_information_extraction}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
+          tags: {sub_task: language_reco}
         # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_json_answer/train.jsonl
+          tags: {sub_task: formatted_temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
         #   tags: {sub_task: formatted_timestamped_transcription}
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/mixed/train.jsonl
@@ -670,6 +688,45 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
           tags: {sub_task: sentence_stress_detection}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_source/train.jsonl
+          tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_time/train.jsonl
+          tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train.jsonl
+          tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word/train.jsonl
+          tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence/train.jsonl
+          tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train.jsonl
+          tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_source_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_time_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time_chat/train.jsonl
+        #   tags: {sub_task: temporal}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/format_json_answer/train.jsonl
+          tags: {sub_task: formatted_temporal}
 
 # ============================================================
 # MISC MULTITURN CONVERSATIONS — 1%
