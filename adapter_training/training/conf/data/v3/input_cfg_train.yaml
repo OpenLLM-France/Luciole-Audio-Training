@@ -328,7 +328,7 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/ami/train.jsonl
           tags: {sub_task: summarization}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/icsi/train.jsonl
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/icsi/summary/train.jsonl
           tags: {sub_task: summarization}
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/nutshell/train.jsonl
@@ -496,7 +496,7 @@
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
         tags: {sub_task: music_captioning}
       - type: multimodal_conversation
-        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/JamendoMaxCaps/tmp.jsonl
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/JamendoMaxCaps/train.jsonl
         tags: {sub_task: music_captioning}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
@@ -521,6 +521,9 @@
         tags: {sub_task: music_qa}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/JamendoMaxCaps/train.jsonl
         tags: {sub_task: music_captioning}
       - type: multimodal_conversation
         manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
@@ -689,12 +692,6 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
           tags: {sub_task: sentence_stress_detection}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_source/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_time/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train.jsonl
           tags: {sub_task: temporal}
         - type: multimodal_conversation
@@ -707,12 +704,6 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train.jsonl
           tags: {sub_task: temporal}
         # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_source_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/answer_with_time_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
         #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence_chat/train.jsonl
         #   tags: {sub_task: temporal}
         # - type: multimodal_conversation
@@ -724,9 +715,6 @@
         # - type: multimodal_conversation
         #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time_chat/train.jsonl
         #   tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/format_json_answer/train.jsonl
-          tags: {sub_task: formatted_temporal}
 
 # ============================================================
 # MISC MULTITURN CONVERSATIONS — 1%
