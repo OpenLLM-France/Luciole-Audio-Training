@@ -123,6 +123,15 @@ def _normalize_dataset_name(name: str) -> str:
     return name
 
 
+def _safe_str(v) -> str:
+    """Convert a possibly-NaN/None value to a stripped string, '' on missing."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and v != v:  # NaN
+        return ""
+    return str(v).strip()
+
+
 def make_label(row, group_field: str = "task_type"):
     """Return (group, unique_label, display_label, lang_src, lang_tgt, hatch_key).
 
@@ -130,10 +139,10 @@ def make_label(row, group_field: str = "task_type"):
     hatch dimension). Default is "task_type" (overall plot); pass "sub_task"
     (or any other column) to group by that field instead.
     """
-    task = str(row["task_type"]).strip().lower()
-    lang = str(row.get("language", "") or "").strip()
-    src = str(row.get("source_lang", "") or "").strip()
-    tgt = str(row.get("target_lang", "") or "").strip()
+    task = _safe_str(row.get("task_type", "")).lower()
+    lang = _safe_str(row.get("language", ""))
+    src = _safe_str(row.get("source_lang", ""))
+    tgt = _safe_str(row.get("target_lang", ""))
 
     if group_field == "task_type":
         hatch_key = task
@@ -145,7 +154,7 @@ def make_label(row, group_field: str = "task_type"):
             else task.replace("_", " ").title()
         )
     else:
-        grp_val = str(row.get(group_field, "") or "").strip() or "(none)"
+        grp_val = _safe_str(row.get(group_field, "")) or "(none)"
         if group_field == "dataset_name" and grp_val != "(none)":
             grp_val = _normalize_dataset_name(grp_val)
         hatch_key = grp_val.lower()
