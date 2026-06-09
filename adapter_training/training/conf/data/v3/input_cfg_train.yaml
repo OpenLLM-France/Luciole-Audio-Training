@@ -1,14 +1,14 @@
 # ============================================================
-# ASR — 35%
+# ASR — 30%
 # ============================================================
 - type: group
-  weight: 0.35
+  weight: 0.30
   tags: {task: asr}
   input_cfg:
 
-    # FR — 28% of ASR
+    # FR — 30% of ASR
     - type: group
-      weight: 0.28
+      weight: 0.30
       tags: {lang: fr}
       input_cfg:
         - type: multimodal_conversation
@@ -55,24 +55,31 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Adultes/train_recasepunc.jsonl
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Enfants/train_recasepunc.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split0.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split1.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split2.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split3.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split4.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split5.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
+        # YouTubeFr — wrap the 7 splits in a single collection so they
+        # compete with the other FR ASR datasets as one entity (not seven).
+        # weight: 0.18 means "this collection gets 18% of the FR ASR budget";
+        # the remaining 82% is split data-driven among the other FR datasets.
+        - type: group
+          weight: 0.18
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split0.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split1.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split2.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split3.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split4.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split5.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
 
-    # EN — 28% of ASR
+    # EN — 30% of ASR
     - type: group
-      weight: 0.28
+      weight: 0.30
       tags: {lang: en}
       input_cfg:
         - type: multimodal_conversation
@@ -86,9 +93,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/VoxPopuli/train.jsonl # max_dur=42.36
 
-    # DE — 9% of ASR
+    # DE — 8% of ASR
     - type: group
-      weight: 0.09
+      weight: 0.08
       tags: {lang: de}
       input_cfg:
         - type: multimodal_conversation
@@ -102,9 +109,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/VoxPopuli/train.jsonl
 
-    # ES — 9% of ASR
+    # ES — 8% of ASR
     - type: group
-      weight: 0.09
+      weight: 0.08
       tags: {lang: es}
       input_cfg:
         - type: multimodal_conversation
@@ -118,9 +125,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/VoxPopuli/train.jsonl
 
-    # IT — 7% of ASR
+    # IT — 6% of ASR
     - type: group
-      weight: 0.07
+      weight: 0.06
       tags: {lang: it}
       input_cfg:
         - type: multimodal_conversation
@@ -134,9 +141,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train.jsonl
 
-    # NL — 6% of ASR
+    # NL — 5% of ASR
     - type: group
-      weight: 0.06
+      weight: 0.05
       tags: {lang: nl}
       input_cfg:
         - type: multimodal_conversation
@@ -175,11 +182,11 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
 
 # ============================================================
-# AST — 14%
+# AST — 12%
 # ============================================================
 - type: group
   tags: {task: ast}
-  weight: 0.14
+  weight: 0.12
   input_cfg:
     # AST EN→X
     - type: multimodal_conversation
@@ -291,16 +298,16 @@
 
 
 # ============================================================
-# QA — 30%
+# QA — 38%   (primary objective)
 # ============================================================
 - type: group
   tags: {task: qa}
-  weight: 0.3
+  weight: 0.38
   input_cfg:
     # EN QA
     - type: group
       tags: {lang: en}
-      weight: 0.4
+      weight: 0.41
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
@@ -354,14 +361,16 @@
     # FR QA
     - type: group
       tags: {lang: fr}
-      weight: 0.39
+      weight: 0.41
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
-        - type: multimodal_conversation
+          # synthetic instruction-tuning data — explicitly capped at 3% of FR QA
+          weight: 0.03
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
         - type: multimodal_conversation
@@ -370,7 +379,7 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/SIFT-50M/content_level/multilingual_librispeech_fr/train_other.jsonl
     - type: group
       tags: {lang: de}
-      weight: 0.05
+      weight: 0.04
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_other.jsonl
@@ -378,7 +387,7 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_other.jsonl
     - type: group
       tags: {lang: es}
-      weight: 0.05
+      weight: 0.04
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_other.jsonl
@@ -386,7 +395,7 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_other.jsonl
     - type: group
       tags: {lang: it}
-      weight: 0.05
+      weight: 0.04
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_other.jsonl
@@ -433,11 +442,11 @@
           tags: {sub_task: gender_reco, task: other}
 
 # ============================================================
-# AQA — 15%
+# AQA — 12%
 # ============================================================
 - type: group
   tags: {task: aqa}
-  weight: 0.15
+  weight: 0.12
   input_cfg:
     - type: group
       weight: 0.5
@@ -560,11 +569,11 @@
       #   tags: {sub_task: music_qa}
 
 # ============================================================
-# OTHER — 5%
+# OTHER — 6%
 # ============================================================
 - type: group
   tags: {task: other}
-  weight: 0.05
+  weight: 0.06
   input_cfg:
     - type: group
       tags: {lang: en}
@@ -717,11 +726,11 @@
         #   tags: {sub_task: temporal}
 
 # ============================================================
-# MISC MULTITURN CONVERSATIONS — 1%
+# MISC MULTITURN CONVERSATIONS — 2%
 # ============================================================
 - type: group
   tags: {task: task_switching, lang: mixed}
-  weight: 0.01
+  weight: 0.02
   input_cfg:
     - type: multimodal_conversation
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train.jsonl
