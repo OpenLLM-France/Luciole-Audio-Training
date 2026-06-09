@@ -340,32 +340,55 @@ def _apply_input_weights(ta, tl, input_task_w, input_lang_w, mode):
 def _compute_tree_leaf_probs(nodes, prefix_prob, df_map, size_field, temperature):
     """Walk a YAML sub-tree and assign an effective probability to each leaf.
 
-    Within every sibling group, weights are determined as follows:
-      - explicit ``weight:`` on the node wins;
-      - otherwise, for a leaf, the weight is ``size**(1/T)`` (size from df_map);
-      - otherwise (group with no weight), defaults to 1.0.
-    Sibling weights are then normalised to sum to 1 and the cumulative product
-    is taken down to each leaf.
+    Within every sibling group:
+      - A sibling with an explicit ``weight:`` is taken as its **fraction** of
+        the sibling pool (so ``weight: 0.18`` literally means 18% of the
+        parent's budget — same intuition as the top-level weights).
+      - Siblings *without* an explicit weight share the remaining
+        ``1 − sum(explicit)`` data-driven: leaves by ``size**(1/T)``, plain
+        groups by a default score of 1.0.
+      - If every sibling is explicit, their values are renormalised to sum to 1.
 
     Returns a list of dicts: {node, effective_prob, path, samples,
     dataset_name, duration_sec}.
     """
     leaves = []
     siblings = [n for n in nodes if isinstance(n, dict)]
+    if not siblings:
+        return leaves
 
-    weights = []
-    for n in siblings:
-        if n.get("weight") is not None:
-            weights.append(float(n["weight"]))
+    is_explicit = [n.get("weight") is not None for n in siblings]
+    explicit_w = [float(n.get("weight") or 0) if e else 0.0 for n, e in zip(siblings, is_explicit)]
+    explicit_sum = sum(explicit_w)
+
+    default_score = []
+    for n, e in zip(siblings, is_explicit):
+        if e:
+            default_score.append(0.0)
         elif n.get("type") == "multimodal_conversation":
             d = df_map.get(n.get("manifest_filepath", ""), {})
             size = float(d.get(size_field, 0) or 0)
-            weights.append(size ** (1.0 / temperature) if size > 0 else 0.0)
+            default_score.append(size ** (1.0 / temperature) if size > 0 else 0.0)
         else:
-            weights.append(1.0)
+            default_score.append(1.0)
+    default_sum = sum(default_score)
+
+    weights = [0.0] * len(siblings)
+    has_defaults = default_sum > 0
+    if has_defaults:
+        # Explicit slots take their stated fraction; defaults split the rest.
+        remaining = max(0.0, 1.0 - explicit_sum)
+        for i, e in enumerate(is_explicit):
+            if e:
+                weights[i] = explicit_w[i]
+            else:
+                weights[i] = (default_score[i] / default_sum) * remaining
+    else:
+        # No data-driven siblings — renormalise explicit weights to sum to 1.
+        if explicit_sum > 0:
+            weights = [w / explicit_sum for w in explicit_w]
 
     total = sum(weights) or 1.0
-
     for n, w in zip(siblings, weights):
         child_prefix = prefix_prob * (w / total)
         if n.get("type") == "group":
@@ -480,16 +503,26 @@ def write_yaml_preserving_structure(
                 n_total += n
         return dur_total, n_total
 
+    def _subtree_prob(node):
+        """Sum effective_prob over all leaves under this node."""
+        if not isinstance(node, dict):
+            return 0.0
+        if node.get("type") == "multimodal_conversation":
+            return path_eff.get(node.get("manifest_filepath", ""), 0.0)
+        return sum(_subtree_prob(ch) for ch in node.get("input_cfg", []))
+
     lines = []
 
     def emit(nodes, indent, depth):
         ind = " " * indent
-        leaf_siblings = [n for n in nodes if isinstance(n, dict) and n.get("type") == "multimodal_conversation"]
-        leaf_paths = [n.get("manifest_filepath", "") for n in leaf_siblings]
-        sib_probs = [path_eff.get(p, 0.0) for p in leaf_paths]
-        sib_total = sum(sib_probs) or 1.0
-        leaf_shares = {leaf_paths[i]: (sib_probs[i] / sib_total) for i in range(len(leaf_paths))}
-        n_leaf_siblings = len(leaf_siblings)
+        siblings = [n for n in nodes if isinstance(n, dict)]
+        sib_probs = [_subtree_prob(n) for n in siblings]
+        pool = sum(sib_probs) or 1.0
+        sib_shares = [p / pool for p in sib_probs]
+        # We only emit a `weight:` line when the parent has >1 children that
+        # carry mass (otherwise the single child is implicitly weight=1).
+        n_active_sibs = sum(1 for p in sib_probs if p > 0)
+        share_by_node = dict(zip(map(id, siblings), sib_shares))
 
         for node in nodes:
             if not isinstance(node, dict):
@@ -499,14 +532,17 @@ def write_yaml_preserving_structure(
             if isinstance(tags, str):
                 tags = {}
             tags_str = _format_tags(tags) if tags else None
+            share = share_by_node[id(node)]
 
             if ntype == "group":
-                w = float(node.get("weight", 1.0) or 1.0)
                 children = node.get("input_cfg", [])
                 dur, n = _group_size(node)
                 comment = f"   # {_size_label(dur, n)}" if (dur or n) else ""
                 lines.append(f"{ind}- type: group")
-                lines.append(f"{ind}  weight: {w:.4f}{comment}")
+                if n_active_sibs > 1:
+                    lines.append(f"{ind}  weight: {share:.4f}{comment}")
+                elif comment:
+                    lines.append(f"{ind}  {comment.strip()}")
                 if tags_str:
                     lines.append(f"{ind}  tags: {tags_str}")
                 lines.append(f"{ind}  input_cfg:")
@@ -520,8 +556,7 @@ def write_yaml_preserving_structure(
                 dur = float(d.get("total_duration_sec", 0))
                 label = _size_label(dur, ns)
                 lines.append(f"{ind}- type: multimodal_conversation")
-                if n_leaf_siblings > 1:
-                    share = leaf_shares.get(path, 0.0)
+                if n_active_sibs > 1:
                     lines.append(f"{ind}  weight: {share:.4f}   # {name} ({label})")
                 else:
                     lines.append(f"{ind}  # {name} ({label})")
