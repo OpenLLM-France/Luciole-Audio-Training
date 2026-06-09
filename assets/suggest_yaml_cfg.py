@@ -337,6 +337,207 @@ def _apply_input_weights(ta, tl, input_task_w, input_lang_w, mode):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _compute_tree_leaf_probs(nodes, prefix_prob, df_map, size_field, temperature):
+    """Walk a YAML sub-tree and assign an effective probability to each leaf.
+
+    Within every sibling group, weights are determined as follows:
+      - explicit ``weight:`` on the node wins;
+      - otherwise, for a leaf, the weight is ``size**(1/T)`` (size from df_map);
+      - otherwise (group with no weight), defaults to 1.0.
+    Sibling weights are then normalised to sum to 1 and the cumulative product
+    is taken down to each leaf.
+
+    Returns a list of dicts: {node, effective_prob, path, samples,
+    dataset_name, duration_sec}.
+    """
+    leaves = []
+    siblings = [n for n in nodes if isinstance(n, dict)]
+
+    weights = []
+    for n in siblings:
+        if n.get("weight") is not None:
+            weights.append(float(n["weight"]))
+        elif n.get("type") == "multimodal_conversation":
+            d = df_map.get(n.get("manifest_filepath", ""), {})
+            size = float(d.get(size_field, 0) or 0)
+            weights.append(size ** (1.0 / temperature) if size > 0 else 0.0)
+        else:
+            weights.append(1.0)
+
+    total = sum(weights) or 1.0
+
+    for n, w in zip(siblings, weights):
+        child_prefix = prefix_prob * (w / total)
+        if n.get("type") == "group":
+            leaves.extend(
+                _compute_tree_leaf_probs(n.get("input_cfg", []), child_prefix, df_map, size_field, temperature)
+            )
+        elif n.get("type") == "multimodal_conversation":
+            path = n.get("manifest_filepath", "")
+            d = df_map.get(path, {})
+            leaves.append(
+                {
+                    "node": n,
+                    "effective_prob": child_prefix,
+                    "path": path,
+                    "samples": float(d.get("num_samples", 0) or 0),
+                    "dataset_name": d.get("dataset_name", "?"),
+                    "duration_sec": float(d.get("total_duration_sec", 0) or 0),
+                }
+            )
+
+    return leaves
+
+
+def _apply_max_passes_tree(leaves, total_samples, max_passes, max_iter=50):
+    """Cap effective_prob so no leaf exceeds *max_passes* expected passes.
+    Excess budget is redistributed proportionally to remaining uncapped leaves."""
+    if max_passes <= 0 or not leaves:
+        return leaves
+    for _ in range(max_iter):
+        capped_any = False
+        for leaf in leaves:
+            if leaf["samples"] <= 0:
+                continue
+            passes = leaf["effective_prob"] * total_samples / leaf["samples"]
+            if passes > max_passes:
+                target = max_passes * leaf["samples"] / total_samples
+                delta = leaf["effective_prob"] - target
+                if delta > 1e-12:
+                    leaf["effective_prob"] = target
+                    uncapped = [
+                        l
+                        for l in leaves
+                        if l is not leaf
+                        and l["samples"] > 0
+                        and (l["effective_prob"] * total_samples / l["samples"]) < max_passes
+                    ]
+                    pool = sum(l["effective_prob"] for l in uncapped)
+                    if pool > 0:
+                        for l in uncapped:
+                            l["effective_prob"] += delta * l["effective_prob"] / pool
+                        capped_any = True
+        if not capped_any:
+            break
+    return leaves
+
+
+def _format_tags(tags: dict) -> str:
+    return "{" + ", ".join(f"{k}: {v}" for k, v in tags.items()) + "}"
+
+
+def write_yaml_preserving_structure(
+    input_yaml_path: str,
+    df: pd.DataFrame,
+    output_path: Path,
+    metric: str,
+    temperature: float,
+    max_passes: float = 0.0,
+) -> None:
+    """Mirror the input YAML tree, copying every group's weight and tags
+    verbatim, and filling in per-leaf weights computed as data-driven shares
+    within each sibling group (size^(1/T)). Optionally caps per-leaf passes
+    via max_passes (redistributing excess to uncapped siblings)."""
+
+    with open(input_yaml_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    if isinstance(cfg, list):
+        cfg = {"input_cfg": cfg}
+
+    df_map = {}
+    for _, row in df.iterrows():
+        p = row.get("raw_manifest_path")
+        if not p:
+            continue
+        df_map[p] = {
+            "num_samples": float(row.get("num_samples", 0) or 0),
+            "total_duration_sec": float(row.get("total_duration_sec", 0) or 0),
+            "dataset_name": row.get("dataset_name", "?"),
+        }
+
+    size_field = "total_duration_sec" if metric == "duration" else "num_samples"
+    total_samples = sum(d["num_samples"] for d in df_map.values()) or 1.0
+
+    leaves = _compute_tree_leaf_probs(cfg.get("input_cfg", []), 1.0, df_map, size_field, temperature)
+    if max_passes > 0:
+        _apply_max_passes_tree(leaves, total_samples, max_passes)
+    path_eff = {l["path"]: l["effective_prob"] for l in leaves}
+
+    def _size_label(dur_sec, n_samples):
+        return f"{fmt_hours(dur_sec)}, {fmt_num(int(n_samples))} samples"
+
+    def _group_size(node):
+        """Sum (duration_sec, num_samples) over all leaves under this node."""
+        dur_total = 0.0
+        n_total = 0
+        if node.get("type") == "multimodal_conversation":
+            d = df_map.get(node.get("manifest_filepath", ""), {})
+            return float(d.get("total_duration_sec", 0) or 0), int(d.get("num_samples", 0) or 0)
+        for ch in node.get("input_cfg", []):
+            if isinstance(ch, dict):
+                d, n = _group_size(ch)
+                dur_total += d
+                n_total += n
+        return dur_total, n_total
+
+    lines = []
+
+    def emit(nodes, indent, depth):
+        ind = " " * indent
+        leaf_siblings = [n for n in nodes if isinstance(n, dict) and n.get("type") == "multimodal_conversation"]
+        leaf_paths = [n.get("manifest_filepath", "") for n in leaf_siblings]
+        sib_probs = [path_eff.get(p, 0.0) for p in leaf_paths]
+        sib_total = sum(sib_probs) or 1.0
+        leaf_shares = {leaf_paths[i]: (sib_probs[i] / sib_total) for i in range(len(leaf_paths))}
+        n_leaf_siblings = len(leaf_siblings)
+
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            ntype = node.get("type")
+            tags = node.get("tags") or {}
+            if isinstance(tags, str):
+                tags = {}
+            tags_str = _format_tags(tags) if tags else None
+
+            if ntype == "group":
+                w = float(node.get("weight", 1.0) or 1.0)
+                children = node.get("input_cfg", [])
+                dur, n = _group_size(node)
+                comment = f"   # {_size_label(dur, n)}" if (dur or n) else ""
+                lines.append(f"{ind}- type: group")
+                lines.append(f"{ind}  weight: {w:.4f}{comment}")
+                if tags_str:
+                    lines.append(f"{ind}  tags: {tags_str}")
+                lines.append(f"{ind}  input_cfg:")
+                emit(children, indent + 4, depth + 1)
+
+            elif ntype == "multimodal_conversation":
+                path = node.get("manifest_filepath", "")
+                d = df_map.get(path, {})
+                name = d.get("dataset_name", "?")
+                ns = int(d.get("num_samples", 0))
+                dur = float(d.get("total_duration_sec", 0))
+                label = _size_label(dur, ns)
+                lines.append(f"{ind}- type: multimodal_conversation")
+                if n_leaf_siblings > 1:
+                    share = leaf_shares.get(path, 0.0)
+                    lines.append(f"{ind}  weight: {share:.4f}   # {name} ({label})")
+                else:
+                    lines.append(f"{ind}  # {name} ({label})")
+                if tags_str:
+                    lines.append(f"{ind}  tags: {tags_str}")
+                lines.append(f"{ind}  manifest_filepath: {path}")
+
+        if depth == 0:
+            lines.append("")  # blank line between top-level groups
+
+    emit(cfg.get("input_cfg", []), 0, 0)
+
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"✅ YAML (tree-preserving) → {output_path}")
+
+
 def write_yaml(df: pd.DataFrame, metric: str, temperature: float, output_path: Path) -> None:
     """Write a NeMo-compatible input_cfg YAML from the weighted DataFrame."""
 
@@ -530,6 +731,16 @@ def main():
 
     print_summary(df, title=f"metric={args.metric}  T={args.temperature}")
     if args.output:
+        if args.yaml:
+            write_yaml_preserving_structure(
+                args.yaml,
+                df,
+                Path(args.output),
+                metric=args.metric,
+                temperature=args.temperature,
+                max_passes=args.max_passes,
+            )
+            return
         write_yaml(df, args.metric, args.temperature, Path(args.output))
 
 
