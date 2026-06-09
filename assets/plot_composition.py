@@ -83,6 +83,27 @@ TASK_HATCHES = {
     "task_switching": "x+x",  # multi-task mix — busy crosshatch
 }
 
+# Fixed sort order for languages. Used everywhere a stable language ordering
+# matters (e.g. ordering pie slices the same way between samples and duration
+# plots). Unknown languages get a large rank so they trail.
+_LANG_RANK = {"en": 1, "fr": 2, "de": 3, "es": 4, "it": 5, "pt": 6, "nl": 7, "ar": 8}
+_UNKNOWN_LANG_RANK = 999
+
+
+def _lang_sort_key(lkey: str) -> tuple:
+    """Return a tuple sort key for a language code or a src→tgt (or src-tgt)
+    translation pair: (min_rank, max_rank, first_lang_rank)."""
+    s = str(lkey).strip().lower()
+    parts = [p for p in s.replace("→", "-").split("-") if p]
+    if len(parts) >= 2:
+        ranks = [_LANG_RANK.get(p, _UNKNOWN_LANG_RANK) for p in parts[:2]]
+        return (min(ranks), max(ranks), ranks[0])
+    if len(parts) == 1:
+        r = _LANG_RANK.get(parts[0], _UNKNOWN_LANG_RANK)
+        return (r, r, r)
+    return (_UNKNOWN_LANG_RANK, _UNKNOWN_LANG_RANK, _UNKNOWN_LANG_RANK)
+
+
 # Hatch styles used to dynamically encode subtasks (sorted from larger to smaller).
 HATCH_CYCLE = [
     "",
@@ -237,10 +258,12 @@ def plot_composition(
                     f"Add an entry to TASK_HATCHES in plot_composition.py."
                 )
         else:
-            size_col = "total_duration_sec" if metric == "duration" else "num_samples"
+            # Always rank by num_samples (not by --metric) so the hatch assigned
+            # to a given group_field value is identical between the samples-
+            # and duration-based plots.
             tmp_key = df[group_field].fillna("").astype(str).map(_key)
-            sizes = df[size_col].fillna(0).groupby(tmp_key).sum().sort_values(ascending=False)
-            sizes = sizes[sizes > 0]
+            sizes = df["num_samples"].fillna(0).groupby(tmp_key).sum()
+            sizes = sizes[sizes > 0].sort_values(ascending=False, kind="stable")
             hatch_map = {str(k): HATCH_CYCLE[i % len(HATCH_CYCLE)] for i, k in enumerate(sizes.index)}
 
     title_hatch_label = "task" if group_field == "task_type" else group_field.replace("_", " ")
@@ -289,17 +312,25 @@ def plot_composition(
     raw_main = raw_grp.copy()
     prob_main = prob_grp.copy()
 
-    # Union of labels, sorted by raw num_samples (before resampling) desc
+    # Union of labels. The sort order is metric-independent: tasks ordered by
+    # total num_samples descending, languages ordered by the fixed _LANG_RANK.
     all_labels_set = set(raw_main.index) | set(prob_main.index)
     samples_grp = df.groupby("_lbl")["num_samples"].sum().fillna(0)
     task_samples_total = {}
     for lbl in all_labels_set:
         task = lbl_map[lbl]["task"]
         task_samples_total[task] = task_samples_total.get(task, 0) + samples_grp.get(lbl, 0)
-    all_labels = sorted(
-        all_labels_set,
-        key=lambda lbl: (-task_samples_total[lbl_map[lbl]["task"]], -samples_grp.get(lbl, 0)),
-    )
+
+    def _sort_key(lbl):
+        m = lbl_map[lbl]
+        if group_field == "language":
+            # Per-(sub)task language plot: single dimension, language rank
+            return (_lang_sort_key(m["task"]),)
+        # Overall / subtask / dataset plots: group hatch by samples desc,
+        # then language rank within group (so en before fr before de … always).
+        return (-task_samples_total[m["task"]], _lang_sort_key(m["disp"]))
+
+    all_labels = sorted(all_labels_set, key=_sort_key)
 
     # Reindex series to follow the sorted order
     raw_main = raw_main.reindex(all_labels).dropna()
@@ -436,7 +467,10 @@ def plot_composition(
         grp_totals[g]["raw_abs"] += it["raw_abs"]
         grp_totals[g]["raw_samples"] += it["raw_samples"]
         grp_totals[g]["prob_pct"] += it["prob_pct"]
-    leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["raw_samples"], -x["raw_samples"]))
+    if group_field == "language":
+        leg_items.sort(key=lambda x: _lang_sort_key(x["label"]))
+    else:
+        leg_items.sort(key=lambda x: (-grp_totals[x["group"]]["raw_samples"], _lang_sort_key(x["label"])))
 
     n_rows = len(leg_items) + len(grp_totals) + 6
     row_h = 1.0 / max(n_rows, 1)
