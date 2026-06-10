@@ -266,6 +266,48 @@ def _uses_automodel_parallel(strategy_cfg: dict) -> bool:
     return "AutomodelParallelStrategy" in target
 
 
+def load_model(ckpt_path: str, class_path: str, ckpt_config: str, dtype: str = "bfloat16"):
+    """Build the model from ``ckpt_config`` and load a single-file Lightning checkpoint.
+
+    Mirrors the non-distributed branch of ``main`` and returns the model ready for
+    ``save_pretrained``. For distributed (directory) checkpoints, use ``main`` via
+    ``torchrun`` instead — this helper only handles single-file ``.ckpt`` files.
+    """
+    if not Path(ckpt_path).exists():
+        raise RuntimeError(f"No such file or directory: {ckpt_path}")
+
+    full_cfg = OmegaConf.to_container(OmegaConf.load(ckpt_config), resolve=True)
+    model_cfg = full_cfg["model"]
+    model_cfg["torch_dtype"] = _canonical_torch_dtype_name(dtype)
+    cls = import_class_by_path(class_path)
+
+    model_cfg["init_configure_model"] = True
+    model = cls(model_cfg)
+    load_checkpoint(model, ckpt_path)
+    model = model.to(str_to_dtype(dtype))
+    model_cfg["pretrained_weights"] = False
+    return model
+
+
+def export_checkpoint(ckpt_path: str, class_path: str, ckpt_config: str, output_dir: str, dtype: str = "bfloat16"):
+    """Export a single-file (non-distributed) checkpoint to HuggingFace format.
+
+    Loads the model and writes the full HF export: weights + root config, the separate
+    LLM backbone config, the tokenizer, and (best-effort) vLLM artifacts. This is the
+    shared single-checkpoint path used by both ``main`` and the batch exporter
+    (``export_experiment.py``). For distributed (directory) checkpoints, use ``main``
+    via ``torchrun`` instead. Returns the loaded model.
+    """
+    model = load_model(ckpt_path, class_path, ckpt_config, dtype)
+    export_cfg = _hf_export_config(model, dtype)
+    model.save_pretrained(str(output_dir), config=export_cfg)
+    save_llm_backbone_config(model, output_dir)
+    if getattr(model, "tokenizer", None) is not None:
+        model.tokenizer.save_pretrained(str(output_dir))
+    _try_prepare_for_vllm(str(output_dir), export_cfg)
+    return model
+
+
 @hydra_runner(config_name="HfExportConfig", schema=HfExportConfig)
 def main(cfg: HfExportConfig) -> None:
     """
@@ -347,14 +389,7 @@ def main(cfg: HfExportConfig) -> None:
         dist.barrier()
         dist.destroy_process_group()
     else:
-        model_cfg["init_configure_model"] = True
-        model = cls(model_cfg)
-        load_checkpoint(model, cfg.ckpt_path)
-        model = model.to(str_to_dtype(cfg.dtype))
-        model_cfg["pretrained_weights"] = False
-        model.save_pretrained(cfg.output_dir, config=_hf_export_config(model, cfg.dtype))
-        save_llm_backbone_config(model, cfg.output_dir)
-        _try_prepare_for_vllm(cfg.output_dir, model_cfg)
+        export_checkpoint(cfg.ckpt_path, cfg.class_path, cfg.ckpt_config, cfg.output_dir, cfg.dtype)
 
 
 if __name__ == "__main__":

@@ -6,11 +6,12 @@ runs the same conversion as `to_hf.py` per checkpoint, then rewrites the exporte
 """
 import argparse
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
 
-from to_hf import load_model
+from to_hf import export_checkpoint
 
 LLM_MATCH = "Luciole-1B-SFT-1.1"
 LLM_REPLACE = "OpenLLM-France/Luciole-1B-SFT-1.1"
@@ -19,22 +20,30 @@ ASR_REPLACE = "nvidia/canary-1b-v2"
 
 
 def parse_step(entry: Path) -> int | None:
+    """Extract the training step from a checkpoint name.
+
+    Handles bare digits ('002500'[.ckpt]) and Lightning's default format
+    ('step=002500.ckpt', 'step=015000-last.ckpt'). Returns None if no step found.
+    """
     stem = entry.name[:-5] if entry.name.endswith(".ckpt") else entry.name
-    try:
-        return int(stem)
-    except ValueError:
-        return None
+    m = re.search(r"step=(\d+)", stem) or re.fullmatch(r"(\d+)", stem)
+    return int(m.group(1)) if m else None
 
 
 def list_checkpoints(ckpt_dir: Path) -> list[tuple[int, Path]]:
-    out = []
+    # Dedup by step, preferring the plain checkpoint over a '-last' duplicate
+    # (the final numbered checkpoint already covers that step).
+    by_step: dict[int, Path] = {}
     for entry in ckpt_dir.iterdir():
-        if entry.name.endswith(".ckpt") or (entry.is_dir() and entry.name.isdigit()):
-            step = parse_step(entry)
-            if step is not None:
-                out.append((step, entry))
-    out.sort(key=lambda x: x[0])
-    return out
+        if not (entry.name.endswith(".ckpt") or (entry.is_dir() and parse_step(entry) is not None)):
+            continue
+        step = parse_step(entry)
+        if step is None:
+            continue
+        if step in by_step and "-last" in entry.name:
+            continue
+        by_step[step] = entry
+    return sorted(by_step.items())
 
 
 def select(ckpts: list[tuple[int, Path]], every: int | None) -> list[tuple[int, Path]]:
@@ -86,10 +95,7 @@ def export_one(ckpt_path: Path, class_path: str, exp_config: Path, output_dir: P
         return True
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    model = load_model(str(ckpt_path), class_path, str(exp_config))
-    model.save_pretrained(str(output_dir))
-    if hasattr(model, "tokenizer") and model.tokenizer is not None:
-        model.tokenizer.save_pretrained(str(output_dir))
+    model = export_checkpoint(str(ckpt_path), class_path, str(exp_config), str(output_dir))
     del model
 
     if config_json.exists():
@@ -134,7 +140,7 @@ def main():
 
     failures = []
     for step, ckpt_path in selected:
-        output_dir = hf_root / ckpt_path.stem
+        output_dir = hf_root / ckpt_path.stem.replace("=", "_")
         print(f"\n[step={step}] exporting {ckpt_path.name} -> {output_dir}")
         try:
             export_one(ckpt_path, args.class_path, exp_config, output_dir, args.force)
