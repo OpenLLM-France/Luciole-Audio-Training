@@ -533,7 +533,7 @@ NEGATIVE_WORD_CANDIDATES = {
         "aardvark", "bumblebee", "chinchilla", "geyser", "pomegranate",
         "document", "time", "restaurant", "meeting", "appointment",
         "file", "text", "email", "message", "plane", "taxi", "doctor",
-        "next week", "important", "phone conversation",
+        "weekday", "important", "voicemail",
         "armadillo", "python", "pelican", "octopus", "barnacle",
         "wombat", "puffin", "cassowary", "manatee", "lemur",
         "saffron", "paprika", "cardamom", "lavender", "dish",
@@ -546,31 +546,31 @@ NEGATIVE_WORD_CANDIDATES = {
         "lawyer", "plumber", "astronaut", "engineer", "journalist",
         "spreadsheet", "podcast", "newsletter", "invoice", "receipt",
         "bicycle", "motorcycle", "scooter", "ferry", "subway",
-        "next month", "last summer", "very urgent", "completely broken",
-        "video call", "team meeting", "annual report", "credit card",
+        "semester", "solstice", "urgent", "malfunction",
+        "webcam", "boardroom", "ledger", "voucher",
     ],
     "fr": [
         "xylophone", "ornithorynque", "zeppelin", "kumquat", "obsidienne",
         "saxophone", "guimauve", "panais", "méduse", "labyrinthe",
         "hippopotame", "kaléidoscope", "rhubarbe", "mandarine", "morse",
         "narval", "avocat", "cannelle", "pissenlit", "eucalyptus",
-        "flamant", "gazelle", "igloo", "mangouste", "noix de muscade", "autruche",
-        "ananas", "raton laveur", "trombone", "courgette",
+        "flamant", "gazelle", "igloo", "mangouste", "muscade", "autruche",
+        "ananas", "chat", "trombone", "courgette",
         "tatou", "python", "pélican", "pieuvre", "bernacle",
         "wombat", "macareux", "casoar", "lamantin", "lémurien",
         "safran", "paprika", "cardamome", "lavande",
         "didgeridoo", "clavecin", "accordéon", "ukulélé", "tambourin",
         "stalactite", "toundra", "fjord", "mousson", "station",
         "télescope", "code", "hélicoptère", "bulldozer", "phare",
-        "passeport", "parapluie", "tapis roulant", "cathédrale", "échafaudage",
+        "passeport", "parapluie", "trampoline", "cathédrale", "échafaudage",
         "hier", "demain", "minuit", "week-end", "vacances",
         "hôpital", "bibliothèque", "stade", "entrepôt", "ambassade",
         "avocate", "plombier", "astronaute", "ingénieur", "journaliste",
         "tableur", "podcast", "newsletter", "facture", "reçu",
         "bicyclette", "moto", "trottinette", "ferry", "métro",
-        "le mois prochain", "l'été dernier", "très urgent", "complètement cassé",
-        "appel vidéo", "réunion d'équipe", "rapport annuel", "carte de crédit",
-        "document", "courriel", "smartphone", "ordinateur portable",
+        "semestre", "solstice", "urgent", "défectueux",
+        "visioconférence", "comité", "bilan", "chéquier",
+        "document", "courriel", "smartphone", "ordinateur",
         "rendez-vous", "réunion", "fichier", "texte", "message",
         "avion", "taxi", "médecin", "important",
     ],
@@ -811,6 +811,35 @@ def build_negative_variant(record, task, lang="en", style="chat"):
     return wrap_record(record, task, document_audio, duration, question, answer, suffix=suffix)
 
 
+def _span_representative_word(w2t, start_idx, end_idx):
+    """Reduce a multi-word answer span [start_idx..end_idx] to a single
+    representative word and its timing, for the single-WORD tasks
+    (`time2word`/`word2time`). Prefers the first distinctive token (>= 4 alnum
+    chars) so we don't end up querying a stopword like "the"; falls back to the
+    first alnum token. Returns (word, start_second, end_second) or None."""
+    words = w2t["word"]
+    starts = w2t["start_second"]
+    ends = w2t.get("end_second") or starts
+    cands = [
+        i for i in range(start_idx, end_idx + 1)
+        if i < len(words) and is_alnum_token(words[i])
+        and i < len(starts) and starts[i] is not None and starts[i] >= 0
+    ]
+    if not cands:
+        return None
+    distinctive = [i for i in cands if sum(c.isalnum() for c in words[i]) >= 4]
+    j = (distinctive or cands)[0]
+    word = words[j].strip(" \t\n\"'.,;:!?()[]")
+    # Guarantee a single token: an alignment entry that bundled several words
+    # (contains internal whitespace) would otherwise leak a phrase into the
+    # single-WORD tasks. Keep the first whitespace-delimited piece.
+    word = word.split()[0] if word.split() else ""
+    if not word:
+        return None
+    end = ends[j] if j < len(ends) and ends[j] is not None else starts[j]
+    return word, starts[j], end
+
+
 def build_variant(record, task, lang="en", style="chat"):
     """Return a new jsonl record for `task`, or None if the source record can't support it."""
     qt = QUESTION_TEMPLATES[lang]
@@ -833,6 +862,18 @@ def build_variant(record, task, lang="en", style="chat"):
 
     phrase = cased_answer_phrase(w2t, start_idx, end_idx) or spans["answer"][0]
     single_token = " " not in phrase
+
+    # `time2word`/`word2time` are single-WORD tasks: a multi-word answer span
+    # would ask for a word ("what word is at Ts?" / "when is <word> said?") but
+    # answer with a phrase. Reduce the span to one representative word and its
+    # timing so these stay well-formed; the phrase still flows untouched into the
+    # sentence / answer_with_* / json tasks.
+    if not single_token and task in ("time2word", "word2time"):
+        reduced = _span_representative_word(w2t, start_idx, end_idx)
+        if reduced is None:
+            return None
+        phrase, answer_start, answer_end = reduced
+        single_token = True
 
     sentence, sent_start_idx = extract_sentence(w2t["word"], start_idx)
     starts = w2t["start_second"]

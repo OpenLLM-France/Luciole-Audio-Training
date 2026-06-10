@@ -368,7 +368,10 @@ def _build_word2time(sub, w2t, lang):
 
     if sub.endswith("_neg"):
         key = "word2time_first" if sub.startswith("first") else "word2time"
-        oov = pick_oov_word(w2t, NEGATIVE_WORD_CANDIDATES[lang])
+        # word2time refers to "le mot {word}", so collapse multi-word candidates
+        # (e.g. "raton laveur", "appel vidéo") to a single token; pick_oov_word
+        # still re-checks the collapsed word is out of the clip's vocab.
+        oov = pick_oov_word(w2t, [w.split()[0] for w in NEGATIVE_WORD_CANDIDATES[lang]])
         if oov is None:
             return None
         question = random.choice(NEGATIVE_QUESTION_TEMPLATES[lang][key]).format(word=oov)
