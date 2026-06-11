@@ -1,8 +1,8 @@
 # ============================================================
-# ASR — 30%
+# ASR — 29%
 # ============================================================
 - type: group
-  weight: 0.30
+  weight: 0.29
   tags: {task: asr}
   input_cfg:
 
@@ -298,16 +298,16 @@
 
 
 # ============================================================
-# QA — 38%   (primary objective)
+# QA — 36%   (primary objective)
 # ============================================================
 - type: group
   tags: {task: qa}
-  weight: 0.38
+  weight: 0.36
   input_cfg:
     # EN QA
     - type: group
       tags: {lang: en}
-      weight: 0.41
+      weight: 0.44
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
@@ -361,7 +361,7 @@
     # FR QA
     - type: group
       tags: {lang: fr}
-      weight: 0.41
+      weight: 0.44
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
@@ -401,45 +401,6 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_other.jsonl
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_other.jsonl
-    - type: group
-      tags: {lang: de}
-      weight: 0.02
-      input_cfg:
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_age.jsonl
-          tags: {sub_task: age_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
-    - type: group
-      tags: {lang: es}
-      weight: 0.02
-      input_cfg:
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_age.jsonl
-          tags: {sub_task: age_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
-    - type: group
-      tags: {lang: it}
-      weight: 0.02
-      input_cfg:
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_age.jsonl
-          tags: {sub_task: age_reco, task: other}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_gender.jsonl
-          tags: {sub_task: gender_reco, task: other}
 
 # ============================================================
 # AQA — 12%
@@ -569,180 +530,253 @@
       #   tags: {sub_task: music_qa}
 
 # ============================================================
-# OTHER — 6%
+# OTHER — 10%   (organised by sub_task, equal split across languages)
 # ============================================================
 - type: group
   tags: {task: other}
-  weight: 0.06
+  weight: 0.10
   input_cfg:
+
+    # === gender_reco — target 1.5% of total ===
     - type: group
-      tags: {lang: en}
-      weight: 0.6
+      tags: {sub_task: gender_reco}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
+        - type: group
+          tags: {lang: de}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_gender.jsonl
+        - type: group
+          tags: {lang: es}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_gender.jsonl
+        - type: group
+          tags: {lang: it}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_gender.jsonl
+
+    # === age_reco — target 1.5% of total ===
+    # en and fr pinned at 35% each; de/es/it share the remaining 30%
+    # data-driven (sample-proportional) so the small es set isn't oversampled.
+    - type: group
+      tags: {sub_task: age_reco}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_age.jsonl
+          tags: {lang: de}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_age.jsonl
+          tags: {lang: es}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_age.jsonl
+          tags: {lang: it}
+
+    # === temporal — target 1.5% of total ===
+    - type: group
+      tags: {sub_task: temporal}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_json_answer/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
+            #   tags: {sub_task: formatted_timestamped_transcription}
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time_chat/train.jsonl
+
+    # === diarization — target 1.5% of total ===
+    # en/fr split set to the natural sample proportion (18.7k / 67.5k samples)
+    - type: group
+      tags: {sub_task: diarization}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.22
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.78
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl
+
+    # === voice_captioning — target 1% of total (en only available) ===
+    - type: group
+      tags: {sub_task: voice_captioning}
+      weight: 0.12
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/mixed/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/finegrained/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/short_captions/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/SpeechCraft/train.jsonl
+
+    # === language_reco — target 0.5% of total ===
+    - type: group
+      tags: {sub_task: language_reco}
+      weight: 0.06
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train.jsonl
+
+    # === emotion_reco — target 0.5% of total ===
+    - type: group
+      tags: {sub_task: emotion_reco}
+      weight: 0.06
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
+
+    # === sentence-stress sub-tasks (small datasets, kept for breadth) ===
+    - type: group
+      weight: 0.04
       input_cfg:
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
-          tags: {sub_task: age_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
-          tags: {sub_task: age_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
-          tags: {sub_task: emotion_reco}
-        - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl
-          tags: {sub_task: sentence_stress_detection}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssr/train.jsonl
-          tags: {sub_task: sentence_stress_reasoning}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
-          tags: {sub_task: language_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train.jsonl
-          tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_json_answer/train.jsonl
-          tags: {sub_task: formatted_temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
-        #   tags: {sub_task: formatted_timestamped_transcription}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/mixed/train.jsonl
-          tags: {sub_task: voice_captioning}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/finegrained/train.jsonl
-        #   tags: {sub_task: voice_captioning}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/short_captions/train.jsonl
-        #   tags: {sub_task: voice_captioning}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
-          tags: {sub_task: voice_captioning}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/SpeechCraft/train.jsonl
-          tags: {sub_task: voice_qa}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
-          tags: {sub_task: diarization}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
-          tags: {sub_task: diarization}
-    - type: group
-      tags: {lang: fr}
-      weight: 0.4
-      input_cfg:   
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
-          tags: {sub_task: age_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
-          tags: {sub_task: age_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
-          tags: {sub_task: gender_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train.jsonl
-          tags: {sub_task: emotion_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train.jsonl
-          tags: {sub_task: emotion_reco}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train.jsonl
-          tags: {sub_task: emotion_reco} 
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train.jsonl
-          tags: {sub_task: language_reco}  
+          tags: {sub_task: sentence_stress_detection, lang: en}
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
-          tags: {sub_task: sentence_stress_detection}
+          tags: {sub_task: sentence_stress_detection, lang: fr}
         - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence/train.jsonl
-          tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train.jsonl
-          tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        # - type: multimodal_conversation
-        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time_chat/train.jsonl
-        #   tags: {sub_task: temporal}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
-          tags: {sub_task: diarization}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
-          tags: {sub_task: diarization}
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl
-          tags: {sub_task: diarization}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssr/train.jsonl
+          tags: {sub_task: sentence_stress_reasoning, lang: en}
 
 # ============================================================
-# MISC MULTITURN CONVERSATIONS — 2%
+# MISC MULTITURN CONVERSATIONS — 1%
 # ============================================================
 - type: group
   tags: {task: task_switching, lang: mixed}
-  weight: 0.02
+  weight: 0.01
   input_cfg:
     - type: multimodal_conversation
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train.jsonl
