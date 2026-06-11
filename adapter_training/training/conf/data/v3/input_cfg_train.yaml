@@ -1,8 +1,16 @@
 # ============================================================
-# ASR — 29%
+# ONE-STEP TRAINING profile — adapter + LoRA on LLM trained together.
+# Balanced mix: ASR 34% (strong multilingual foundation), QA 34%
+# (primary objective), OTHER 10% (multitask breadth), task_switching
+# kept at 1% (small but always present).
+# Sum: 34 + 11 + 34 + 10 + 10 + 1 = 100
+# ============================================================
+
+# ============================================================
+# ASR — 34%
 # ============================================================
 - type: group
-  weight: 0.29
+  weight: 0.34
   tags: {task: asr}
   input_cfg:
 
@@ -182,11 +190,11 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
 
 # ============================================================
-# AST — 12%
+# AST — 11%
 # ============================================================
 - type: group
   tags: {task: ast}
-  weight: 0.12
+  weight: 0.11
   input_cfg:
     # AST EN→X
     - type: multimodal_conversation
@@ -298,11 +306,11 @@
 
 
 # ============================================================
-# QA — 36%   (primary objective)
+# QA — 34%   (primary objective)
 # ============================================================
 - type: group
   tags: {task: qa}
-  weight: 0.36
+  weight: 0.34
   input_cfg:
     # EN QA
     - type: group
@@ -403,11 +411,11 @@
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_other.jsonl
 
 # ============================================================
-# AQA — 12%
+# AQA — 10%
 # ============================================================
 - type: group
   tags: {task: aqa}
-  weight: 0.12
+  weight: 0.10
   input_cfg:
     - type: group
       weight: 0.5
