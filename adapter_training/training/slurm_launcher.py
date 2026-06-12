@@ -13,6 +13,7 @@ import argparse
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -112,6 +113,36 @@ def materialize(template, out_path, job_name, save_dir, sbatch_overrides, env_ov
     out_path.chmod(0o755)
 
 
+def resolve_input_cfg(config_path, data_version):
+    """Mirror run_train.slurm's INPUT_CFG resolution from DATA_VERSION."""
+    if data_version.endswith(".yaml"):
+        return config_path / "data" / data_version
+    return (config_path / "data" / data_version /
+            "input_cfg_train_weighted_randomorder_sharded.yaml")
+
+
+def copy_configs(save_dir_path, job_name, config_name, data_version, suffix):
+    """Replicate the `cp` steps run_train.slurm does at runtime (config + input_cfg yamls).
+
+    Returns the list of destination paths. Used for --dry-run, where the slurm
+    script never executes and so would otherwise not produce these snapshots.
+    """
+    config_path = SLURM_SCRIPT.parent / "conf"
+    config_yaml = config_path / f"{config_name}.yaml"
+    input_cfg = resolve_input_cfg(config_path, data_version)
+
+    copied = []
+    for src, dst in [
+        (config_yaml, save_dir_path / f"{job_name}_{suffix}.yaml"),
+        (input_cfg,   save_dir_path / f"{job_name}_{suffix}.input_cfg.yaml"),
+    ]:
+        if not src.exists():
+            sys.exit(f"Config to copy does not exist: {src}")
+        shutil.copyfile(src, dst)
+        copied.append(dst)
+    return copied
+
+
 def parse_job_id(sbatch_stdout):
     m = re.search(r"Submitted batch job (\d+)", sbatch_stdout)
     if not m:
@@ -155,8 +186,9 @@ def main():
                          help="Override SLURM --job-name (default: from run_train.slurm)")
 
     parser.add_argument("--dry-run", action="store_true",
-                        help="Materialize the slurm file but don't submit; leave it at "
-                             "<save_dir>/<job_name>_dryrun.slurm for inspection")
+                        help="Materialize the slurm file and copy the config + input_cfg "
+                             "yamls (as run_train.slurm would) but don't submit; leave them "
+                             "at <save_dir>/<job_name>_dryrun.* for inspection")
     args = parser.parse_args()
 
     job_name = args.job_name or parse_job_name(SLURM_SCRIPT)
@@ -224,7 +256,11 @@ def main():
     if args.dry_run:
         dryrun_path = save_dir_path / f"{job_name}_dryrun.slurm"
         submitted.rename(dryrun_path)
+        copied = copy_configs(save_dir_path, job_name, args.config,
+                              args.data_version, "dryrun")
         print(f"(dry run — not submitted; inspect: {dryrun_path})")
+        for dst in copied:
+            print(f"  config: {dst}")
         return
 
     result = subprocess.run(["sbatch", "--export=ALL", str(submitted)], capture_output=True, text=True)

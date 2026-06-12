@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 
 from nemo.collections.speechlm2 import SALM, DataModule, SALMDataset
 from nemo.core.config import hydra_runner
+from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 from nemo.utils.trainer_utils import resolve_trainer_cfg
 
@@ -45,6 +46,17 @@ def train(cfg):
 
     with trainer.init_module():
         model = model_cls(OmegaConf.to_container(cfg.model, resolve=True))
+
+    # [attn-check] Log the self-attention the encoder *actually instantiated* (reads the
+    # live nn.Module, not the yaml): rel_pos -> RelPositionMultiHeadAttention (full),
+    # rel_pos_local_attn -> RelPositionMultiHeadAttentionLongformer (local). Per-run proof
+    # for the attention A/B; harmless for every other run.
+    _enc = model.perception.encoder
+    logging.info(
+        f"[attn-check] self_attention_model={_enc.self_attention_model} "
+        f"att_context_size={_enc.att_context_size} "
+        f"attn_class={type(_enc.layers[0].self_attn).__name__}"
+    )
 
     dataset = SALMDataset(tokenizer=model.tokenizer)
     datamodule = DataModule(cfg.data, tokenizer=model.tokenizer, dataset=dataset)
