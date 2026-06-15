@@ -1,17 +1,18 @@
 # ============================================================
 # STAGE 2 of 3 — ENCODER TUNING.
 # Train adapter + audio encoder; LLM still frozen.
-# Broader mix: ASR drops to 30% (stable floor), QA jumps to 36%
-# (main reasoning push), AQA + OTHER expanded. The encoder is
-# adapted to a wider task distribution while the LLM stays clean.
-# Sum: 30 + 13 + 36 + 12 + 8 + 1 = 100
+# ASR drops to 29% (stable floor), QA jumps to 35% (main reasoning
+# push), AQA + OTHER expanded. Inside OTHER (10%), the sub-tasks
+# that benefit from encoder fine-tuning peak (gender_reco, age_reco,
+# emotion_reco, voice_captioning), while stress stays high too.
+# Sum: 29 + 13 + 35 + 12 + 10 + 1 = 100
 # ============================================================
 
 # ============================================================
-# ASR — 30%
+# ASR — 29%
 # ============================================================
 - type: group
-  weight: 0.30
+  weight: 0.29
   tags: {task: asr}
   input_cfg:
 
@@ -307,11 +308,11 @@
 
 
 # ============================================================
-# QA — 36%   (ramped up — main reasoning push)
+# QA — 35%   (ramped up — main reasoning push)
 # ============================================================
 - type: group
   tags: {task: qa}
-  weight: 0.36
+  weight: 0.35
   input_cfg:
     # EN QA
     - type: group
@@ -539,17 +540,17 @@
       #   tags: {sub_task: music_qa}
 
 # ============================================================
-# OTHER — 8%   (organised by sub_task, equal split across languages)
+# OTHER — 10%   (10% — gender/age/emotion/voice_captioning peak; stress still high)
 # ============================================================
 - type: group
   tags: {task: other}
-  weight: 0.08
+  weight: 0.10
   input_cfg:
 
     # === gender_reco — target 1.5% of total ===
     - type: group
       tags: {sub_task: gender_reco}
-      weight: 0.18
+      weight: 0.20
       input_cfg:
         - type: group
           tags: {lang: en}
@@ -597,7 +598,7 @@
     # data-driven (sample-proportional) so the small es set isn't oversampled.
     - type: group
       tags: {sub_task: age_reco}
-      weight: 0.18
+      weight: 0.20
       input_cfg:
         - type: group
           tags: {lang: en}
@@ -628,7 +629,7 @@
     # === temporal — target 1.5% of total ===
     - type: group
       tags: {sub_task: temporal}
-      weight: 0.18
+      weight: 0.08
       input_cfg:
         - type: group
           tags: {lang: en}
@@ -686,11 +687,11 @@
     # en/fr split set to the natural sample proportion (18.7k / 67.5k samples)
     - type: group
       tags: {sub_task: diarization}
-      weight: 0.18
+      weight: 0.08
       input_cfg:
         - type: group
           tags: {lang: en}
-          weight: 0.22
+          weight: 0.17
           input_cfg:
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
@@ -698,7 +699,7 @@
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
         - type: group
           tags: {lang: fr}
-          weight: 0.78
+          weight: 0.66
           input_cfg:
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
@@ -706,6 +707,14 @@
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl
+        - type: group
+          tags: {lang: mixed}
+          weight: 0.17
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/yes_no/train.jsonl
 
     # === voice_captioning — target 1% of total (en only available) ===
     - type: group
@@ -745,7 +754,7 @@
     # === emotion_reco — target 0.5% of total ===
     - type: group
       tags: {sub_task: emotion_reco}
-      weight: 0.06
+      weight: 0.10
       input_cfg:
         - type: group
           tags: {lang: en}
@@ -768,7 +777,7 @@
 
     # === sentence-stress sub-tasks (small datasets, kept for breadth) ===
     - type: group
-      weight: 0.04
+      weight: 0.16
       input_cfg:
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl

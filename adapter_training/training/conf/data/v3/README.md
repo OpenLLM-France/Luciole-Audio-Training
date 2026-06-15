@@ -19,18 +19,19 @@ provided: a single one-step mix, and a 3-stage curriculum.
 
 | Task | One-step | Stage 1 (adapter) | Stage 2 (+enc) | Stage 3 (+LLM LoRA) |
 |---|---:|---:|---:|---:|
-| **ASR**               | **34 %** | **50 %** | 30 %     | 25 %     |
+| **ASR**               | **34 %** | **48 %** | 29 %     | 25 %     |
 | **AST**               | 11 %     | 20 %     | 13 %     | 12 %     |
-| **QA**                | **34 %** | 16 %     | **36 %** | **40 %** |
+| **QA**                | **34 %** | 15 %     | **35 %** | **38 %** |
 | **AQA** (sound+music) | 10 %     | 8 %      | 12 %     | 12 %     |
-| **OTHER**             | 10 %     | 5 %      | 8 %      | 10 %     |
+| **OTHER**             | 10 %     | 8 %      | 10 %     | **12 %** |
 | **task_switching**    | **1 %**  | **1 %**  | **1 %**  | **1 %**  |
 | **Sum**               | 100 %    | 100 %    | 100 %    | 100 %    |
 
-Across the curriculum the two key trajectories are:
+Across the curriculum the three key trajectories are:
 
-- **ASR**: 50 % → 30 % → 25 %  *(decreases as encoder/LLM unfreeze and reasoning takes over)*
-- **QA**: 16 % → 36 % → 40 %  *(ramps up — main reasoning push happens once the LLM is trainable)*
+- **ASR**: 48 % → 29 % → 25 %  *(decreases as encoder/LLM unfreeze and reasoning takes over)*
+- **QA**: 15 % → 35 % → 38 %  *(ramps up — main reasoning push happens once the LLM is trainable)*
+- **OTHER**: 8 % → 10 % → 12 %  *(ramps up; **average 10 %** matches the one-step value)*
 
 `task_switching` is held at exactly 1 % in every configuration to keep multi-turn
 exposure constant.
@@ -52,19 +53,45 @@ parameters and shift the data mix:
 
 | | Trainable parameters | Why this data mix |
 |---|---|---|
-| **Stage 1** | adapter only | The adapter alone has to learn to project audio embeddings into the LLM token space. Recognition tasks (ASR + AST) give the cleanest, most directly-supervised signal for this — hence ASR 50 %, AST 20 %. QA and other tasks are kept small (they're a poor learning signal when the adapter is still random). |
-| **Stage 2** | adapter + encoder | The encoder now adapts to a wider task distribution while the LLM stays frozen. ASR drops to a stable floor (30 %) and QA jumps to 36 % — the main reasoning push happens here. |
-| **Stage 3** | adapter + encoder + LoRA on LLM | The LLM is unfrozen (via LoRA) to learn reasoning and skill acquisition on top of an already-aligned encoder + adapter. QA peaks at 40 %, ASR holds at its floor of 25 %, and OTHER expands for multitask polish. |
+| **Stage 1** | adapter only | The adapter alone has to learn to project audio embeddings into the LLM token space. Recognition tasks (ASR + AST) give the cleanest, most directly-supervised signal for this — hence ASR 48 %, AST 20 %. QA and other tasks are kept small (they're a poor learning signal when the adapter is still random). |
+| **Stage 2** | adapter + encoder | The encoder now adapts to a wider task distribution while the LLM stays frozen. ASR drops to a stable floor (29 %) and QA jumps to 35 % — the main reasoning push happens here. |
+| **Stage 3** | adapter + encoder + LoRA on LLM | The LLM is unfrozen (via LoRA) to learn reasoning and skill acquisition on top of an already-aligned encoder + adapter. QA peaks at 38 %, ASR holds at its floor of 25 %, and OTHER expands to 12 % for multitask polish. |
 
-## How the weights were computed
+## Within-OTHER sub-task trajectories
 
-For every file, the top-level percentages above are **explicit weights** on the
-six top-level `task: {asr, ast, qa, aqa, other, task_switching}` groups. The
-within-task structure (per-language splits, sub-task sub-groups, YouTubeFr
-collection wrap, etc.) is **identical across all four files** — only the six
-top-level weights differ.
+Different OTHER sub-tasks benefit from different stages depending on **what's
+being trained**. The within-OTHER weights are therefore **not identical across
+files** — they're tuned per stage so that each sub-task peaks where it gets
+the most learning value:
 
-## Within-task structure (unchanged across files)
+| sub-task | One-step | Stage 1 | Stage 2 | Stage 3 | peak rationale |
+|---|---:|---:|---:|---:|---|
+| `gender_reco`      | 18 %  | 10 %      | **20 %** | 10 %     | acoustic-feature classification — best when the **encoder** is unfrozen (Stage 2) |
+| `age_reco`         | 18 %  | 10 %      | **20 %** | 10 %     | same as gender_reco |
+| `temporal`         | 18 %  | 8 %       | 8 %      | **20 %** | structured / time-grounded outputs — needs the **LLM** to be trainable (Stage 3) |
+| `diarization`      | 18 %  | 8 %       | 8 %      | **20 %** | same as temporal (multi-speaker structured outputs) |
+| `voice_captioning` | 12 %  | 8 %       | **12 %** | **14 %** | benefits from both encoder learning prosodic features (S2) and the LLM learning to generate text (S3) |
+| `emotion_reco`     | 6 %   | 8 %       | **10 %** | **12 %** | same as voice_captioning (acoustic + label generation) |
+| `language_reco`    | 6 %   | 8 %       | 6 %      | 6 %      | small, constant |
+| sentence-stress    | 4 %   | **40 %**  | **16 %** | 8 %      | prosodic recognition — most useful in the alignment / encoder phases (S1 + S2) |
+| **Within-OTHER sum** | 100 % | 100 %     | 100 %    | 100 %    | |
+
+Multiplying the within-OTHER weight by the OTHER top-level (column 2 above)
+gives the share of the total mix each sub-task receives, e.g. `gender_reco` in
+Stage 2 = 10 % × 20 % = 2.0 % of total.
+
+> ⚠ **Note on the sentence-stress trajectory.** The stress datasets (`ssd`,
+> `ssr`) are very small (~12 K combined samples), so even with the high input
+> weights in Stage 1 (40 %) and Stage 2 (16 %), `max_passes=20` clips their
+> effective share to roughly 0.6 % of the total mix in every stage. The
+> "peak at S1 + S2" pattern is preserved in the *input* weights but is
+> visually flat in the realised per-leaf probabilities. The "wasted" budget
+> is redistributed to uncapped leaves (mostly ASR / QA).
+
+## Within-task structure (shared across all four files)
+
+The intra-task tuning below is identical across all four YAMLs — only the
+top-level task weights and the within-OTHER weights (see previous section) differ.
 
 - **ASR** — fr 30 %, en 30 %, de 8 %, es 8 %, it 6 %, nl 5 %, pt 5 %, ar 8 %.
   YouTubeFr's 7 splits are wrapped under a sub-group with `weight: 0.18` so the
@@ -73,17 +100,23 @@ top-level weights differ.
   explicit `weight: 0.03` to cap its share at ~3 % of FR QA.
 - **AST** — flat list of 31 language pairs, data-driven within the group.
 - **AQA** — sound 50 % / music 50 %, each broken down by language and dataset.
-- **OTHER** — organised by sub-task: `gender_reco`, `age_reco`, `temporal`,
+- **OTHER** — organised by sub-task (`gender_reco`, `age_reco`, `temporal`,
   `diarization`, `voice_captioning`, `language_reco`, `emotion_reco`, plus a
-  small sentence-stress bucket. `gender_reco` and `age_reco` use 35 / 35 / 10 /
-  10 / 10 splits for en/fr/de/es/it (with `age_reco` letting de/es/it share the
-  remaining 30 % data-driven so es isn't over-sampled). `diarization` uses the
-  natural en/fr sample ratio (22 / 78).
+  small sentence-stress bucket). Within each sub-task:
+  - `gender_reco` and `age_reco` use a 35 / 35 / 10 / 10 / 10 en/fr/de/es/it
+    split (with `age_reco` letting de/es/it share the remaining 30 %
+    data-driven so the small `es` set isn't over-sampled);
+  - `diarization` is split en / fr / mixed = 17 / 66 / 17, with the **mixed**
+    group containing the `VoxCeleb/chat` *same-speaker* dataset (and a
+    commented-out `VoxCeleb/yes_no` variant ready to enable);
+  - the en / fr splits in other sub-tasks default to roughly the natural
+    sample ratio.
 - **task_switching** — single `MiscMultiTurn` manifest.
 
-Changing within-task structure in one file means manually replicating it in
-the other three; the four files are intentionally kept structurally identical
-so only the six top-level weights need attention.
+Changing within-task structure (other than the per-stage within-OTHER weights
+above) in one file means manually replicating it in the other three; the four
+files are intentionally kept structurally identical so that only the top-level
+task weights and within-OTHER weights vary across configurations.
 
 ## Regenerating `input_cfg_train_weighted.yaml` and the analysis assets
 
@@ -126,4 +159,4 @@ To do the same for one of the stage files, point `--input_weights` (step 2) and
 
 The `Tasks:` line printed by `suggest_yaml_cfg.py` shows the effective
 per-task budget after the algorithm processes the tree — it should match the
-table above.
+top-level table above.

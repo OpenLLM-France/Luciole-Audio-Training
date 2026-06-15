@@ -689,7 +689,7 @@
       input_cfg:
         - type: group
           tags: {lang: en}
-          weight: 0.22
+          weight: 0.17
           input_cfg:
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
@@ -697,7 +697,7 @@
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
         - type: group
           tags: {lang: fr}
-          weight: 0.78
+          weight: 0.66
           input_cfg:
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
@@ -705,6 +705,14 @@
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl
+        - type: group
+          tags: {lang: mixed}
+          weight: 0.17
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/yes_no/train.jsonl
 
     # === voice_captioning — target 1% of total (en only available) ===
     - type: group
