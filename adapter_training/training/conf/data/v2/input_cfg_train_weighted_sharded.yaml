@@ -223,7 +223,7 @@
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train_shards/train__OP_0..10_CL_.jsonl
     - type: multimodal_conversation
       weight: 0.0401
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slu-phase-2-sqa5/train_shards/train__OP_0..9_CL_.jsonl
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slue-phase-2-sqa5/train_shards/train__OP_0..9_CL_.jsonl
     - type: multimodal_conversation
       weight: 0.0101
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl

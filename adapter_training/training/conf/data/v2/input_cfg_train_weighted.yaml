@@ -232,8 +232,8 @@
           weight: 0.0447   # L3 — gruhit-patel--alpaca_speech_instruct (72.1 h, 51.8K samples)
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
         - type: multimodal_conversation
-          weight: 0.0401   # L3 — slu-phase-2-sqa5 (511.2 h, 46.2K samples)
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slu-phase-2-sqa5/train.jsonl
+          weight: 0.0401   # L3 — slue-phase-2-sqa5 (511.2 h, 46.2K samples)
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slue-phase-2-sqa5/train.jsonl
         - type: multimodal_conversation
           weight: 0.0101   # L3 — yijingwu--HeySQuAD_human (18.0 h, 10.8K samples)
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
