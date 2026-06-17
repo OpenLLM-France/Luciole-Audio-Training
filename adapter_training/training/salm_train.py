@@ -27,9 +27,40 @@ if torch.cuda.is_available():
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
+def _normalize_for_automodel(cfg):
+    """Rewrite DDP/HF-PEFT-shaped config blocks into NeMo-Automodel shapes.
+
+    base.yaml is built for SALM (HuggingFace backend + DDPStrategy). Hydra
+    deep-merges dicts and cannot delete keys, so an overlay can't strip the
+    HF-PEFT lora keys or the DDP-only strategy kwargs — they would leak into
+    SALMAutomodel's PeftConfig / AutomodelParallelStrategy and raise TypeError.
+    Normalize them here, once, when use_nemo_automodel is set.
+    """
+    OmegaConf.set_struct(cfg, False)
+    # LoRA: HF-PEFT keys -> Automodel PeftConfig keys (make_peft_config forwards
+    # every key verbatim, so r/lora_alpha/lora_dropout/task_type must be remapped).
+    lora = cfg.model.get("lora")
+    if lora:
+        rename = {"r": "dim", "lora_alpha": "alpha", "lora_dropout": "dropout"}
+        cfg.model.lora = {rename.get(k, k): v for k, v in lora.items() if k != "task_type"}
+    # Strategy: replace DDPStrategy wholesale. AutomodelParallelStrategy calls the
+    # model's configure_model() with the device mesh (so leave init_configure_model
+    # at its default false). ep_size=1 for dense LLMs (no MoE).
+    cfg.trainer.strategy = {
+        "_target_": "nemo.collections.speechlm2.parts.parallel.AutomodelParallelStrategy",
+        "dp_size": None,
+        "tp_size": 1,
+        "pp_size": 1,
+        "cp_size": 1,
+        "ep_size": 1,
+    }
+
+
 @hydra_runner(config_path="conf", config_name="config_canary-1b-v2_linear")
 def train(cfg):
     OmegaConf.resolve(cfg)
+    if cfg.model.get("use_nemo_automodel", False):
+        _normalize_for_automodel(cfg)
     if torch.cuda.is_available():
         torch.distributed.init_process_group(backend="nccl")
     seed_everything(cfg.data.train_ds.seed)
@@ -51,12 +82,17 @@ def train(cfg):
     # live nn.Module, not the yaml): rel_pos -> RelPositionMultiHeadAttention (full),
     # rel_pos_local_attn -> RelPositionMultiHeadAttentionLongformer (local). Per-run proof
     # for the attention A/B; harmless for every other run.
-    _enc = model.perception.encoder
-    logging.info(
-        f"[attn-check] self_attention_model={_enc.self_attention_model} "
-        f"att_context_size={_enc.att_context_size} "
-        f"attn_class={type(_enc.layers[0].self_attn).__name__}"
-    )
+    # SALMAutomodel defers building perception/llm to configure_model() (called later by
+    # AutomodelParallelStrategy with the device mesh), so model.perception is None here — skip.
+    if model.perception is not None:
+        _enc = model.perception.encoder
+        logging.info(
+            f"[attn-check] self_attention_model={_enc.self_attention_model} "
+            f"att_context_size={_enc.att_context_size} "
+            f"attn_class={type(_enc.layers[0].self_attn).__name__}"
+        )
+    else:
+        logging.info("[attn-check] perception not built yet (Automodel deferred init); skipping.")
 
     dataset = SALMDataset(tokenizer=model.tokenizer)
     datamodule = DataModule(cfg.data, tokenizer=model.tokenizer, dataset=dataset)

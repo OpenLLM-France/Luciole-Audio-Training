@@ -1,3 +1,0 @@
-python slurm_launcher.py --config run/luciole_data_xp --data-version xp_timestamps/input_cfg_train_weighted_text_audio.yaml --gpus 4 --job-name xp_timestamp_text_audio --time 02:00:00 --qos dev --nodes 1
-python slurm_launcher.py --config run/luciole_data_xp --data-version xp_timestamps/input_cfg_train_weighted_randomorder.yaml --gpus 4 --job-name xp_timestamp_randomorder --time 02:00:00 --qos dev --nodes 1
-python slurm_launcher.py --config run/luciole_data_xp --data-version xp_timestamps/input_cfg_train_weighted_audio_text.yaml --gpus 4 --job-name xp_timestamp_audio_text --time 02:00:00 --qos dev --nodes 1

@@ -23,9 +23,6 @@ LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
 
 export EXPERIMENT_FOLDER="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
-# export SPEECH_ENCODER_MODEL="$SCRATCH/speechlm/models/canary-1b-v2.nemo"
-# export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
-# export PROMPT_FORMAT="qwen"
 NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
 export PYTHONPATH="$NEMO_FORK:${PYTHONPATH:-}"
 
@@ -36,13 +33,7 @@ export HF_DATASETS_OFFLINE=1
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
-# export HYDRA_FULL_ERROR=1
 
-# =====================================================
-# Configs
-# =====================================================
-# CONFIG_PATH="$LOCAL_FOLDER/conf"
-# CONFIG_NAME="hf_export_config.yaml"
 
 # Experiment to export: pass the name as the first argument, e.g.
 #   sbatch run_export_experiment.slurm my_experiment_name

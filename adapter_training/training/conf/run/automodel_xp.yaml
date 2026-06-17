@@ -1,0 +1,36 @@
+# @package _global_
+# Run the NeMo Automodel backend (SALMAutomodel) instead of SALM (HF Transformers).
+#
+# Backend selection lives in two places:
+#   - /base_automodel sets the additive fields (use_nemo_automodel, encoder chunking, ...)
+#   - salm_train._normalize_for_automodel() rewrites the conflicting lora + trainer.strategy
+#     blocks in code (Hydra can't delete base.yaml's HF-PEFT / DDPStrategy keys via overlay).
+# All existing recipes/data configs are reused as-is.
+#
+# Requirements (verify inside the training env, with NEMO_FORK on PYTHONPATH):
+#   - SALMAutomodel class      -> provided by the fork at $NEMO_FORK (NOT module nemo/2.4.0)
+#   - nemo_automodel package   -> pip install --user (0.4.0 confirmed importable)
+#   - transformer_engine 2.6.0 -> already in the cluster env (optional; see /base_automodel)
+# NOTE: NEMO_FORK defaults to $HOME/NeMo which does not exist here — export
+#       NEMO_FORK=/home/abert/abert/NeMo (or wherever the fork lives on the node).
+#
+# Dense Luciole-1B: keep precision bf16-true + AdamW (base.yaml). ep_size=1 (no MoE),
+# pure FSDP2 data-parallel via AutomodelParallelStrategy.
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole
+  - _self_
+
+trainer:
+  max_steps: 600_000
+  limit_train_batches: 10_000
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 5_000
+  
+  create_mlflow_logger: true
+  mlflow_logger_kwargs:
+    experiment_name: speechlm2_automodel
+    tracking_uri: file:///lustre/fsn1/projects/rech/qgz/uxn76rc/speechlm/shared/mlflow/mlruns
