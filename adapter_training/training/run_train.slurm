@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=24
-#SBATCH --time=00:30:00
+#SBATCH --time=02:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-dev
@@ -46,7 +46,7 @@ EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm
 NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
 
 # --- Models / data
-LLM_MODEL="${LLM_MODEL:-${TMP_CACHE}/Luciole-8B-hf}"
+LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/finetune/luciole_final/Luciole-1B-SFT-1.1}"
 SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/canary-1b-v2.nemo}"
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
@@ -93,7 +93,13 @@ EOF
 # =====================================================
 # Save SLURM + config for reproducibility
 # =====================================================
-INPUT_CFG="${CONFIG_PATH}/data/${DATA_VERSION}/input_cfg_train_weighted_randomorder_sharded.yaml"
+# DATA_VERSION may be either a subfolder name (legacy: looks for the default
+# filename inside it) or a full path to a specific input_cfg .yaml file.
+if [[ "$DATA_VERSION" == *.yaml ]]; then
+  INPUT_CFG="${CONFIG_PATH}/data/${DATA_VERSION}"
+else
+  INPUT_CFG="${CONFIG_PATH}/data/${DATA_VERSION}/input_cfg_train_weighted_randomorder_sharded.yaml"
+fi
 
 # The materialized slurm file is snapshotted by slurm_launcher.py into SAVE_DIR/<job_name>_<jobid>.slurm.
 cp "${CONFIG_PATH}/${CONFIG_NAME}.yaml" \
@@ -109,7 +115,7 @@ export LLM_MODEL
 export SPEECH_ENCODER_MODEL
 export DATA_FOLDER
 export PROMPT_FORMAT
-
+export MLFLOW_ALLOW_FILE_STORE=true
 # Runtime
 export HYDRA_FULL_ERROR=1
 export TMPDIR="${JOBSCRATCH:-/tmp}"

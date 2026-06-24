@@ -18,6 +18,26 @@ LLM_REPLACE = "OpenLLM-France/Luciole-1B-SFT-1.1"
 ASR_MATCH = "canary-1b-v2.nemo"
 ASR_REPLACE = "nvidia/canary-1b-v2"
 
+SALM_CLASS = "nemo.collections.speechlm2.models.SALM"
+SALM_AUTOMODEL_CLASS = "nemo.collections.speechlm2.models.SALMAutomodel"
+
+
+def resolve_class_path(exp_config: Path, override: str | None) -> str:
+    """Pick the model class for export.
+
+    Honors an explicit --class_path override; otherwise auto-detects from the
+    experiment's own exp_config.yaml so the export backend can never drift from
+    the training backend: SALMAutomodel when model.use_nemo_automodel is set,
+    else SALM. exp_config is already resolved (no interpolations) by salm_train.py.
+    """
+    if override:
+        return override
+    from omegaconf import OmegaConf
+
+    model_cfg = OmegaConf.load(exp_config).get("model", {})
+    use_automodel = bool(model_cfg.get("use_nemo_automodel", False))
+    return SALM_AUTOMODEL_CLASS if use_automodel else SALM_CLASS
+
 
 def parse_step(entry: Path) -> int | None:
     """Extract the training step from a checkpoint name.
@@ -46,13 +66,28 @@ def list_checkpoints(ckpt_dir: Path) -> list[tuple[int, Path]]:
     return sorted(by_step.items())
 
 
-def select(ckpts: list[tuple[int, Path]], every: int | None) -> list[tuple[int, Path]]:
+def select(ckpts: list[tuple[int, Path]], every: int | None,
+           include_steps: list[int] | None = None,
+           include_first: bool = True, include_last: bool = True) -> list[tuple[int, Path]]:
     if not ckpts:
         return []
+    include = set(include_steps or [])
+    # The "last" checkpoint is the one Lightning marks with '-last' in its name;
+    # fall back to the highest step if no such marker survived dedup.
+    last_marked = [s for s, p in ckpts if "-last" in p.name]
+    last_step = last_marked[-1] if last_marked else ckpts[-1][0]
+
     if every is None or every <= 0:
-        return ckpts
-    keep_steps = {ckpts[0][0], ckpts[-1][0]}
-    keep_steps.update(step for step, _ in ckpts if step % every == 0)
+        keep_steps = {s for s, _ in ckpts} if not include else set(include)
+        if not include:
+            return ckpts
+    else:
+        keep_steps = set(include)
+        keep_steps.update(step for step, _ in ckpts if step % every == 0)
+    if include_first:
+        keep_steps.add(ckpts[0][0])
+    if include_last:
+        keep_steps.add(last_step)
     return [(s, p) for s, p in ckpts if s in keep_steps]
 
 
@@ -111,7 +146,19 @@ def main():
     ap.add_argument("--exp_dir", required=True, type=Path)
     ap.add_argument("--every", type=int, default=None,
                     help="Keep first+last plus steps divisible by this. Omit to export all.")
-    ap.add_argument("--class_path", default="nemo.collections.speechlm2.models.SALM")
+    ap.add_argument("--steps", type=int, nargs="+", default=[10000, 15000],
+                    help="Explicit step(s) to always include, in addition to --every selection. "
+                         "Steps with no matching checkpoint are silently ignored. "
+                         "Default: 10000 15000 (pass --steps with other values to override).")
+    ap.add_argument("--include-first", action=argparse.BooleanOptionalAction, default=True,
+                    help="Always include the first (smallest-step) checkpoint. Default: on "
+                         "(disable with --no-include-first).")
+    ap.add_argument("--include-last", action=argparse.BooleanOptionalAction, default=True,
+                    help="Always include the last ('-last' in name, else highest-step) checkpoint. "
+                         "Default: on (disable with --no-include-last).")
+    ap.add_argument("--class_path", default=None,
+                    help="Model class for export. Default: auto-detect from exp_config.yaml "
+                         "(SALMAutomodel if model.use_nemo_automodel, else SALM).")
     ap.add_argument("--output_dir", type=Path, default=None,
                     help="Where to write exports. Defaults to <exp_dir>/hf_checkpoints.")
     ap.add_argument("--dry_run", action="store_true")
@@ -127,8 +174,17 @@ def main():
     if not ckpt_dir.is_dir():
         sys.exit(f"Missing {ckpt_dir}")
 
+    class_path = resolve_class_path(exp_config, args.class_path)
+    print(f"Model class: {class_path}"
+          f"{' (from --class_path)' if args.class_path else ' (auto-detected from exp_config.yaml)'}")
+
     ckpts = list_checkpoints(ckpt_dir)
-    selected = select(ckpts, args.every)
+    selected = select(ckpts, args.every, args.steps, args.include_first, args.include_last)
+    if args.steps:
+        available = {step for step, _ in ckpts}
+        missing = [s for s in args.steps if s not in available]
+        if missing:
+            print(f"Warning: requested --steps with no checkpoint: {sorted(missing)}")
     if not selected:
         sys.exit(f"No checkpoints matching NNNNNN.ckpt found in {ckpt_dir}")
 
@@ -143,7 +199,7 @@ def main():
         output_dir = hf_root / ckpt_path.stem.replace("=", "_")
         print(f"\n[step={step}] exporting {ckpt_path.name} -> {output_dir}")
         try:
-            export_one(ckpt_path, args.class_path, exp_config, output_dir, args.force)
+            export_one(ckpt_path, class_path, exp_config, output_dir, args.force)
         except Exception as e:
             print(f"  FAILED: {e}")
             traceback.print_exc()

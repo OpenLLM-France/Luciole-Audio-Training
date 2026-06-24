@@ -46,7 +46,12 @@ def _normalize_for_automodel(cfg):
     # Strategy: replace DDPStrategy wholesale. AutomodelParallelStrategy calls the
     # model's configure_model() with the device mesh (so leave init_configure_model
     # at its default false). ep_size=1 for dense LLMs (no MoE).
-    cfg.trainer.strategy = {
+    #
+    # Default = pure FSDP2 (params/grads/optim sharded across all DP ranks, ZeRO-3).
+    # An optional `model.automodel_parallel` block overrides any strategy kwarg, e.g.
+    # to run DDP-equivalent (replicate, no shard) or HSDP. It is popped here so it
+    # never reaches the SALMAutomodel ctor (which would reject the unknown key).
+    strategy = {
         "_target_": "nemo.collections.speechlm2.parts.parallel.AutomodelParallelStrategy",
         "dp_size": None,
         "tp_size": 1,
@@ -54,6 +59,18 @@ def _normalize_for_automodel(cfg):
         "cp_size": 1,
         "ep_size": 1,
     }
+    parallel_override = cfg.model.get("automodel_parallel")
+    if parallel_override is not None:
+        override = OmegaConf.to_container(parallel_override, resolve=True)
+        # Convenience sentinel: dp_replicate_size: "world" -> replicate across ALL
+        # ranks so dp_shard collapses to 1 (DDP-equivalent: full params per GPU,
+        # only a gradient all-reduce, no param all-gather). WORLD_SIZE is set by
+        # torchrun before this runs, so it resolves regardless of --gpus.
+        if override.get("dp_replicate_size") == "world":
+            override["dp_replicate_size"] = int(os.environ.get("WORLD_SIZE", 1))
+        strategy.update(override)
+        del cfg.model["automodel_parallel"]
+    cfg.trainer.strategy = strategy
 
 
 @hydra_runner(config_path="conf", config_name="config_canary-1b-v2_linear")
