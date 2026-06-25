@@ -9,11 +9,11 @@ model:
 
 trainer:
   max_steps: 600_000
-  limit_train_batches: 100_000
+  limit_train_batches: 10_000
 
 data:
   train_ds:
-    num_workers: 3
+    num_workers: 4
     max_tokens: 3072
     use_bucketing: true
     bucket_duration_bins: [83,100,114,129,148,166,198,222,245,267,290,312,335,369,417,432,449,475,525,574,666,707,732,1024,2048,4096]
@@ -23,4 +23,4 @@ data:
 
 exp_manager:
   checkpoint_callback_params:
-    every_n_train_steps: 2500
+    every_n_train_steps: 5000

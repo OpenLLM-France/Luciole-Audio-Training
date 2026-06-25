@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /base
+  - /recipe: luciole
+  - _self_
+
+model:
+  perception:
+      # Optional Rotary Time Embedding (ROTE): encodes absolute time into the encoder output
+      # features (at the modality-adapter entrance). ``dim`` must match the encoder output
+      # feature dim. Omit this block to disable (default). The values below are the OmniVinci
+      # (media_encoder.py) defaults: full rotation, theta=10000, no max_time normalization.
+      rote:
+        _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+        dim: 1024             # must equal the encoder output feature dim
+        rotary_fraction: 0.2  # OmniVinci rotates the full feature dim
+        theta: 1200.0         # OmniVinci 'lang' default. Leave unset to follow max_time
+                              #   (max_time/2π, or 10000 when max_time is null). Set only to override.
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 10_000

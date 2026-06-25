@@ -1,0 +1,36 @@
+# @package _global_
+# Experiment: wrap the audio placeholder with explicit boundary markers.
+#
+# Baseline renders each audio turn as just the locator token:   <|audio|>
+# This run renders it as:                                       <|audio_bos|><|audio|><|audio_eos|>
+# i.e. the LLM gets explicit "audio starts here / ends here" cues around the spliced-in
+# audio embeddings, to test whether marking the audio span helps.
+#
+# Mechanism (two DIFFERENT knobs, do not confuse them):
+#   * model.audio_locator_tag   -> the SINGLE special token the model searches for and
+#       replaces with audio embeddings (salm.py). MUST stay "<|audio|>" (one token).
+#   * data.train_ds.audio_locator_tag -> the STRING each AudioTurn renders into the prompt
+#       text (dataloader.py: "global audio placeholder token, propagates to datasets").
+#       We wrap it here; only the inner <|audio|> is replaced, bos/eos stay as text.
+#
+# IMPORTANT — choice of LLM: salm.py only force-adds audio_locator_tag as a special token
+# and never calls resize_token_embeddings, so <|audio_bos|>/<|audio_eos|> must ALREADY exist
+# in the chosen LLM's tokenizer (and embedding table) to behave as real boundary tokens.
+# This run is therefore launched with a DIFFERENT LLM than the baseline — one whose tokenizer
+# contains these markers — via --llm-model in the commands file. Only the inner <|audio|>
+# (model.audio_locator_tag) is spliced with audio embeddings; bos/eos stay as text tokens.
+#
+# Encoder: canary-1b-v2 (default), v2 data, clean luciole baseline. The variables vs the
+# baseline are the wrapped placeholder (here) AND its matching LLM (commands file).
+#
+# NOTE FOR EVAL: inference prompts must wrap the placeholder the same way, or train/test
+# will mismatch. (Training validation is disabled here via base.yaml limit_val_batches=0.)
+defaults:
+  - /base
+  - /recipe: luciole
+  - _self_
+
+data:
+  train_ds:
+    # Literal expansion of "<|audio_bos|>${model.audio_locator_tag}<|audio_eos|>".
+    audio_locator_tag: "<|audio_bos|>${model.audio_locator_tag}<|audio_eos|>"

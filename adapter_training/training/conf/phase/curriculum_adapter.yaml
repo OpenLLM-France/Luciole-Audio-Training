@@ -7,8 +7,8 @@ model:
     lr: 2e-4
 
 trainer:
-  max_steps: 5_000
-  limit_train_batches: 5_000
+  max_steps: 10_000
+  limit_train_batches: 10_000
 
 data:
   train_ds:

@@ -1,4 +1,9 @@
+# @package _global_
 defaults:
   - /base
   - /recipe: luciole
   - _self_
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 10_000

@@ -1,0 +1,20 @@
+# @package _global_
+# LOCAL-attention arm of the attention A/B experiment (see attention_xp.yaml for the
+# FULL-attention arm). Identical in every respect except the encoder's self-attention
+# context: parakeet-tdt-0.6b-v3 run with NeMo's local attention (rel_pos_local_attn,
+# Longformer-style, chunked) limited to a +/-128 frame window (~+/-10s after the
+# fast-conformer 8x subsampling, ~80ms/frame).
+#
+# Kept self-contained (rather than composing attention_xp) to match the rest of conf/run/
+# and keep the override unambiguous. global_tokens defaults to 0, so no extra encoder
+# params are introduced and pretrained weights load cleanly.
+defaults:
+  - /base
+  - /recipe: luciole
+  - _self_
+
+model:
+  perception:
+    encoder:
+      self_attention_model: rel_pos_local_attn
+      att_context_size: [128, 128]   # frames on each side; the local window

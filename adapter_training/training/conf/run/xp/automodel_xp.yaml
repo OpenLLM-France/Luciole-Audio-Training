@@ -23,7 +23,7 @@ defaults:
   - _self_
 
 trainer:
-  max_steps: 600_000
+  max_steps: 10_000
   limit_train_batches: 10_000
 
 exp_manager:
@@ -32,5 +32,4 @@ exp_manager:
   
   create_mlflow_logger: true
   mlflow_logger_kwargs:
-    experiment_name: speechlm2_automodel
     tracking_uri: file:///lustre/fsn1/projects/rech/qgz/uxn76rc/speechlm/shared/mlflow/mlruns
