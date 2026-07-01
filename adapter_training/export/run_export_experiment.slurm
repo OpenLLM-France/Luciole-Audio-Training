@@ -18,13 +18,12 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
+conda activate $SCRATCH/speechlm/envs/nemo24-salm
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
 
 export EXPERIMENT_FOLDER="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
-NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
-export PYTHONPATH="$NEMO_FORK:${PYTHONPATH:-}"
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export TMPDIR=$JOBSCRATCH

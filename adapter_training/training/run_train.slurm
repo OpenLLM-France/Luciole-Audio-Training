@@ -42,9 +42,6 @@ SAVE_DIR="${SAVE_DIR:-$ALL_CCFRSCRATCH/audio/training/logs/${SLURM_JOB_NAME}}"
 TMP_CACHE="$SCRATCH/.cache"
 EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}"
 
-# --- NeMo fork
-NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
-
 # --- Models / data
 LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/finetune/luciole_final/Luciole-1B-SFT-1.1}"
 SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/canary-1b-v2.nemo}"
@@ -79,8 +76,7 @@ mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
-
-export PYTHONPATH="$NEMO_FORK:${PYTHONPATH:-}"
+conda activate $SCRATCH/speechlm/envs/nemo24-salm
 
 # =====================================================
 # Check NeMo version
@@ -121,6 +117,7 @@ export HYDRA_FULL_ERROR=1
 export TMPDIR="${JOBSCRATCH:-/tmp}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=$(( SLURM_GPUS_ON_NODE * SLURM_NNODES ))
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,garbage_collection_threshold:0.8
 
 # Offline HF mode
 export HF_DATASETS_OFFLINE=1
@@ -179,7 +176,6 @@ echo " Save dir       : $SAVE_DIR"
 echo " LLM model      : $LLM_MODEL"
 echo " Speech encoder : $SPEECH_ENCODER_MODEL"
 echo " Prompt format  : $PROMPT_FORMAT"
-echo " NeMo fork      : $NEMO_FORK"
 echo "======================================"
 
 # =====================================================

@@ -88,7 +88,9 @@ def inject_exports(lines, env):
     """Insert an `export` block right after the last #SBATCH directive."""
     last_sbatch = max(i for i, l in enumerate(lines) if l.startswith("#SBATCH"))
     block = ["\n# ---- Overrides injected by slurm_launcher.py ----\n",
-             "# To rerun this exact job: `sbatch <this-file>`\n"]
+             "# To rerun this exact job: `sbatch <this-file>`\n",
+             "# (NOTE: env vars NOT injected here, e.g. CHECKPOINT for curriculum\n",
+             "#  warm-starts, must be re-exported in the shell before re-running.)\n"]
     for k, v in env.items():
         block.append(f"export {k}={shlex.quote(v)}\n")
     block.append("# ---- End overrides ----\n")

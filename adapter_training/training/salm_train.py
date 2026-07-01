@@ -76,6 +76,13 @@ def _normalize_for_automodel(cfg):
 @hydra_runner(config_path="conf", config_name="config_canary-1b-v2_linear")
 def train(cfg):
     OmegaConf.resolve(cfg)
+    # `lora: null` in a config overlay means "disable LoRA". base.yaml always
+    # defines model.lora and Hydra can't delete the key (it deep-merges dicts), so
+    # it arrives as None and SALM.maybe_install_lora would call LoraConfig(**None).
+    # Strip it here so LoRA is simply not installed (e.g. curriculum stages 1-2).
+    if cfg.model.get("lora", "x") is None:
+        OmegaConf.set_struct(cfg, False)
+        del cfg.model["lora"]
     if cfg.model.get("use_nemo_automodel", False):
         _normalize_for_automodel(cfg)
     if torch.cuda.is_available():

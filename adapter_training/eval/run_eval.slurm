@@ -16,6 +16,7 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
+conda activate $SCRATCH/speechlm/envs/nemo24-salm
 mkdir -p log
 
 LOCAL_FOLDER=$(pwd)
