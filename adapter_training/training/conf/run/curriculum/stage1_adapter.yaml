@@ -29,16 +29,6 @@ model:
     lr: 3e-4
   lr_scheduler:
     min_lr: 1e-6
-  perception:
-    encoder:
-      self_attention_model: rel_pos_local_attn
-      att_context_size: [128, 128]   # frames on each side; the local window
-
-    rote:
-      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
-      dim: 1024
-      rotary_fraction: 0.2
-      theta: 1200.0
 
 trainer:
   max_steps: 10_000

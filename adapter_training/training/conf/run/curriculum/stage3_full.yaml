@@ -39,15 +39,6 @@ model:
     - "^llm\\..+$"
     - "^embed_tokens\\..+$"
     - "^perception\\.preprocessor\\..+$"
-  perception:
-    encoder:          # parakeet local attention (+/-128 frames each side)
-      self_attention_model: rel_pos_local_attn
-      att_context_size: [128, 128]
-    rote:
-      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
-      dim: 1024
-      rotary_fraction: 0.2
-      theta: 1200.0
   optimizer:
     lr: 1e-6
   lr_scheduler:

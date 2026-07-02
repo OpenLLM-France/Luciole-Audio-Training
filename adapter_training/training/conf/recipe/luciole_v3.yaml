@@ -1,15 +1,15 @@
 # @package _global_
 # Recipe: LoRA r=64, lr=2e-4, bucketing (28 buckets). Max_tokens=15000, num_workers=4.
 model:
-  lora:
-    r: 64
-    lora_alpha: 64
-  optimizer:
-    lr: 2e-4
-
-trainer:
-  max_steps: 600_000
-  limit_train_batches: 10_000
+  perception:
+    encoder:          # parakeet local attention (+/-128 frames each side)
+        self_attention_model: rel_pos_local_attn
+        att_context_size: [128, 128]
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
 
 data:
   train_ds:
