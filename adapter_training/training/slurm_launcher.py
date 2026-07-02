@@ -145,6 +145,27 @@ def copy_configs(save_dir_path, job_name, config_name, data_version, suffix):
     return copied
 
 
+def config_needs_checkpoint(config_name):
+    """Return True if the composed Hydra config references ${oc.env:CHECKPOINT}.
+
+    Curriculum warm-start stages set `init_from_checkpoint: ${oc.env:CHECKPOINT}`
+    (directly or via their defaults list, e.g. phase/curriculum_encoder.yaml), so
+    the job fails at config-resolve time if CHECKPOINT is unset. We compose the
+    config the same way salm_train.py does and inspect it *without* resolving, so
+    the missing env var doesn't blow up the check itself.
+    """
+    try:
+        from hydra import compose, initialize_config_dir
+        from omegaconf import OmegaConf
+    except ImportError:
+        return False  # can't introspect here; let the job decide at runtime
+
+    conf_dir = str(SLURM_SCRIPT.parent / "conf")
+    with initialize_config_dir(version_base=None, config_dir=conf_dir):
+        cfg = compose(config_name=config_name)
+    return "oc.env:CHECKPOINT" in OmegaConf.to_yaml(cfg, resolve=False)
+
+
 def parse_job_id(sbatch_stdout):
     m = re.search(r"Submitted batch job (\d+)", sbatch_stdout)
     if not m:
@@ -173,6 +194,9 @@ def main():
     g_train.add_argument("--nemo-fork", default=None, help="Override NEMO_FORK path")
     g_train.add_argument("--overwrite", action="store_true",
                          help="Wipe existing experiment folder before launch")
+    g_train.add_argument("--overwrite-log", action="store_true",
+                         help="Clear the log/save directory before launch "
+                              "(removes previous .slurm/.out/.err snapshots)")
     g_train.add_argument("--save-dir", default=None,
                          help="Log + snapshot directory "
                               "(default: $ALL_CCFRSCRATCH/audio/training/logs/<job_name>)")
@@ -202,6 +226,15 @@ def main():
                  f"(source your env or pass --save-dir explicitly)")
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(parents=True, exist_ok=True)
+    if args.overwrite_log:
+        print(f"Clearing log directory contents: {save_dir_path}")
+        # Delete the *contents*, not the dir itself, so shells cd'd into it (and
+        # their relative paths) keep working.
+        for entry in save_dir_path.iterdir():
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink()
 
     env_overrides = {
         "CONFIG_NAME":  args.config,
@@ -218,6 +251,15 @@ def main():
         ("NEMO_FORK",             args.nemo_fork),
     ]:
         if value is not None:
+            # An empty string almost always means an undefined shell variable was
+            # passed (e.g. --speech-encoder-model "$PARAKEET" with $PARAKEET unset).
+            # Injecting `export X=''` would silently trip run_train.slurm's
+            # `${X:-<default>}` fallback, running with the WRONG model. Fail loud.
+            if value == "":
+                cli_flag = "--" + name.lower().replace("_", "-")
+                sys.exit(f"Empty value for {cli_flag} (probably an undefined shell "
+                         f"variable). Pass a real path or omit the flag to use the "
+                         f"default.")
             env_overrides[name] = value
 
     sbatch_overrides = {}
@@ -264,6 +306,15 @@ def main():
         for dst in copied:
             print(f"  config: {dst}")
         return
+
+    if config_needs_checkpoint(args.config) and not os.environ.get("CHECKPOINT"):
+        submitted.unlink(missing_ok=True)
+        sys.exit(
+            f"Config '{args.config}' warm-starts from ${{oc.env:CHECKPOINT}} but "
+            f"CHECKPOINT is not set in the environment.\n"
+            f"Export it before launching, e.g.:\n"
+            f'  export CHECKPOINT="$(ls -t "$EXP"/<stage>/checkpoints/*-last.ckpt | head -1)"'
+        )
 
     result = subprocess.run(["sbatch", "--export=ALL", str(submitted)], capture_output=True, text=True)
     print(result.stdout.strip())

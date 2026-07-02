@@ -44,7 +44,7 @@ EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm
 
 # --- Models / data
 LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/finetune/luciole_final/Luciole-1B-SFT-1.1}"
-SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/canary-1b-v2.nemo}"
+SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo}"
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
 
