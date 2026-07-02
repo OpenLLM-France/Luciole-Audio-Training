@@ -855,5 +855,5 @@
   input_cfg:
     - type: multimodal_conversation
       # MiscMultiTurn (428.0 h, 100.0K samples)
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train_randomorder.jsonl
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train_randomorder_filtered.jsonl
 
