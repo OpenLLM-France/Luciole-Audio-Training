@@ -192,8 +192,15 @@ def main():
     g_train.add_argument("--speech-encoder-model", default=None,
                          help="Override SPEECH_ENCODER_MODEL path")
     g_train.add_argument("--nemo-fork", default=None, help="Override NEMO_FORK path")
+    g_train.add_argument("--set", dest="overrides", action="append", default=[],
+                         metavar="KEY=VAL",
+                         help="Extra Hydra override appended to the torchrun command "
+                              "(repeatable), e.g. --set ++model.optimizer.lr=1e-6")
     g_train.add_argument("--overwrite", action="store_true",
                          help="Wipe existing experiment folder before launch")
+    g_train.add_argument("--resume", action="store_true",
+                         help="Keep an existing experiment folder and resume from its "
+                              "last checkpoint (exp_manager resume_if_exists)")
     g_train.add_argument("--overwrite-log", action="store_true",
                          help="Clear the log/save directory before launch "
                               "(removes previous .slurm/.out/.err snapshots)")
@@ -216,6 +223,10 @@ def main():
                              "yamls (as run_train.slurm would) but don't submit; leave them "
                              "at <save_dir>/<job_name>_dryrun.* for inspection")
     args = parser.parse_args()
+
+    if args.resume and args.overwrite:
+        sys.exit("--resume and --overwrite are mutually exclusive "
+                 "(one keeps the folder to resume, the other wipes it).")
 
     job_name = args.job_name or parse_job_name(SLURM_SCRIPT)
 
@@ -240,6 +251,7 @@ def main():
         "CONFIG_NAME":  args.config,
         "DATA_VERSION": args.data_version,
         "OVERWRITE":    "true" if args.overwrite else "false",
+        "RESUME":       "true" if args.resume else "false",
         "SAVE_DIR":     save_dir,
         "LOCAL_FOLDER": str(SLURM_SCRIPT.parent),
     }
@@ -261,6 +273,12 @@ def main():
                          f"variable). Pass a real path or omit the flag to use the "
                          f"default.")
             env_overrides[name] = value
+
+    if args.overrides:
+        for o in args.overrides:
+            if "=" not in o:
+                sys.exit(f"--set expects KEY=VAL, got: {o!r}")
+        env_overrides["EXTRA_OVERRIDES"] = " ".join(args.overrides)
 
     sbatch_overrides = {}
     if args.gpus is not None:

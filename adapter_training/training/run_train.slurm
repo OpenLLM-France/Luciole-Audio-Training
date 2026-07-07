@@ -132,9 +132,11 @@ if [[ -d "${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}" ]]; then
     if [[ "${OVERWRITE:-false}" == "true" ]]; then
         echo "⚠ OVERWRITE=true — wiping ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
         rm -rf "${EXPERIMENT_FOLDER:?}/${EXPERIMENT_NAME}"
+    elif [[ "${RESUME:-false}" == "true" ]]; then
+        echo "↻ RESUME=true — keeping ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}; exp_manager will resume from its last checkpoint"
     else
         echo "❌ Experiment folder already exists: ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
-        echo "   Re-submit with OVERWRITE=true sbatch run_train.slurm, or change SLURM --job-name."
+        echo "   Re-submit with --resume (resume from last ckpt) or --overwrite (wipe and restart), or change --job-name."
         exit 1
     fi
 fi
@@ -189,4 +191,5 @@ torchrun ${DISTRIBUTED_ARGS} \
   ++trainer.num_nodes="$NNODES" \
   ++exp_manager.exp_dir="$EXPERIMENT_FOLDER" \
   ++exp_manager.name="$EXPERIMENT_NAME" \
-  ++exp_manager.max_time_per_run="$MAX_TIME_PER_RUN"
+  ++exp_manager.max_time_per_run="$MAX_TIME_PER_RUN" \
+  ${EXTRA_OVERRIDES:-}
