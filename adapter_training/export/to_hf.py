@@ -106,6 +106,10 @@ def _hf_export_config(model: torch.nn.Module, dtype: str | torch.dtype) -> dict[
     dtype_name = _canonical_torch_dtype_name(dtype)
     config["dtype"] = dtype_name
     config["torch_dtype"] = dtype_name
+    # Training-only weight init: the exported checkpoint already holds all trained
+    # weights, so re-seeding from this (often now-missing) training checkpoint at
+    # load time is both unnecessary and wrong. Drop it from the exported config.
+    config.pop("init_from_checkpoint", None)
     return config
 
 
