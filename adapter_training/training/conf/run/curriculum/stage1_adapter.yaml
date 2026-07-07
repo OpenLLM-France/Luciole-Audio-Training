@@ -32,7 +32,6 @@ model:
 
 trainer:
   max_steps: 10_000
-  limit_train_batches: 10_000
 
 # Bucketing (bins, max_tokens 15000, max_duration 1200) is inherited from the
 # luciole_v3 recipe. Adapter-only fits LARGER batches than the recipe default,

@@ -57,6 +57,7 @@ trainer:
 
   max_epochs: -1
 
+  limit_train_batches: 10_000
   accumulate_grad_batches: 1
   limit_val_batches: 0.0
 

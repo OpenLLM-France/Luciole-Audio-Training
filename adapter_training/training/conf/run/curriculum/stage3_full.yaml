@@ -1,9 +1,11 @@
 # @package _global_
 # ============================================================
-# CURRICULUM STAGE 3 of 3 — FULL FINE-TUNE (adapter + encoder + LLM-LoRA).
-# Thaw everything: adapter + audio encoder train fully, LLM trains
-# via LoRA. No /phase file exists for this stage, so the strategy is
-# inlined below (mirrors curriculum_encoder but KEEPS LoRA enabled).
+# CURRICULUM STAGE 3 of 3 — LLM-LoRA FINE-TUNE (adapter + LLM-LoRA).
+# Thaw the LLM via LoRA on top of the trained adapter. The audio encoder
+# is KEPT FROZEN here: unfreezing it on top of LoRA overflows VRAM, so
+# stage 2 remains the only encoder-tuning stage. So trainable = adapter +
+# LoRA (~12M), NOT the encoder. No /phase file exists for this stage, so the
+# strategy is inlined below (mirrors curriculum_encoder but KEEPS LoRA enabled).
 # Encoder: parakeet-tdt-0.6b-v3 with LOCAL attention (passed via
 # --speech-encoder-model; rel_pos_local_attn set below).
 # Data: v3 stage-3 QA-emphasised mix (QA 38%, ASR floor 25%).
@@ -35,7 +37,7 @@ model:
   lora:
     r: 64
     lora_alpha: 64
-  freeze_params:    # drop "^perception\.encoder\..+$" → encoder trains; LLM frozen except LoRA
+  freeze_params:    # encoder KEPT FROZEN (VRAM); LLM frozen except LoRA → trains adapter + LoRA
     - "^llm\\..+$"
     - "^embed_tokens\\..+$"
     - "^perception\\.preprocessor\\..+$"
@@ -47,7 +49,6 @@ model:
 
 trainer:
   max_steps: 100_000
-  limit_train_batches: 100_000
 
 data:
   train_ds:
