@@ -17,9 +17,9 @@
   tags: {task: asr}
   input_cfg:
 
-    # FR — 30% of ASR
+    # FR — 24% of ASR   (phase 2 curriculum: 5 pp reallocated to AR peak at 20%)
     - type: group
-      weight: 0.30
+      weight: 0.24
       tags: {lang: fr}
       input_cfg:
         - type: multimodal_conversation
@@ -88,9 +88,9 @@
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
 
-    # EN — 30% of ASR
+    # EN — 24% of ASR   (phase 2 curriculum: 5 pp reallocated to AR peak at 20%)
     - type: group
-      weight: 0.30
+      weight: 0.24
       tags: {lang: en}
       input_cfg:
         - type: multimodal_conversation
@@ -180,9 +180,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
 
-  # AR — 8% of ASR
+  # AR — 20% of ASR   (curriculum PEAK; phase 1 = 0, phase 3 = 10%)
     - type: group
-      weight: 0.08
+      weight: 0.20
       tags: {lang: ar}
       input_cfg:
         - type: multimodal_conversation
@@ -308,19 +308,24 @@
     - type: multimodal_conversation
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/Multilingual_TEDx/train.jsonl
       tags: {source_lang: pt, target_lang: en}
-    # AST AR <-> X
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
-      tags: {source_lang: ar, target_lang: fr}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
-      tags: {source_lang: fr, target_lang: ar}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
-      tags: {source_lang: ar, target_lang: en}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
-      tags: {source_lang: en, target_lang: ar}
+    # AST AR <-> X   (phase 2 curriculum PEAK: 20% of AST budget; mirrors ASR AR)
+    # The four AR-involving pairs are wrapped so they compete as one entity
+    # (20% of AST). The remaining 80% is split data-driven among the other pairs.
+    - type: group
+      weight: 0.20
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
+          tags: {source_lang: ar, target_lang: fr}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
+          tags: {source_lang: fr, target_lang: ar}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
+          tags: {source_lang: ar, target_lang: en}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
+          tags: {source_lang: en, target_lang: ar}
 
 
 # ============================================================

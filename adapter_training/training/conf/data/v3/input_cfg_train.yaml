@@ -15,9 +15,9 @@
   tags: {task: asr}
   input_cfg:
 
-    # FR — 30% of ASR
+    # FR — 29% of ASR   (was 30%; 1 pp reallocated to AR)
     - type: group
-      weight: 0.30
+      weight: 0.29
       tags: {lang: fr}
       input_cfg:
         - type: multimodal_conversation
@@ -86,9 +86,9 @@
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
 
-    # EN — 30% of ASR
+    # EN — 29% of ASR   (was 30%; 1 pp reallocated to AR)
     - type: group
-      weight: 0.30
+      weight: 0.29
       tags: {lang: en}
       input_cfg:
         - type: multimodal_conversation
@@ -178,9 +178,9 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
 
-  # AR — 8% of ASR
+  # AR — 10% of ASR   (was 8%; boosted after adding MASC/MGB2/... — 1447 h total)
     - type: group
-      weight: 0.08
+      weight: 0.10
       tags: {lang: ar}
       input_cfg:
         - type: multimodal_conversation

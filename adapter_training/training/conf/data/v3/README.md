@@ -93,12 +93,25 @@ Stage 2 = 10 % × 20 % = 2.0 % of total.
 The intra-task tuning below is identical across all four YAMLs — only the
 top-level task weights and the within-OTHER weights (see previous section) differ.
 
-- **ASR** — fr 30 %, en 30 %, de 8 %, es 8 %, it 6 %, nl 5 %, pt 5 %, ar 8 %.
+- **ASR** — one-step: fr 29 %, en 29 %, de 8 %, es 8 %, it 6 %, nl 5 %, pt 5 %, ar 10 %.
+  In the curriculum stages the AR share follows a trajectory
+  (**0 % → 20 % → 10 %** across phases 1/2/3): phase 1 has AR ASR commented out
+  (FR/EN restored to 30 % each so the adapter aligns on languages Canary already
+  handles); phase 2 boosts AR to a 20 % peak while the encoder is unfrozen
+  (5 pp each taken from FR and EN → both at 24 %); phase 3 settles at 10 %
+  (same shape as the one-step config). Other ASR sub-language weights
+  (de/es/it/nl/pt = 8/8/6/5/5) are held constant across all four files.
   YouTubeFr's 7 splits are wrapped under a sub-group with `weight: 0.18` so the
   collection competes as one entity (not seven).
 - **QA** — en 44 %, fr 44 %, de 4 %, es 4 %, it 4 %. Vigogne–Alpaca has an
   explicit `weight: 0.03` to cap its share at ~3 % of FR QA.
 - **AST** — flat list of 31 language pairs, data-driven within the group.
+  In the curriculum stages, the four AR-involving pairs (`ar↔fr`, `ar↔en`,
+  `fr↔ar`, `en↔ar`) follow the **same 0 % → 20 % → 10 %** trajectory as ASR AR:
+  phase 1 has them commented out; phases 2 & 3 wrap them in a sub-group with
+  explicit `weight: 0.20` and `weight: 0.10` respectively (the remaining 80 % /
+  90 % is split data-driven among the non-AR pairs). The one-step config leaves
+  them flat (~9.4 % effective share, close to the phase-3 target).
 - **AQA** — sound 50 % / music 50 %, each broken down by language and dataset.
 - **OTHER** — organised by sub-task (`gender_reco`, `age_reco`, `temporal`,
   `diarization`, `voice_captioning`, `language_reco`, `emotion_reco`, plus a

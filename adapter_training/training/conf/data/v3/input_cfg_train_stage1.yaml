@@ -18,7 +18,7 @@
   tags: {task: asr}
   input_cfg:
 
-    # FR — 30% of ASR
+    # FR — 30% of ASR   (phase 1: AR excluded, so FR keeps its full share)
     - type: group
       weight: 0.30
       tags: {lang: fr}
@@ -89,7 +89,7 @@
             - type: multimodal_conversation
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
 
-    # EN — 30% of ASR
+    # EN — 30% of ASR   (phase 1: AR excluded, so EN keeps its full share)
     - type: group
       weight: 0.30
       tags: {lang: en}
@@ -181,32 +181,35 @@
         - type: multimodal_conversation
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
 
-  # AR — 8% of ASR
-    - type: group
-      weight: 0.08
-      tags: {lang: ar}
-      input_cfg:
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
-        # Newly added Arabic ASR datasets (ESCWA ships a single all.jsonl).
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ARABIC-SPEECH/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ESCWA/all.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MASC/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB2/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB5/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TARIC/train.jsonl
-        - type: multimodal_conversation
-          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TunSwitch/train.jsonl
+  # AR — 0% of ASR   (curriculum: 0 → 20% → 10% across phases 1/2/3)
+  # AR ASR is intentionally OFF in phase 1 so the adapter first aligns on the
+  # languages Canary already handles well. Re-enabled at 20% in stage 2 (peak,
+  # encoder unfrozen) and settled at 10% in stage 3 (steady-state).
+  #  - type: group
+  #    weight: 0.10
+  #    tags: {lang: ar}
+  #    input_cfg:
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
+  #      # Newly added Arabic ASR datasets (ESCWA ships a single all.jsonl).
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ARABIC-SPEECH/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ESCWA/all.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MASC/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB2/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB5/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TARIC/train.jsonl
+  #      - type: multimodal_conversation
+  #        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TunSwitch/train.jsonl
 
 # ============================================================
 # AST — 20%
@@ -309,19 +312,19 @@
     - type: multimodal_conversation
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/Multilingual_TEDx/train.jsonl
       tags: {source_lang: pt, target_lang: en}
-    # AST AR <-> X
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
-      tags: {source_lang: ar, target_lang: fr}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
-      tags: {source_lang: fr, target_lang: ar}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
-      tags: {source_lang: ar, target_lang: en}
-    - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
-      tags: {source_lang: en, target_lang: ar}
+    # AST AR <-> X   (phase 1: OFF; curriculum 0 → 20% → 10% mirrors ASR AR)
+    # - type: multimodal_conversation
+    #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
+    #   tags: {source_lang: ar, target_lang: fr}
+    # - type: multimodal_conversation
+    #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
+    #   tags: {source_lang: fr, target_lang: ar}
+    # - type: multimodal_conversation
+    #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
+    #   tags: {source_lang: ar, target_lang: en}
+    # - type: multimodal_conversation
+    #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
+    #   tags: {source_lang: en, target_lang: ar}
 
 
 # ============================================================
