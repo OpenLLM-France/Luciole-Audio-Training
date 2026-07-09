@@ -46,7 +46,6 @@ model:
 
 trainer:
   max_steps: 200_000
-  limit_train_batches: 10_000
 
 # Stage-2-only bucketing override (recipe keeps the full 28-bucket / max_duration
 # 1200 layout). The encoder is unfrozen here → memory-heavy, and the recipe's top

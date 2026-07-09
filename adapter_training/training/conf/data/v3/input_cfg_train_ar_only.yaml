@@ -1,0 +1,38 @@
+# ============================================================
+# ARABIC-ONLY probe mix (ASR).
+# Single-task, single-language: all Arabic ASR datasets available under
+# nemo/asr/ar/context. Used to test whether parakeet (+ our adapter/encoder)
+# can learn Arabic at all, and at which LR.
+#
+#   CommonVoice, FLEURS, Multilingual_TEDx  (original v3 probe, ~54.6 h)
+#   ARABIC-SPEECH, ESCWA, MASC, MGB2, MGB5, TARIC, TunSwitch  (newly added)
+#
+# Weights left data-driven inside the group (proportional to samples),
+# randomorder manifests => good shuffling across the small corpus.
+# ============================================================
+- type: group
+  weight: 1.0
+  tags: {task: asr, lang: ar}
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
+    # Newly added Arabic datasets. No randomorder variant on disk yet, so we
+    # point at the plain train manifests (ESCWA only ships a single all.jsonl).
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ARABIC-SPEECH/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ESCWA/all.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MASC/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB2/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB5/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TARIC/train.jsonl
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TunSwitch/train.jsonl
