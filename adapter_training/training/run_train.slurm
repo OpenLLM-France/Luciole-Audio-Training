@@ -76,14 +76,18 @@ mkdir -p "$TMP_CACHE" "$EXPERIMENT_FOLDER"
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
-conda activate $SCRATCH/speechlm/envs/nemo24-salm
+# Conda env is overridable (Automodel runs use a dedicated env, e.g. salm_automodel).
+# Default keeps the SALM env so existing DDP/HF runs are unchanged.
+CONDA_ENV="${CONDA_ENV:-$SCRATCH/speechlm/envs/nemo24-salm}"
+echo "Conda env: $CONDA_ENV"
+conda activate "$CONDA_ENV"
 
 # =====================================================
 # Check NeMo version
 # =====================================================
 python - <<EOF
 import nemo
-print(f"NeMo version: {nemo.__version__}")
+print(f"NeMo version: {nemo.__version__} (from {nemo.__file__})")
 EOF
 
 # =====================================================
