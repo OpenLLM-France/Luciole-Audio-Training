@@ -678,11 +678,11 @@
           tags: {lang: it}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_age_randomorder.jsonl
     - type: group
-      weight: 0.1201   # 7,418 h, 623.0K samples
+      weight: 0.1201   # 7,418 h, 623.1K samples
       tags: {sub_task: temporal}
       input_cfg:
         - type: group
-          weight: 0.5000   # 3,391 h, 305.9K samples
+          weight: 0.5000   # 3,392 h, 306.0K samples
           tags: {lang: en}
           input_cfg:
             - type: multimodal_conversation
@@ -692,16 +692,16 @@
               weight: 0.1390   # answer_with_time (458.2 h, 41.3K samples)
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train_randomorder.jsonl
             - type: multimodal_conversation
-              weight: 0.1456   # time2sentence (503.0 h, 45.4K samples)
+              weight: 0.1456   # time2sentence (503.3 h, 45.4K samples)
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train_randomorder.jsonl
             - type: multimodal_conversation
-              weight: 0.1458   # time2word (504.5 h, 45.5K samples)
+              weight: 0.1458   # time2word (504.1 h, 45.5K samples)
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train_randomorder.jsonl
             - type: multimodal_conversation
-              weight: 0.1459   # word2sentence (505.0 h, 45.6K samples)
+              weight: 0.1459   # word2sentence (504.9 h, 45.5K samples)
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train_randomorder.jsonl
             - type: multimodal_conversation
-              weight: 0.1458   # word2time (504.1 h, 45.5K samples)
+              weight: 0.1459   # word2time (504.8 h, 45.5K samples)
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train_randomorder.jsonl
             - type: multimodal_conversation
               weight: 0.1390   # format_json_answer (458.2 h, 41.3K samples)
