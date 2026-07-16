@@ -3,6 +3,8 @@ import asyncio
 import argparse
 import json
 import copy
+import re
+import unicodedata
 from functools import partial
 from pathlib import Path
 
@@ -16,6 +18,68 @@ from datatrove.pipeline.filters import LambdaFilter
 
 
 SEP = "\n[[SEP]]\n"
+
+
+# Typographic normalization of the translated turns. TranslateGemma emits typographer's
+# punctuation (curly quotes, ellipsis, guillemets, no-break spaces) that the source English
+# data does not have, so the two languages would otherwise disagree on characters that sound
+# identical. Accents and the oe/ae ligatures are French SPELLING, not typography: never touched.
+def _map_to(chars, replacement):
+    return {c: replacement for c in chars}
+
+
+_CHAR_MAP = {
+    # apostrophes / single quotes / primes / acute accent / backtick
+    **_map_to("‘’‚‛′´`", "'"),
+    # double quotes and guillemets
+    **_map_to("“”„‟″«»", '"'),
+    # hyphen variants, en/em dash, horizontal bar
+    **_map_to("‐‑‒–—―", "-"),
+    "…": "...",
+    # presentation-form ligatures (unlike œ/æ, these are pure typography)
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    # The invisible ones stay as \u escapes on purpose: literal forms are unreviewable, and
+    # U+2028 is a LINE SEPARATOR that git and editors flag as a stray terminator in the source.
+    # no-break, narrow no-break, figure, thin, hair space; line + paragraph separator
+    **_map_to("\u00a0\u202f\u2007\u2009\u200a\u2028\u2029", " "),
+}
+# zero-width space / non-joiner / joiner, word joiner, BOM
+_ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
+_NORM_TABLE = str.maketrans({**_CHAR_MAP, **{c: "" for c in _ZERO_WIDTH}})
+
+# Only horizontal runs: newlines separate paragraphs inside a turn and must survive.
+_SPACE_RUN = re.compile(r"[ \t]{2,}")
+
+# French sets the padding INSIDE guillemets (« mot »), so the pair must collapse to
+# "mot", not " mot ". Runs before _NORM_TABLE, which cannot tell an opener from a closer once
+# both are '"'. Unpaired guillemets fall through to the table. \s is Unicode-aware for str
+# patterns, so it already covers the no-break spaces French puts there.
+_GUILLEMETS = re.compile(r"«\s*(.*?)\s*»", re.DOTALL)
+
+
+def normalize_text(text):
+    """ASCII-ify punctuation and spacing without touching letters.
+
+    NFC first so decomposed accents (e + U+0301) become a single é, otherwise the combining
+    mark would survive as its own character downstream.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    text = unicodedata.normalize("NFC", text)
+    text = _GUILLEMETS.sub(r'"\1"', text)
+    text = text.translate(_NORM_TABLE)
+    text = _SPACE_RUN.sub(" ", text)
+    return text.strip()
+
+
+def normalize_docs(data: DocumentsPipeline, rank: int = 0, world_size: int = 1):
+    """Pipeline stage: normalize every text turn of the translated conversation."""
+    for doc in data:
+        for turn in doc.metadata.get("conversations", []):
+            if turn.get("type") == "text":
+                turn["value"] = normalize_text(turn.get("value"))
+        yield doc
 
 
 def _find_turn(conversations, from_role, turn_type="text"):
@@ -102,6 +166,12 @@ if __name__ == "__main__":
         "--debug",
         action="store_true",
         help="Debug mode: only process the first 10 rows.",
+    )
+    parser.add_argument(
+        "--no_normalize",
+        action="store_true",
+        help="Skip the typographic normalization stage (curly quotes, ellipsis, "
+        "no-break spaces, ... -> their ASCII equivalents). See normalize_text.",
     )
     parser.add_argument(
         "--dataset_name",
@@ -279,6 +349,7 @@ if __name__ == "__main__":
             ),
             LambdaFilter(filter_data),
             fix_data,
+            *([] if args.no_normalize else [normalize_docs]),
             JsonlWriter(
                 f"{output_path}/data_cleaned/{dataset_name}",
                 output_filename="${split}.jsonl",
