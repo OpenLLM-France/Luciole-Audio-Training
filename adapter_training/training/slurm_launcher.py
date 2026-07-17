@@ -8,6 +8,7 @@ Examples:
   python slurm_launcher.py --data-version data_v3 --gpus 4 --time 02:00:00
   python slurm_launcher.py --config foo.yaml --qos t3 --nodes 2
   python slurm_launcher.py --llm-model /path/to/model --prompt-format llama3 --dry-run
+  python slurm_launcher.py --config run/xp/automodel_8b --conda-env $SCRATCH/speechlm/envs/salm_automodel
 """
 import argparse
 import os
@@ -192,6 +193,10 @@ def main():
     g_train.add_argument("--speech-encoder-model", default=None,
                          help="Override SPEECH_ENCODER_MODEL path")
     g_train.add_argument("--nemo-fork", default=None, help="Override NEMO_FORK path")
+    g_train.add_argument("--conda-env", default=None,
+                         help="Override CONDA_ENV, the conda env activated by the job "
+                              "(default: $SCRATCH/speechlm/envs/nemo24-salm). Automodel "
+                              "runs need a dedicated env, e.g. .../envs/salm_automodel")
     g_train.add_argument("--set", dest="overrides", action="append", default=[],
                          metavar="KEY=VAL",
                          help="Extra Hydra override appended to the torchrun command "
@@ -261,6 +266,7 @@ def main():
         ("PROMPT_FORMAT",         args.prompt_format),
         ("SPEECH_ENCODER_MODEL",  args.speech_encoder_model),
         ("NEMO_FORK",             args.nemo_fork),
+        ("CONDA_ENV",             args.conda_env),
     ]:
         if value is not None:
             # An empty string almost always means an undefined shell variable was
