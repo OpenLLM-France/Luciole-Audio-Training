@@ -100,6 +100,50 @@ def _canonical_torch_dtype_name(dtype: str | torch.dtype) -> str:
     return str(str_to_dtype(dtype)).replace("torch.", "")
 
 
+# Nemotron-H is reachable through two implementations that differ ONLY in the name of the
+# trunk submodule: the bundled remote code shipped with Luciole-8B calls it `backbone`,
+# transformers' built-in nemotron_h calls it `model`. Training builds the bundled one (the
+# nemo_automodel parallelizer wants `.backbone`), so the trained state dict comes out
+# `llm.backbone.*` -- but nothing could then EVALUATE it:
+#
+#   * The built-in cannot load it: `llm.backbone.*` matches none of its `llm.model.*`
+#     params, and hf_hub._load_state_dict_with_dtensors keeps only keys present in BOTH, so
+#     every LLM tensor was dropped SILENTLY -> a randomly initialised 8B LLM emitting
+#     fluent, confident, completely unrelated text (no missing-key warning anywhere).
+#   * The bundled one cannot generate: its modeling_nemotron_h.py is a transformers-4.x-era
+#     copy whose prepare_inputs_for_generation assumes generate() has not pre-created the
+#     cache. transformers>=5 inverts that, so it unconditionally slices `input_ids`, which
+#     is None on SALM's inputs_embeds-only (audio-conditioned) path -> AttributeError:
+#     'NoneType' object has no attribute 'shape'. And nemo_automodel 0.4.0 hard-pins
+#     transformers==5.5.0, so downgrading is not on the table.
+#
+# So the export normalises onto the BUILT-IN naming. That direction is canonical, not a
+# preference: vLLM's own nemotron_h.py does the same remap when loading Nemotron-H weights
+# (`name = name.replace("backbone", "model")`, models/nemotron_h.py:585) and calls its trunk
+# `self.model`. Since that replace is a no-op once tensors are already `model.*`, exporting
+# in built-in naming keeps the vLLM path working too.
+LLM_TRUNK_OLD = "llm.backbone."
+LLM_TRUNK_NEW = "llm.model."
+
+
+def _remap_llm_trunk(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Rename the LLM trunk from the bundled `backbone` to the built-in `model`.
+
+    A pure prefix rename -- layer ordering and every name below the trunk are identical
+    between the two implementations. `perception.*` and `llm.lm_head.weight` are untouched.
+    No-op for a state dict that is already in built-in naming (or a non-Nemotron-H backbone).
+    """
+    n = sum(1 for k in state_dict if k.startswith(LLM_TRUNK_OLD))
+    if n == 0:
+        return state_dict
+    print(f"[to_hf] remapped {n} LLM tensors {LLM_TRUNK_OLD}* -> {LLM_TRUNK_NEW}* "
+          "(transformers built-in naming)")
+    return {
+        (LLM_TRUNK_NEW + k[len(LLM_TRUNK_OLD):] if k.startswith(LLM_TRUNK_OLD) else k): v
+        for k, v in state_dict.items()
+    }
+
+
 def _hf_export_config(model: torch.nn.Module, dtype: str | torch.dtype) -> dict[str, Any]:
     """Build the exported root config without mutating the training config."""
     config = OmegaConf.to_container(model.cfg) if isinstance(model.cfg, DictConfig) else deepcopy(model.cfg)
@@ -110,6 +154,13 @@ def _hf_export_config(model: torch.nn.Module, dtype: str | torch.dtype) -> dict[
     # weights, so re-seeding from this (often now-missing) training checkpoint at
     # load time is both unnecessary and wrong. Drop it from the exported config.
     config.pop("init_from_checkpoint", None)
+    # The weights are exported in built-in naming (see _remap_llm_trunk), so the loader must
+    # build the BUILT-IN class to match them. trust_remote_code is a training-time need (the
+    # parallelizer wants the bundled `.backbone`); carrying it into the exported checkpoint
+    # would rebuild the bundled class at eval, whose generate() is broken under
+    # transformers>=5. force_hf goes with it: it only selects between nemo_automodel's custom
+    # impl and the HF one, and is meaningless once no remote code ships.
+    config["trust_remote_code"] = False
     return config
 
 
@@ -120,6 +171,7 @@ def save_hf_checkpoint(model: torch.nn.Module, state_dict: dict, cfg: HfExportCo
 
     target_dtype = str_to_dtype(cfg.dtype)
     state_dict = {k: v.to(target_dtype) for k, v in state_dict.items()}
+    state_dict = _remap_llm_trunk(state_dict)
 
     save_file(state_dict, output_dir / "model.safetensors")
 
@@ -138,6 +190,28 @@ def save_llm_backbone_config(model: torch.nn.Module, output_dir: str | Path) -> 
     llm_backbone_dir = Path(output_dir) / LLM_BACKBONE_DIR
     llm_backbone_dir.mkdir(parents=True, exist_ok=True)
     llm_config.save_pretrained(str(llm_backbone_dir))
+
+    # save_pretrained() copies the config's OWN dynamic module (configuration_nemotron_h.py)
+    # and writes an auto_map naming modeling_nemotron_h.NemotronHForCausalLM -- but it never
+    # copies the modeling file, because a config object does not know about it. The exported
+    # llm_backbone/ therefore had a DANGLING auto_map: trust_remote_code=True would resolve
+    # the config remotely and then silently fall back to the built-in for the MODEL, which is
+    # how a checkpoint whose weights were `backbone`-named ended up being loaded into a
+    # `model`-named class and losing every LLM tensor.
+    #
+    # We export in built-in naming (see _remap_llm_trunk) and set trust_remote_code=False, so
+    # no remote code should be consulted at all. Strip the auto_map and drop the copied .py so
+    # the artifact is self-consistent and there is nothing to fall back to. Leaving them would
+    # re-arm exactly the failure above for anyone who flips trust_remote_code back on.
+    cfg_path = llm_backbone_dir / "config.json"
+    if cfg_path.is_file():
+        llm_cfg = json.loads(cfg_path.read_text())
+        if llm_cfg.pop("auto_map", None) is not None:
+            cfg_path.write_text(json.dumps(llm_cfg, indent=2))
+            print("[to_hf] stripped dangling auto_map from llm_backbone/config.json")
+    for stray in llm_backbone_dir.glob("*.py"):
+        stray.unlink()
+        print(f"[to_hf] removed unused bundled module {stray.name} (built-in naming exported)")
 
 
 def _detect_vllm_architecture(model_cfg: dict) -> str:

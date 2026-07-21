@@ -18,7 +18,7 @@
 # =====================================================
 module purge
 module load arch/h100 nemo/2.4.0
-conda activate $SCRATCH/speechlm/envs/nemo24-salm
+# conda activate happens below, once $XP is known (the env depends on the experiment).
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
@@ -38,6 +38,22 @@ export NEMO_MODELS_CACHE=$TMP_CACHE
 #   sbatch run_export_experiment.slurm my_experiment_name
 XP="${1:?Usage: sbatch run_export_experiment.slurm <experiment_name> [every] [steps...]}"
 EVERY="${2:-50000}"
+
+# Conda env to export in. Pass an env NAME (under $SCRATCH/speechlm/envs) to force it:
+#   sbatch --export=ALL,CONDA_ENV=nemo24-salm_automodel run_export_experiment.slurm ...
+# Unset -> auto-detect from the experiment's exp_config.yaml: an automodel experiment
+# (model.use_nemo_automodel) needs nemo24-salm_automodel, the only env with the
+# nemo_automodel package; anything else runs in nemo24-salm.
+if [ -z "${CONDA_ENV:-}" ]; then
+    if grep -qE '^[[:space:]]*use_nemo_automodel:[[:space:]]*(true|True|yes|1)[[:space:]]*$' \
+        "$EXPERIMENT_FOLDER/$XP/exp_config.yaml" 2>/dev/null; then
+        CONDA_ENV=nemo24-salm_automodel
+    else
+        CONDA_ENV=nemo24-salm
+    fi
+fi
+echo "Conda env: $CONDA_ENV"
+conda activate "$SCRATCH/speechlm/envs/$CONDA_ENV"
 
 # Extra step(s) to always export on top of the --every selection. Defaults to
 # 10000 and 15000; override positionally or via env, e.g.
