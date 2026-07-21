@@ -1,0 +1,46 @@
+# @package _global_
+# Luciole-8B on the NeMo Automodel backend (SALMAutomodel), LoRA r=128.
+#
+# Same backend wiring as run/xp/automodel_xp.yaml but swaps the 1B recipe for
+# luciole-8b. salm_train._normalize_for_automodel() rewrites the lora +
+# trainer.strategy blocks in code (Hydra can't delete base.yaml's HF-PEFT /
+# DDPStrategy keys via overlay).
+#
+# Requirements on the node (see run/xp/automodel_xp.yaml header for the full list):
+#   - NEMO_FORK on PYTHONPATH -> provides SALMAutomodel (run_train.slurm does this
+#     when --nemo-fork is passed). On JZ the fork is $HOME/NeMo.
+#   - nemo_automodel + transformer_engine 2.6.0 importable in the conda env
+#     (the salm_automodel env, set via CONDA_ENV in the launcher).
+#
+# MEMORY / PARALLELISM — luciole-8b is a LONG-CONTEXT recipe (max_tokens=16384,
+# max_duration=1200, buckets up to a 16k-token bucket). So ACTIVATIONS, not
+# params, are the memory wall. This config is set up for that:
+#   - FSDP2 / ZeRO-3 (default; NO replication) shards the 16 GB params to
+#     ~4 GB/GPU, leaving room for the long-sequence activation stack. Replication
+#     (dp_replicate_size=world) would hold the full model AND full activations on
+#     every GPU and OOM on the 16k buckets — only use it for short-seq recipes.
+#   - activation_checkpointing_llm recomputes activations in backward instead of
+#     storing them: the single biggest lever for long sequences (~25% compute).
+# If the 16k buckets STILL OOM, escalate to context parallel (shard the sequence
+# across GPUs): add packed_sequences=true + automodel_backend.attn=te + cp_size=2
+# and export NVTE_FUSED_ATTN=0 — see the CP variant in
+# xp_commands/xp_model_sizes.sh.
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-8b
+  - _self_
+
+model:
+  automodel_parallel:
+    # HSDP: dp_size=None -> total DP = world (4 GPU); dp_replicate_size=2 -> the model is
+    # sharded across dp_shard = dp_size/dp_replicate = 2 GPUs (½ each) and replicated ×2.
+    # Trade full-shard (¼/GPU, max all-gather) for less communication (all-gather over 2 GPUs
+    # only), at ~8 GB params/GPU — trivial for LoRA on a frozen 8B on 80 GB H100. A speed
+    # lever, not a capacity one. Set dp_replicate_size=1 (or remove) to go back to full shard.
+    # dp_replicate_size: 2
+    dp_replicate_size: 1
+    activation_checkpointing_llm: true
+
+trainer:
+  max_steps: 25_000

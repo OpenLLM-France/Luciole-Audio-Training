@@ -28,7 +28,7 @@
 # ============================================================
 defaults:
   - /base
-  - /recipe: luciole_v3
+  - /recipe: luciole
   - _self_
 
 model:
@@ -40,9 +40,9 @@ model:
     - "^perception\\.preprocessor\\..+$"
   # encoder_chunk_size: 30
   optimizer:
-    lr: 1e-5
+    lr: 1e-4
   lr_scheduler:
-    min_lr: 1e-6
+    min_lr: 1e-5
 
 trainer:
   max_steps: 200_000
@@ -56,22 +56,6 @@ trainer:
 # curriculum/oomptimizer_stage2_encoder.slurm (25 values).
 data:
   train_ds:
-    # max_duration: 320
-    # max_tokens: 4096
-    # num_buckets: 22
-    # bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,433,485,539,585,683,734,966,1545,2048,4096]
-    # bucket_batch_size: [46,40,36,31,27,24,21,20,16,15,14,13,11,10,9,8,7,6,5,3,2,1]
-    # num_buckets: 16
-    # bucket_duration_bins: [96,128,160,192,256,288,320,384,512,544,576,640,768,1088,2112,4096]
-    # bucket_batch_size: [102,83,73,60,49,40,35,31,24,21,22,19,17,11,6,3]
-    # num_buckets: 15
-    # bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2112,4096]
-    # bucket_batch_size: [65,57,38,34,30,27,24,21,17,15,13,12,8,4,2]
-    # num_buckets: 15
-    # bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2112,3072]
-    # bucket_batch_size: [32,28,19,17,15,13,12,10,8,7,6,6,4,2,1]
-    # max_duration: 240
-    # max_tokens: 3072
     num_buckets: 14
     bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2048]
     bucket_batch_size: [31,27,18,16,14,12,11,9,7,6,5,5,3,1]

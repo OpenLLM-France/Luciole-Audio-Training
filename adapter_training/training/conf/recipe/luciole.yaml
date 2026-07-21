@@ -1,26 +1,19 @@
 # @package _global_
-# Recipe: LoRA r=64, lr=2e-4, bucketing (26 buckets). Max_tokens=3072, num_workers=3.
+# Recipe: LoRA r=64, lr=2e-4, bucketing (28 buckets). Max_tokens=15000, num_workers=4.
 model:
   lora:
     r: 64
     lora_alpha: 64
   optimizer:
     lr: 2e-4
-
-trainer:
-  max_steps: 600_000
-  limit_train_batches: 10_000
-
 data:
   train_ds:
     num_workers: 4
-    max_tokens: 3072
+    max_tokens: 16384
+    min_duration: 0.1
+    max_duration: 1200
     use_bucketing: true
-    bucket_duration_bins: [83,100,114,129,148,166,198,222,245,267,290,312,335,369,417,432,449,475,525,574,666,707,732,1024,2048,4096]
-    bucket_batch_size: [122,97,86,76,68,59,50,45,40,37,34,32,30,27,24,23,22,21,19,17,15,14,13,4,2,1]
-    num_buckets: 26
-    bucket_buffer_size: 25000
-
-exp_manager:
-  checkpoint_callback_params:
-    every_n_train_steps: 5000
+    bucket_buffer_size: 20000
+    num_buckets: 27
+    bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,418,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
+    bucket_batch_size: [238,200,173,146,120,104,92,84,76,70,64,59,50,48,46,42,40,38,36,33,30,28,21,13,6,2,1]

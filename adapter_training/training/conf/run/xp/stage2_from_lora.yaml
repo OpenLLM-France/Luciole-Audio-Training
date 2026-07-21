@@ -1,0 +1,95 @@
+# @package _global_
+# ============================================================
+# "TOUT ENTRAÎNER" — adapter + encoder + LoRA, warm-started from the
+# single-phase LoRA run instead of from curriculum stage 1.
+#
+# Why: `xp_data_v3_parakeet_rote` (adapter + LoRA, encoder frozen, from
+# scratch) reached train loss ~0.74 by step 20k, whereas curriculum stage 1
+# (adapter only) plateaus at ~1.12 and the whole 3-stage pipeline lands at
+# 0.82 after ~294k cumulative steps. So it is a strictly better starting
+# point. This run asks: does unfreezing the encoder add anything on top of an
+# already LLM-adapted model?
+#
+# Trainable here: adapter + encoder + LoRA. The LLM base stays frozen — LoRA
+# is the only path into it, and it CANNOT be frozen from config:
+# `parts/lora.py:33` appends `^.+\.lora_.+$` to prevent_freeze_params
+# unconditionally, and keep_patterns override freeze_params in
+# `freeze_and_subset`. (To isolate the encoder's contribution you would need a
+# `train_lora` flag in the fork.)
+#
+# Launch (from adapter_training/training/):
+#   EXP=${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}
+#   export CHECKPOINT="$EXP/xp_data_v3_parakeet_rote/checkpoints/step=020000.ckpt"
+#   python slurm_launcher.py \
+#     --config run/xp/stage2_from_lora \
+#     --data-version v3_2/input_cfg_train_stage2_ood_weighted_randomorder_sharded.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --job-name stage2_from_lora --gpus 4 --time 01:00:00 --qos dev --nodes 1
+# ============================================================
+defaults:
+  - /base
+  # MUST be `luciole`, NOT `luciole_v3`. The checkpoint was produced with the
+  # encoder's DEFAULT full attention (exp_config: self_attention_model=None),
+  # while luciole_v3 forces rel_pos_local_attn [128,128]. Building a different
+  # attention than the checkpoint's would at best silently drop weights (see
+  # the loading note below) and at worst run an encoder under a masking scheme
+  # it was never trained with.
+  - /recipe: luciole
+  - _self_
+
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}
+
+  # ROTE must reproduce the reference run EXACTLY (values copied from
+  # xp_data_v3_parakeet_rote's exp_config.yaml).
+  perception:
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
+
+  # Must match the checkpoint: r=64, alpha=64, q_proj/v_proj. A different r
+  # would make the LoRA tensors mismatch in shape and they would be dropped
+  # WITHOUT ERROR — `set_model_dict_for_partial_init` keeps only keys that
+  # exist in the target model with a matching shape, and the subsequent
+  # `load_state_dict(..., strict=True)` then trivially passes.
+  # Sanity check: the checkpoint holds 96 `*.lora_*` tensors named
+  # `llm.base_model.model.model.layers.N.self_attn.{q,v}_proj.lora_{A,B}.default.weight`.
+  lora:
+    r: 64
+    lora_alpha: 64
+
+  # Encoder pattern DROPPED -> encoder trains. LoRA stays trainable via the
+  # prevent_freeze_params mechanism described above. LLM base + embeddings +
+  # preprocessor stay frozen.
+  freeze_params:
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+
+  # 1e-4 is the value the stage-2 LR sweep picked as best over 8 orders of
+  # magnitude (xp_encoder_lr: 1e-8..1e-2), and the Arabic probes agree.
+  optimizer:
+    lr: 1e-4
+  lr_scheduler:
+    min_lr: 1e-5
+
+trainer:
+  # Also the cosine horizon (lr_scheduler.max_steps = ${trainer.max_steps}).
+  # Sized for an experiment, not a production run — raise it for a real one.
+  max_steps: 50_000
+
+# Memory. The recipe's bucketing (max_tokens 3072, 26 bins up to 4096 frames)
+# was tuned with a FROZEN encoder. Here the encoder trains AND attention is
+# full rather than local, so both activation memory and attention cost go up.
+# These are stage 2's validated limits, which is the closest safe reference —
+# but they were measured WITH local attention, so this is the most likely
+# thing to OOM. Re-run curriculum/oomptimizer_stage2_encoder.slurm if it does.
+data:
+  train_ds:
+    num_buckets: 14
+    bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2048]
+    bucket_batch_size: [31,27,18,16,14,12,11,9,7,6,5,5,3,1]
+    max_duration: 150
+    max_tokens: 2048

@@ -1,0 +1,55 @@
+# @package data.validation_ds.datasets
+
+asr_fr:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/dev.jsonl
+      tags: {lang: fr}
+
+asr_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/dev.jsonl
+      tags: {lang: en}
+
+asr_ar:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/dev.jsonl
+      tags: {lang: ar}
+
+ast_fr_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/Multilingual_TEDx/dev.jsonl
+      tags: {lang: en}
+
+qa_en_slue:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slue-phase-2-sqa5/validation.jsonl
+      tags: {lang: en}
+
+qa_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/test.jsonl
+      tags: {lang: en}
+
+qa_fr:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/test.jsonl
+      tags: {lang: fr}
+
+sound_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/AudioCaps/dev.jsonl
+      tags: {lang: en}
+
+music_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/test.jsonl
+      tags: {lang: en}

@@ -16,6 +16,26 @@
 # both in code (after config resolution) whenever model.use_nemo_automodel is set.
 model:
   use_nemo_automodel: true
+  # Use transformers' BUILT-IN nemotron_h, NOT the bundled remote code. Both can now
+  # load Luciole-8B: install_automodel.sh pins transformers 5.6.0, whose built-in
+  # configuration_nemotron_h.py parses the dense hybrid_override_pattern natively
+  # ('-'=MLP; the KeyError: '-' that forced remote code on 5.3-5.5 is gone). Built-in
+  # is the reproducible choice — no transformers-4.x-era modeling file frozen into the
+  # checkpoint, and generation works under transformers>=5 (the bundled
+  # prepare_inputs_for_generation slices input_ids, which is None on SALM's
+  # inputs_embeds-only audio path, and crashes). So keep trust_remote_code OFF.
+  # NOTE: the built-in trunk is `.model`, the bundled one is `.backbone`; nemo_automodel's
+  # parallelizer and the fork's find_embedding_layer must accept BOTH names — see patch #3
+  # in install_automodel.sh and pretrained.py::find_embedding_layer.
+  trust_remote_code: false
+  # Still required even with built-in code. force_hf makes automodel build the HF model
+  # instead of its own native impl. Dense Nemotron-H (Luciole) trips automodel's native-v3
+  # selection: its compat gate only checks `n_routed_experts is not None`, but the dense
+  # config carries a stray default n_routed_experts=8, so the v3 (MoE) model is wrongly
+  # built and its parallelizer crashes on the missing `.backbone`. force_hf routes to the
+  # HF (built-in, given trust_remote_code=false) dense model instead. (Requires the fork's
+  # force_hf plumbing in SALMAutomodel.configure_model.)
+  force_hf: true
   # TransformerEngine 2.6.0 is installed, so TE kernels are used by default.
   # Uncomment to bypass TE (e.g. if te.pytorch fails to load on the GPU node):
   # automodel_backend:

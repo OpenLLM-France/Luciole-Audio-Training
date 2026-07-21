@@ -2,8 +2,14 @@
 # Shared skeleton. Every run composes: base + one recipe (+ optional phase).
 # Model choice is env-driven (LLM_MODEL, SPEECH_ENCODER_MODEL, PROMPT_FORMAT).
 
+defaults:
+  # Validation dataset list, kept in its own file like the train input_cfg.
+  # Each key in it becomes a `val_loss_<key>` scalar. Override: ++data/val=<name>
+  - data/val: v3_2
+  - _self_
+
 ############ Model ############
-model:
+model:  
   pretrained_llm: ${oc.env:LLM_MODEL}
   pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
   pretrained_weights: true  # If false → load architecture only
@@ -30,11 +36,19 @@ model:
     lora_dropout: 0.0
 
   perception:
-     target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
-     output_dim: 2048
-     modality_adapter:
+    target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
+    output_dim: 2048
+    modality_adapter:
        _target_: nemo.collections.speechlm2.modules.perception.IdentityConnector
        d_model: 1024
+    encoder:
+        self_attention_model: rel_pos_local_attn
+        att_context_size: [128, 128]
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
 
   optimizer:
     _target_: torch.optim.AdamW
@@ -59,10 +73,11 @@ trainer:
 
   limit_train_batches: 10_000
   accumulate_grad_batches: 1
-  limit_val_batches: 0.0
 
-  val_check_interval: ${trainer.limit_train_batches}
+  limit_val_batches: 16
+  val_check_interval: 500
   num_sanity_val_steps: 1
+  inference_mode: false
 
   sync_batchnorm: true
   log_every_n_steps: 10
@@ -100,21 +115,25 @@ data:
   validation_ds:
     prompt_format: ${model.prompt_format}
     token_equivalent_duration: ${model.token_equivalent_duration}
+    audio_locator_tag: ${model.audio_locator_tag}
 
     sample_rate: 16000
-    batch_size: 4
-    num_workers: 1
+    batch_size: 8
+    num_workers: 2
     seed: 42
     shard_seed: "randomized"
+    text_field: "answer"
+    lang_field: target_lang
+    use_lhotse: true
+    use_multimodal_sampling: true
+    measure_total_length: true
 
-    datasets:
-      CommonVoice_FR:
-        input_cfg:
-          - type: lhotse_as_conversation
-            cuts_path: ${oc.env:DATA_FOLDER}/lhotse/asr/fr/CommonVoice/cuts_CommonVoice_casepunc_dev.jsonl.gz
-            audio_locator_tag: ${model.audio_locator_tag}
-            tags:
-              context: "Repeat after me, typing in lowercase."
+    datasets: {}   # filled by conf/data/val/*.yaml via defaults
+
+validate_before_fit: true
+validation_schedule:
+  steps: [500, 1000, 1500, 2000, 2500, 5000, 7500, 10000, 15000, 20000]
+  then_every: 10000
 
 ############ Experiment Manager ############
 exp_manager:
@@ -139,3 +158,5 @@ exp_manager:
     save_top_k: -1
     always_save_nemo: false
     save_nemo_on_train_end: false
+    every_n_train_steps: 5000
+    

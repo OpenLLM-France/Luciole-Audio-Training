@@ -197,6 +197,10 @@ def main():
                          help="Override CONDA_ENV, the conda env activated by the job "
                               "(default: $SCRATCH/speechlm/envs/nemo24-salm). Automodel "
                               "runs need a dedicated env, e.g. .../envs/salm_automodel")
+    g_train.add_argument("--nemo-module", default=None,
+                         help="Override NEMO_MODULE, the module loaded by the job "
+                              "(default: nemo/2.4.0). Must be CUDA-compatible with "
+                              "--conda-env: nemo/2.4.0 is CUDA 12.8, nemo/2.7.3 is 13.2")
     g_train.add_argument("--set", dest="overrides", action="append", default=[],
                          metavar="KEY=VAL",
                          help="Extra Hydra override appended to the torchrun command "
@@ -267,6 +271,7 @@ def main():
         ("SPEECH_ENCODER_MODEL",  args.speech_encoder_model),
         ("NEMO_FORK",             args.nemo_fork),
         ("CONDA_ENV",             args.conda_env),
+        ("NEMO_MODULE",           args.nemo_module),
     ]:
         if value is not None:
             # An empty string almost always means an undefined shell variable was

@@ -14,7 +14,7 @@
 import os
 
 import torch
-from lightning.pytorch import Trainer, seed_everything
+from lightning.pytorch import Callback, Trainer, seed_everything
 from omegaconf import OmegaConf
 
 from nemo.collections.speechlm2 import SALM, DataModule, SALMDataset
@@ -25,6 +25,58 @@ from nemo.utils.trainer_utils import resolve_trainer_cfg
 
 if torch.cuda.is_available():
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+
+
+class ValidationSchedule(Callback):
+    """Validate on a SPARSE, front-loaded schedule instead of a fixed interval.
+
+    Motivation: the interesting movement happens early. A fixed
+    `val_check_interval` either wastes time late in a long run or is too coarse
+    to catch the first few thousand steps. This gives e.g.
+    500, 1000, 2500, 5000, 10000, 15000, 20000, then every 10k.
+
+    How it works — and why it looks the way it does. Lightning decides *whether*
+    to validate with a modulo (`training_epoch_loop._should_check_val_fx`:
+    `(current_iteration + 1) % trainer.val_check_batch == 0`), so an arbitrary
+    milestone list cannot be expressed by tuning `val_check_interval` alone.
+    So: set `val_check_interval` to the GCD of the milestones (every milestone
+    must be a multiple of it) and cancel the unwanted checks here.
+
+    Cancelling is done via `val_loop._max_batches`, NOT `trainer.limit_val_batches`:
+    `_EvaluationLoop.setup_data` early-returns once `_combined_loader` exists
+    (evaluation_loop.py:147), so mutating `limit_val_batches` has no effect after
+    the first validation. `_EvaluationLoop.run` checks `skip` (== `sum(max_batches) == 0`)
+    *before* `on_run_start`, so a zeroed loop costs nothing and fires no hooks —
+    importantly it never reaches `on_validation_epoch_end`, which would raise on
+    an empty `_partial_val_losses`.
+
+    `_max_batches` is Lightning-internal. It is stable in the pinned 2.x used
+    here, but this is the part to check first if a Lightning upgrade breaks
+    validation timing.
+    """
+
+    def __init__(self, steps, then_every=None):
+        self.steps = sorted({int(s) for s in steps})
+        self.then_every = int(then_every) if then_every else None
+        self._full = None  # real per-dataloader batch counts, captured on first use
+
+    def wants(self, step: int) -> bool:
+        if step in self.steps:
+            return True
+        if self.then_every and self.steps and step > self.steps[-1]:
+            return step % self.then_every == 0
+        return False
+
+    def on_train_batch_end(self, trainer, pl_module, *args, **kwargs):
+        # Runs before `on_advance_end`, where Lightning decides on validation.
+        loop = trainer.fit_loop.epoch_loop.val_loop
+        max_batches = getattr(loop, "_max_batches", None)
+        if not max_batches:
+            return  # dataloaders not set up yet; let the first validation through
+        if self._full is None or any(b > 0 for b in max_batches):
+            self._full = list(max_batches)  # remember the real sizes before zeroing
+        run = self.wants(trainer.global_step)
+        loop._max_batches = list(self._full) if run else [0] * len(self._full)
 
 
 def _normalize_for_automodel(cfg):
@@ -120,6 +172,44 @@ def train(cfg):
 
     dataset = SALMDataset(tokenizer=model.tokenizer)
     datamodule = DataModule(cfg.data, tokenizer=model.tokenizer, dataset=dataset)
+
+    if (sched := cfg.get("validation_schedule", None)) and trainer.limit_val_batches:
+        cb = ValidationSchedule(sched.steps, sched.get("then_every", None))
+        trainer.callbacks.append(cb)
+        logging.info(
+            f"[val-schedule] validating at steps {cb.steps}"
+            + (f" then every {cb.then_every}" if cb.then_every else "")
+            + f" (val_check_interval={trainer.val_check_interval} gates the candidates)"
+        )
+
+    # Baseline validation at step 0, before any weight update. Gives every
+    # val_loss_*/val_acc_* curve its true starting point (the warm-start
+    # checkpoint's state) — otherwise the first point is at val_check_interval
+    # and an improvement is indistinguishable from a regression.
+    # Lightning's sanity check can't do this: it computes validation but
+    # logger_connector skips logging while trainer.sanity_checking is True.
+    if cfg.get("validate_before_fit", False) and trainer.limit_val_batches:
+        logging.info("[baseline-val] running validation before training")
+        results = trainer.validate(model, datamodule)
+
+        # `trainer.validate()` PRINTS its results table but does not persist the
+        # epoch-level metrics: the TensorBoard file it opens ends up holding only
+        # per-step scalars (validation_step_timing), so every val_loss_*/val_acc_*
+        # curve would still start at the first val_check_interval. Push the
+        # returned metrics in explicitly at step 0. They land in this stage's
+        # event file, and TensorBoard merges all event files in the run dir, so
+        # the step-0 point joins the curve that `fit` writes afterwards.
+        if results:
+            baseline = {}
+            for key, value in results[0].items():
+                try:
+                    baseline[key] = float(value)
+                except (TypeError, ValueError):
+                    continue  # non-scalar entries aren't plottable
+            for lg in trainer.loggers:
+                lg.log_metrics(baseline, step=0)
+                lg.save()
+            logging.info(f"[baseline-val] logged {len(baseline)} scalars at step 0: {sorted(baseline)}")
 
     trainer.fit(model, datamodule)
 

@@ -1,29 +1,46 @@
 # @package _global_
-# Recipe: LoRA r=128, lr=5e-4, no bucketing. batch_tokens=1024, max_tokens=2048.
+# Recipe: LoRA r=64
 # Sized for 8B LLMs on 4×H100; trained with max_steps=10M, limit=250k. lora_dropout not set.
 model:
-  lora:
-    r: 128
-    # lora_alpha and lora_dropout left at their base values (alpha unset → NeMo default; dropout=0.0)
+  # HF config override applied at load time (threaded into from_pretrained by the fork's
+  # load_pretrained_* via _resolve_llm_config_overrides). Keep Nemotron-H's cross-layer
+  # residual stream in fp32 — cheap stability hygiene for Mamba2 training (kernels stay on).
+  llm_config_overrides:
+    residual_in_fp32: true
+  # THE fix for the Luciole-8B NaN. Nemotron-H's squared-ReLU MLP layers amplify the backward
+  # gradient ~×30-800 each; over ~50 frozen layers the grad to any input-side trainable param
+  # (perception.proj / early-layer LoRA) overflows to inf on the step-1 backward -> the first
+  # update NaNs the weights -> loss=nan from step 2. It's input-independent (ZERO_AUDIO
+  # explodes identically) and precision/kernel/backend-independent. The stock gradient_clip_val
+  # can't help — it runs AFTER backward, on already-inf grads. This clips each decoder layer's
+  # grad-OUTPUT norm DURING backward, so it never compounds to inf; gradient_clip_val then
+  # governs the actual update. Tune 100–1000. Set null to disable (SALMAutomodel only).
+  #
+  # DISABLED 2026-07-20: the built-in-code smoke test (transformers 5.6, trust_remote_code=false,
+  # residual_in_fp32=true) ran 112 steps with finite loss and NO clip active, so we turn it off
+  # for now. Re-enable (set back to e.g. 1000) if loss=nan reappears on a longer/full run. The
+  # fork regex now matches both `backbone.layers.N` (bundled) and `model.layers.N` (built-in),
+  # so re-enabling will actually install the hooks on the built-in path.
+  # backward_grad_clip: 1000
   optimizer:
-    lr: 5e-4
-
-trainer:
-  max_steps: 10_000_000
-  limit_train_batches: 250_000
+    lr: 2e-4
+  lora:
+    r: 64
+    lora_alpha: 64
+    task_type: CAUSAL_LM
+    target_modules: ["q_proj", "v_proj", "up_proj", "down_proj"]
+    lora_dropout: 0.0
 
 data:
   train_ds:
     num_workers: 4
-    max_duration: 60
-    min_tokens: 2
-    use_bucketing: false
-    batch_tokens: 1024
-    max_tokens: 2048
-
-  validation_ds:
-    num_workers: 4
-
-exp_manager:
-  checkpoint_callback_params:
-    every_n_train_steps: 1000
+    max_tokens: 16384
+    min_duration: 0.1
+    max_duration: 1200
+    use_bucketing: true
+    bucket_buffer_size: 20000
+    num_buckets: 28
+    # bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,408,425,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
+    # bucket_batch_size: [113,95,80,67,57,48,44,39,36,33,30,28,24,23,22,21,20,19,18,16,15,14,13,10,6,2,1,1]
+    bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,408,425,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
+    bucket_batch_size: [226,190,160,135,114,96,88,78,72,66,60,56,48,46,44,42,40,38,36,33,31,29,27,20,12,5,2,1]
