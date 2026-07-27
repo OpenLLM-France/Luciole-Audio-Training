@@ -135,6 +135,29 @@ def train(cfg):
     if cfg.model.get("lora", "x") is None:
         OmegaConf.set_struct(cfg, False)
         del cfg.model["lora"]
+    # Forces Nemotron-H's Mamba2 mixers onto the NON-fused (slower) path so a LoRA on
+    # out_proj is actually trained: use_mem_eff_path is hard-coded True in
+    # modeling_nemotron_h.py (not a config field) and the fused kernel consumes
+    # out_proj.weight directly, so the LoRA gets zero gradient and stays inert. Patch
+    # the CLASS, since the Automodel LLM is only built later in configure_model. The
+    # import is lazy so non-Nemotron runs never touch it.
+    if cfg.model.get("mamba_force_torch_path", None) is not None:
+        OmegaConf.set_struct(cfg, False)
+        _force_torch = bool(cfg.model["mamba_force_torch_path"])
+        del cfg.model["mamba_force_torch_path"]
+        if _force_torch:
+            from transformers.models.nemotron_h import modeling_nemotron_h as _mnh
+            _orig_mixer_init = _mnh.NemotronHMamba2Mixer.__init__
+
+            def _mixer_init_no_memeff(self, *args, **kwargs):
+                _orig_mixer_init(self, *args, **kwargs)
+                self.use_mem_eff_path = False
+
+            _mnh.NemotronHMamba2Mixer.__init__ = _mixer_init_no_memeff
+            logging.info(
+                "[mamba] use_mem_eff_path forced False on NemotronHMamba2Mixer -- "
+                "non-fused path so a LoRA on out_proj is actually trained"
+            )
     if cfg.model.get("use_nemo_automodel", False):
         _normalize_for_automodel(cfg)
     if torch.cuda.is_available():
@@ -188,7 +211,20 @@ def train(cfg):
     # and an improvement is indistinguishable from a regression.
     # Lightning's sanity check can't do this: it computes validation but
     # logger_connector skips logging while trainer.sanity_checking is True.
-    if cfg.get("validate_before_fit", False) and trainer.limit_val_batches:
+    # Fresh runs only. On a resume it restates the previous leg's last validation, but
+    # still lands at step 0, so TensorBoard draws a flat line across the whole new leg.
+    # Key off trainer.ckpt_path, which exp_manager sets only when it really found a
+    # checkpoint — stricter than the launcher's --resume, since resume_if_exists=true
+    # means a plain relaunch resumes without that flag.
+    baseline_val = bool(cfg.get("validate_before_fit", False)) and bool(trainer.limit_val_batches)
+    if baseline_val and trainer.ckpt_path:
+        logging.info(
+            f"[baseline-val] skipped: resuming from {trainer.ckpt_path}, so a step-0 "
+            f"baseline would only restate the previous leg's last validation"
+        )
+        baseline_val = False
+
+    if baseline_val:
         logging.info("[baseline-val] running validation before training")
         results = trainer.validate(model, datamodule)
 

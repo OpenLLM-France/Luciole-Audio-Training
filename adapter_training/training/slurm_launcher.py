@@ -226,6 +226,11 @@ def main():
     g_slurm.add_argument("--nodes", type=int, default=None, help="Number of nodes")
     g_slurm.add_argument("--job-name", default=None,
                          help="Override SLURM --job-name (default: from run_train.slurm)")
+    g_slurm.add_argument("--array", type=int, default=None, metavar="N",
+                         help="Submit as a SLURM array of N sequential jobs (--array=1-N%%1, "
+                              "one at a time). The first task starts the run; each later task "
+                              "auto-resumes from the last checkpoint. Use when training can't "
+                              "finish within a single --time window.")
 
     parser.add_argument("--dry-run", action="store_true",
                         help="Materialize the slurm file and copy the config + input_cfg "
@@ -301,6 +306,12 @@ def main():
         sbatch_overrides["time"]  = args.time
     if args.nodes is not None:
         sbatch_overrides["nodes"] = str(args.nodes)
+    if args.array is not None:
+        if args.array < 1:
+            sys.exit("--array must be >= 1")
+        # %1: the tasks share one experiment folder and resume from each other's
+        # checkpoints, so they must run sequentially.
+        sbatch_overrides["array"] = f"1-{args.array}%1"
 
     # Derive exp_manager.max_time_per_run = SLURM time - 15min, min 30min.
     slurm_time_str = args.time or parse_slurm_time_from_template(SLURM_SCRIPT)

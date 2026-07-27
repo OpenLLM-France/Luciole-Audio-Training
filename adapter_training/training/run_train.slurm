@@ -134,6 +134,18 @@ export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE="$TMP_CACHE"
 
 # =====================================================
+# SLURM array: tasks after the first auto-resume
+# =====================================================
+# The first task starts the run and honors OVERWRITE/RESUME as usual; every later one
+# must continue from the checkpoint the previous task wrote. Forcing RESUME=true keeps
+# the experiment folder, and exp_manager's resume_if_exists does the rest.
+if [[ -n "${SLURM_ARRAY_TASK_ID:-}" && "${SLURM_ARRAY_TASK_ID}" -ne "${SLURM_ARRAY_TASK_MIN:-1}" ]]; then
+    echo "↻ Array task ${SLURM_ARRAY_TASK_ID} (not first) — forcing RESUME=true, OVERWRITE=false"
+    RESUME=true
+    OVERWRITE=false
+fi
+
+# =====================================================
 # Experiment folder cleanup
 # =====================================================
 if [[ -d "${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}" ]]; then

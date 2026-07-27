@@ -100,28 +100,12 @@ def _canonical_torch_dtype_name(dtype: str | torch.dtype) -> str:
     return str(str_to_dtype(dtype)).replace("torch.", "")
 
 
-# Nemotron-H is reachable through two implementations that differ ONLY in the name of the
-# trunk submodule: the bundled remote code shipped with Luciole-8B calls it `backbone`,
-# transformers' built-in nemotron_h calls it `model`. Training builds the bundled one (the
-# nemo_automodel parallelizer wants `.backbone`), so the trained state dict comes out
-# `llm.backbone.*` -- but nothing could then EVALUATE it:
-#
-#   * The built-in cannot load it: `llm.backbone.*` matches none of its `llm.model.*`
-#     params, and hf_hub._load_state_dict_with_dtensors keeps only keys present in BOTH, so
-#     every LLM tensor was dropped SILENTLY -> a randomly initialised 8B LLM emitting
-#     fluent, confident, completely unrelated text (no missing-key warning anywhere).
-#   * The bundled one cannot generate: its modeling_nemotron_h.py is a transformers-4.x-era
-#     copy whose prepare_inputs_for_generation assumes generate() has not pre-created the
-#     cache. transformers>=5 inverts that, so it unconditionally slices `input_ids`, which
-#     is None on SALM's inputs_embeds-only (audio-conditioned) path -> AttributeError:
-#     'NoneType' object has no attribute 'shape'. And nemo_automodel 0.4.0 hard-pins
-#     transformers==5.5.0, so downgrading is not on the table.
-#
-# So the export normalises onto the BUILT-IN naming. That direction is canonical, not a
-# preference: vLLM's own nemotron_h.py does the same remap when loading Nemotron-H weights
-# (`name = name.replace("backbone", "model")`, models/nemotron_h.py:585) and calls its trunk
-# `self.model`. Since that replace is a no-op once tensors are already `model.*`, exporting
-# in built-in naming keeps the vLLM path working too.
+# Nemotron-H's two implementations differ only in the trunk submodule name: the bundled
+# remote code calls it `backbone`, transformers' built-in nemotron_h calls it `model`.
+# Training builds the built-in one (trust_remote_code=false), so this is a no-op today, but
+# it guards against a run flipping that back on: `llm.backbone.*` weights are dropped
+# SILENTLY (hf_hub keeps only keys present in both model and checkpoint), leaving a random
+# LLM that emits fluent, unrelated text. Built-in naming is also what vLLM expects.
 LLM_TRUNK_OLD = "llm.backbone."
 LLM_TRUNK_NEW = "llm.model."
 
@@ -129,9 +113,8 @@ LLM_TRUNK_NEW = "llm.model."
 def _remap_llm_trunk(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """Rename the LLM trunk from the bundled `backbone` to the built-in `model`.
 
-    A pure prefix rename -- layer ordering and every name below the trunk are identical
-    between the two implementations. `perception.*` and `llm.lm_head.weight` are untouched.
-    No-op for a state dict that is already in built-in naming (or a non-Nemotron-H backbone).
+    Pure prefix rename: names below the trunk are identical between the two
+    implementations. No-op on a state dict already in built-in naming.
     """
     n = sum(1 for k in state_dict if k.startswith(LLM_TRUNK_OLD))
     if n == 0:
@@ -144,9 +127,42 @@ def _remap_llm_trunk(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Ten
     }
 
 
+# `pretrained_llm`/`pretrained_asr` come from the training config as absolute JZ lustre paths,
+# and SALM.__init__ dereferences both at load time -- so the export is unloadable anywhere but
+# JZ. Rewrite them to public Hub ids, keyed on the basename. `.nemo` is stripped because
+# load_pretrained_nemo falls back to from_pretrained(name) for anything that isn't a file.
+PORTABLE_REFS = {
+    "Luciole-1B-Instruct-1.1": "OpenLLM-France/Luciole-1B-Instruct-1.1",
+    "Luciole-8B-Instruct-1.1": "OpenLLM-France/Luciole-8B-Instruct-1.1",
+    "parakeet-tdt-0.6b-v3": "nvidia/parakeet-tdt-0.6b-v3",
+}
+PORTABLE_REF_KEYS = ("pretrained_llm", "pretrained_asr")
+
+
+def _portable_ref(key: str, value: Any) -> Any:
+    """Map one cluster-local model reference onto its public Hub id.
+
+    Hub ids and relative values pass through. An absolute path with no PORTABLE_REFS entry
+    also passes through, but loudly: it is what makes an export non-portable.
+    """
+    if not isinstance(value, str) or not os.path.isabs(value):
+        return value
+    name = os.path.basename(value.rstrip("/")).removesuffix(".nemo")
+    repo_id = PORTABLE_REFS.get(name)
+    if repo_id is None:
+        print(f"[to_hf] WARNING: {key}={value} is an absolute path with no PORTABLE_REFS entry; "
+              "the exported checkpoint will only load on a machine where that path exists.")
+        return value
+    print(f"[to_hf] {key}: {value} -> {repo_id} (portable Hub id)")
+    return repo_id
+
+
 def _hf_export_config(model: torch.nn.Module, dtype: str | torch.dtype) -> dict[str, Any]:
     """Build the exported root config without mutating the training config."""
     config = OmegaConf.to_container(model.cfg) if isinstance(model.cfg, DictConfig) else deepcopy(model.cfg)
+    for key in PORTABLE_REF_KEYS:
+        if key in config:
+            config[key] = _portable_ref(key, config[key])
     dtype_name = _canonical_torch_dtype_name(dtype)
     config["dtype"] = dtype_name
     config["torch_dtype"] = dtype_name
@@ -191,18 +207,10 @@ def save_llm_backbone_config(model: torch.nn.Module, output_dir: str | Path) -> 
     llm_backbone_dir.mkdir(parents=True, exist_ok=True)
     llm_config.save_pretrained(str(llm_backbone_dir))
 
-    # save_pretrained() copies the config's OWN dynamic module (configuration_nemotron_h.py)
-    # and writes an auto_map naming modeling_nemotron_h.NemotronHForCausalLM -- but it never
-    # copies the modeling file, because a config object does not know about it. The exported
-    # llm_backbone/ therefore had a DANGLING auto_map: trust_remote_code=True would resolve
-    # the config remotely and then silently fall back to the built-in for the MODEL, which is
-    # how a checkpoint whose weights were `backbone`-named ended up being loaded into a
-    # `model`-named class and losing every LLM tensor.
-    #
-    # We export in built-in naming (see _remap_llm_trunk) and set trust_remote_code=False, so
-    # no remote code should be consulted at all. Strip the auto_map and drop the copied .py so
-    # the artifact is self-consistent and there is nothing to fall back to. Leaving them would
-    # re-arm exactly the failure above for anyone who flips trust_remote_code back on.
+    # For a remote-code config, save_pretrained() copies the configuration module and writes an
+    # auto_map pointing at a modeling file it never copies. That dangling auto_map makes
+    # trust_remote_code=True fall back to the built-in for the MODEL -- the silent tensor loss
+    # described at _remap_llm_trunk. Strip it so there is nothing to fall back to.
     cfg_path = llm_backbone_dir / "config.json"
     if cfg_path.is_file():
         llm_cfg = json.loads(cfg_path.read_text())
@@ -382,7 +390,12 @@ def export_checkpoint(ckpt_path: str, class_path: str, ckpt_config: str, output_
     save_llm_backbone_config(model, output_dir)
     if getattr(model, "tokenizer", None) is not None:
         model.tokenizer.save_pretrained(str(output_dir))
-    _try_prepare_for_vllm(str(output_dir), export_cfg)
+    # The TRAINING cfg, not export_cfg: prepare_for_vllm reads the tokenizer from
+    # `pretrained_llm`, and JZ compute nodes are offline, so only the lustre path resolves --
+    # export_cfg carries a Hub id there (PORTABLE_REFS). It only writes model_type /
+    # architectures / audio_locator_tag, so the portable refs stay untouched.
+    train_cfg = OmegaConf.to_container(model.cfg) if isinstance(model.cfg, DictConfig) else dict(model.cfg)
+    _try_prepare_for_vllm(str(output_dir), train_cfg)
     return model
 
 
