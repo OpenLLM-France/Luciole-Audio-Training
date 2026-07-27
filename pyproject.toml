@@ -1,5 +1,5 @@
 [project]
-name = "audio-adapter-training"
+name = "luciole-audio"
 version = "0.1.0"
 description = "Scripts to train Audio Adapter models"
 readme = "README.md"
@@ -38,9 +38,9 @@ whisper = [
 ]
 
 # --- per-subfolder feature extras ---
-# adapter_training/data/  (root data-prep scripts)
+# data/  (root data-prep scripts)
 data = [
-    "audio-adapter-training[hf]",
+    "luciole-audio[hf]",
     "audiomentations==0.34.1",
     "soxbindings",
     "pydub",
@@ -48,34 +48,34 @@ data = [
     "pandas",
     "pyarrow",
 ]
-# adapter_training/data/generation/
+# data/generation/
 generation = [
-    "audio-adapter-training[hf]",
+    "luciole-audio[hf]",
     "datatrove",
     "faster-whisper",
     "ctranslate2==4.0.0",
 ]
-# adapter_training/data/processing/
+# data/processing/
 processing = [
-    "audio-adapter-training[hf]",
-    "audio-adapter-training[whisper]",
+    "luciole-audio[hf]",
+    "luciole-audio[whisper]",
     "lhotse",
     "whisperx",
     "pyarrow",
     "pydub",
     "ssak @ git+https://github.com/linagora-labs/ssak.git",  # used by convert_manifest_to_lhotse.py
 ]
-# adapter_training/data/templating/
+# data/templating/
 templating = [
-    "audio-adapter-training[hf]",
+    "luciole-audio[hf]",
     "pandas",
     "pyarrow",
     "python-slugify",
     "pyyaml",
 ]
-# adapter_training/data/tts/
+# data/tts/
 tts = [
-    "audio-adapter-training[hf]",
+    "luciole-audio[hf]",
     "TTS==0.22.0",
     "moshi==0.2.11",
     "sphn<0.2",
@@ -83,9 +83,9 @@ tts = [
     "nltk",
     "ssak @ git+https://github.com/linagora-labs/ssak.git",  # used by tts_v1.py / tts_kyutai.py
 ]
-# adapter_training/training/
+# training/
 training = [
-    "audio-adapter-training[nemo]",
+    "luciole-audio[nemo]",
     "lightning>=2.1.3",
     "pytorch-lightning",
     "tensorboard",
@@ -93,9 +93,9 @@ training = [
     "unsloth",
     "peft",
 ]
-# adapter_training/eval/
+# eval/
 eval = [
-    "audio-adapter-training[nemo,hf]",
+    "luciole-audio[nemo,hf]",
     "torchmetrics",
     "evaluate",
     "bert-score",
@@ -103,13 +103,13 @@ eval = [
     "whisper-normalizer",
     "lhotse",
 ]
-# adapter_training/export/
+# export/
 export = [
-    "audio-adapter-training[nemo]",
+    "luciole-audio[nemo]",
 ]
-# adapter_training/utils/
+# utils/
 utils = [
-    "audio-adapter-training[hf]",
+    "luciole-audio[hf]",
     "jiwer",
     "peft",
     "psutil",
@@ -122,10 +122,10 @@ utils = [
 
 # --- convenience bundles ---
 all-data = [
-    "audio-adapter-training[data,generation,processing,templating,tts]",
+    "luciole-audio[data,generation,processing,templating,tts]",
 ]
 all = [
-    "audio-adapter-training[data,generation,processing,templating,tts,training,eval,export,utils]",
+    "luciole-audio[data,generation,processing,templating,tts,training,eval,export,utils]",
 ]
 
 [dependency-groups]
@@ -135,11 +135,51 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["adapter_training"]
+# The business folders live at the repo root (training/, data/, eval/, export/, utils/) but are
+# published as subpackages of the `luciole_audio` implicit namespace package, so the import path is
+# `from luciole_audio.data import dataset`, `from luciole_audio.utils.audio import ...`, etc.
+#
+# `packages` / `package-dir` are enumerated explicitly: automatic discovery cannot express this
+# "add a prefix" rewrite. When you add a new subpackage (a folder with an __init__.py under one of
+# the roots above), add it to BOTH tables below.
+#
+# Note: hatchling cannot do this — it rejects prefix-adding `sources` rewrites in editable mode
+# (see pfmoore/editables#20), hence setuptools.
+[tool.setuptools]
+packages = [
+    "luciole_audio.training",
+    "luciole_audio.data",
+    "luciole_audio.data.convert",
+    "luciole_audio.data.generation",
+    "luciole_audio.data.processing",
+    "luciole_audio.data.templating",
+    "luciole_audio.data.tts",
+    "luciole_audio.eval",
+    "luciole_audio.export",
+    "luciole_audio.utils",
+    "luciole_audio.utils.infer_models",
+]
+
+[tool.setuptools.package-dir]
+"luciole_audio.training" = "training"
+"luciole_audio.data" = "data"
+"luciole_audio.data.convert" = "data/convert"
+"luciole_audio.data.generation" = "data/generation"
+"luciole_audio.data.processing" = "data/processing"
+"luciole_audio.data.templating" = "data/templating"
+"luciole_audio.data.tts" = "data/tts"
+"luciole_audio.eval" = "eval"
+"luciole_audio.export" = "export"
+"luciole_audio.utils" = "utils"
+"luciole_audio.utils.infer_models" = "utils/infer_models"
+
+# Hydra configs (training/conf, eval/conf, export/conf), prompt templates (data/assets) and the
+# slurm templates resolved by slurm_launcher.py must ship with the wheel.
+[tool.setuptools.package-data]
+"*" = ["**/*.yaml", "**/*.yml", "**/*.txt", "**/*.slurm", "**/*.sh"]
 
 [tool.ruff]
 line-length = 120 # Allow lines to be as long as 120.
@@ -159,3 +199,6 @@ ignore = [
     "C901", # C901 `...` is too complex
     "C417"  # C417 Unnecessary `map` usage (rewrite using a generator expression)
 ]
+
+[tool.ruff.isort]
+known-first-party = ["luciole_audio"]
