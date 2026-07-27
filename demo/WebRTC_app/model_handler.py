@@ -167,12 +167,27 @@ class SALMModel:
         """
 
         # Start with existing history or empty list
-        current_turn = []
-        if history:
-            current_turn.extend(history)
+        raw_history = history if history else []
+        
+        # NeMo SALM formatter only supports ['user', 'assistant'].
+        # We fold any 'system' messages into the first following message.
+        processed_history = []
+        system_prefix = ""
+        for turn in raw_history:
+            if turn.get("role") == "system":
+                system_prefix += turn.get("content", "") + "\n\n"
+            else:
+                processed_history.append(turn.copy())
+
+        current_turn = processed_history
 
         if audio_path:
             instruction = text_input if text_input else self.default_instruction
+            # Prepend system prefix if this is the first message and we have one
+            if not current_turn and system_prefix:
+                instruction = system_prefix + instruction
+                system_prefix = ""
+            
             prompt_content = f"{instruction}\n{self.model.audio_locator_tag}\n"
             current_turn.append({
                 "role": "user",
@@ -182,10 +197,21 @@ class SALMModel:
         else:
             if not text_input:
                 return "Please provide text or audio input."
+            
+            content = text_input
+            if not current_turn and system_prefix:
+                content = system_prefix + content
+                system_prefix = ""
+                
             current_turn.append({
                 "role": "user",
-                "content": text_input,
+                "content": content,
             })
+
+        # If we still have a system prefix (e.g. history was all system messages), 
+        # but current_turn is not empty, prepend it to the first message.
+        if system_prefix and current_turn:
+            current_turn[0]["content"] = system_prefix + current_turn[0]["content"]
 
         prompts = [current_turn]
 
@@ -226,13 +252,28 @@ class SALMModel:
         history: List of dicts [{"role": "user", "content": ...}, {"role": "assistant", "content": ...}]
         """
         # Prepare inputs
-        current_turn = []
-        if history:
-            current_turn.extend(history)
+        raw_history = history if history else []
+        
+        # NeMo SALM formatter only supports ['user', 'assistant'].
+        # We fold any 'system' messages into the first following message.
+        processed_history = []
+        system_prefix = ""
+        for turn in raw_history:
+            if turn.get("role") == "system":
+                system_prefix += turn.get("content", "") + "\n\n"
+            else:
+                processed_history.append(turn.copy())
+
+        current_turn = processed_history
             
         if audio_path:
             # Assume caller manages audio file lifecycle
             instruction = text_input if text_input else self.default_instruction
+            
+            if not current_turn and system_prefix:
+                instruction = system_prefix + instruction
+                system_prefix = ""
+
             prompt_content = f"{instruction}\n{self.model.audio_locator_tag}\n"
             current_turn.append({
                 "role": "user",
@@ -243,10 +284,19 @@ class SALMModel:
             if not text_input:
                 yield "Please provide text or audio input."
                 return
+            
+            content = text_input
+            if not current_turn and system_prefix:
+                content = system_prefix + content
+                system_prefix = ""
+
             current_turn.append({
                 "role": "user",
-                "content": text_input,
+                "content": content,
             })
+
+        if system_prefix and current_turn:
+            current_turn[0]["content"] = system_prefix + current_turn[0]["content"]
 
         prompts = [current_turn]
         

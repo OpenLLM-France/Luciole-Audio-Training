@@ -26,6 +26,20 @@ MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llam
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
 MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
+# Optional system prompt seeded into every new session. Empty (the default) = no system
+# turn at all, i.e. the plain demo behaviour. SALM's formatter only knows user/assistant,
+# so model_handler folds any system turn into the first user message.
+# SYSTEM_PROMPT_FILE wins over SYSTEM_PROMPT (easier to pass a long prompt via a mount).
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "")
+_sys_prompt_file = os.getenv("SYSTEM_PROMPT_FILE", "")
+if _sys_prompt_file:
+    SYSTEM_PROMPT = Path(_sys_prompt_file).read_text()
+
+
+def new_session():
+    """Fresh session state, seeded with the system turn only if one is configured."""
+    history = [{"role": "system", "content": SYSTEM_PROMPT}] if SYSTEM_PROMPT.strip() else []
+    return {"history": history}
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("WebRTC-App")
@@ -601,7 +615,7 @@ async def offer_with_datachannel(request):
     session_id = params.get('sessionId', 'default')
     
     if session_id not in SESSIONS:
-        SESSIONS[session_id] = {"history": []}
+        SESSIONS[session_id] = new_session()
 
     pc = RTCPeerConnection()
     pcs.add(pc)
@@ -716,7 +730,7 @@ async def upload_audio(request):
     logger.info(f"Received file {filename} ({size} bytes) with prompt: {text_prompt} for session {session_id}")
 
     if session_id not in SESSIONS:
-        SESSIONS[session_id] = {"history": []}
+        SESSIONS[session_id] = new_session()
     current_history = SESSIONS[session_id]["history"]
 
     if not check_rate_limit(session_id):

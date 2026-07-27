@@ -1,47 +1,53 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+# Démo WebRTC SALM, pour les DGX Spark (arm64).
+#
+#   docker build --build-context nemo=/home/abert/NeMo -t salm-demo:latest .
+#
+# --build-context REQUIS : le NeMo de la base (2.7.1) ignore llm_backbone/ et aucun
+# checkpoint récent ne charge. Le fork apporte la redirection + 18 commits d'inférence.
+# Ni secret ni modèle dans l'image : le checkpoint est monté au lancement.
 
-# Set environment variables to prevent Python from writing pyc files to disc
-# and buffering stdout and stderr
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ARG BASE_IMAGE=nvcr.io/nvidia/nemo:26.02
+FROM ${BASE_IMAGE}
 
-# Install system dependencies
-# libsndfile1 and ffmpeg are required for audio processing (librosa, soundfile)
-# git and g++ are often needed for installing python packages
-RUN apt-get update && apt-get install -y \
-    libsndfile1 \
-    ffmpeg \
-    git \
-    g++ \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# libsndfile1/ffmpeg : décodage audio (librosa, soundfile).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libsndfile1 \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory in the container
-WORKDIR /app
+# `python -m pip`, jamais `pip` : ici pip est rattaché à l'interpréteur système et écrit
+# dans un site-packages que /opt/venv/bin/python ne lit pas (build vert, effet nul).
+COPY requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt /app/
+# Le fork remplace le NeMo de la base. Le pip install ne pose pas les fichiers (le finder
+# editable mappe déjà `nemo` -> /opt/NeMo/nemo) mais corrige les métadonnées de version.
+# --no-deps : sinon pip réinstalle torch/transformers depuis PyPI par-dessus les roues NVIDIA.
+RUN rm -rf /opt/NeMo
+COPY --from=nemo . /opt/NeMo
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e /opt/NeMo
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir "nemo_toolkit[all]"
+# Les 4 dépendances que le fork déclare et que la base ne satisfait pas. Bornées : un `>=`
+# ouvert tire la dernière version publiée (datasets 5.0.0, fsspec +2 ans).
+RUN python -m pip install --no-cache-dir --no-deps \
+        "lhotse>=1.33.0,<1.34" \
+        "datasets>=3.2.0,<4" \
+        "fsspec>=2024.12.0,<2025" \
+        "aistore"
 
-# Download the model during build
-ARG HF_TOKEN
-ARG BASE_MODEL
-
-RUN huggingface-cli login --token $HF_TOKEN
-RUN huggingface-cli download $BASE_MODEL
-
-# Set the model path environment variable
+# Point de montage du checkpoint (-v <step_XXXXXX>:/app/model:ro), jamais copié.
 ENV MODEL_PATH=/app/model
+RUN mkdir -p /app/model
 
-# Copy the current directory contents into the container at /app
+WORKDIR /app
 COPY . /app
 
-# Make port 7860 available to the world (HuggingFace Spaces port)
-EXPOSE 7860
+# 9009 = app, 3478/udp = STUN, 50000-50100/udp = plage média aiortc.
+EXPOSE 9009/tcp
+EXPOSE 3478/udp
+EXPOSE 50000-50100/udp
 
-# Run app.py when the container launches
 CMD ["python", "app.py"]
