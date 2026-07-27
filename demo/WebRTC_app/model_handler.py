@@ -1,10 +1,12 @@
 import nemo.collections.speechlm2 as slm
+import json
 import librosa
 import soundfile as sf
 import torch
 import os
 import logging
 
+from pathlib import Path
 from threading import Thread
 import traceback
 from transformers import TextIteratorStreamer, StoppingCriteria, StoppingCriteriaList
@@ -40,6 +42,53 @@ class TokenizerWrapper:
             ids = [ids]
         return self.tokenizer.ids_to_text(ids)
 
+def resolve_model_class(model_path):
+    """Pick the SALM class matching the checkpoint: SALM or SALMAutomodel.
+
+    `SALM` builds the LLM with plain HF transformers (Canary-Qwen, Luciole-1B);
+    `SALMAutomodel` goes through nemo_automodel, which is what the Nemotron-H
+    backbones (Luciole-8B/23B) were trained with. Getting it wrong does not raise:
+    hf_hub keeps only the state-dict keys present in both the checkpoint and the
+    freshly built model, so a mismatch silently drops the LLM tensors and leaves a
+    random backbone emitting fluent, unrelated text.
+
+    Discriminator: `use_nemo_automodel` in the exported config.json, the same flag
+    the export/eval Slurm scripts key on. MODEL_CLASS overrides it for a checkpoint
+    whose config predates the flag.
+    """
+    override = os.getenv("MODEL_CLASS", "").strip()
+    if override:
+        cls = getattr(slm.models, override, None)
+        if cls is None:
+            raise ValueError(f"MODEL_CLASS={override!r} is not a class of nemo.collections.speechlm2.models")
+        logger.info(f"Model class forced by MODEL_CLASS: {override}")
+        return cls
+
+    use_automodel = False
+    cfg_path = Path(model_path) / "config.json"
+    if cfg_path.is_file():
+        try:
+            use_automodel = bool(json.loads(cfg_path.read_text()).get("use_nemo_automodel", False))
+        except Exception as e:
+            logger.warning(f"Could not read {cfg_path} ({e}); assuming the plain SALM backend.")
+    else:
+        # Hub id rather than a local dir — no local config to inspect.
+        logger.warning(f"No config.json under {model_path}; assuming the plain SALM backend.")
+
+    name = "SALMAutomodel" if use_automodel else "SALM"
+    logger.info(f"Detected backend: {name} (use_nemo_automodel={use_automodel})")
+    return getattr(slm.models, name)
+
+
+def resolve_torch_dtype():
+    """Load dtype. bf16 on GPU — these checkpoints are exported in bf16, and an 8B in
+    fp32 is 32 GB. CPU stays in fp32 (bf16 matmuls there are painfully slow)."""
+    requested = os.getenv("TORCH_DTYPE", "").strip()
+    if requested:
+        return getattr(torch, requested)
+    return torch.bfloat16 if torch.cuda.is_available() else torch.float32
+
+
 class SALMModel:
     def __init__(self, model_path, default_instruction="Listen to the audio and answer the question:"):
         self.model_path = os.path.expanduser(model_path)
@@ -47,9 +96,15 @@ class SALMModel:
         if "Thinking" in self.model_path:
              # Better default for thinking models
              self.default_instruction = "You are a helpful assistant. Think step-by-step and wrap your thoughts in <think>...</think> tags before answering."
-        logger.info(f"Loading SALM model from {self.model_path}...")
+        model_cls = resolve_model_class(self.model_path)
+        self.is_automodel = model_cls.__name__ == "SALMAutomodel"
+        dtype = resolve_torch_dtype()
+        logger.info(f"Loading {model_cls.__name__} from {self.model_path} in {dtype}...")
         try:
-            self.model = slm.models.SALM.from_pretrained(self.model_path).eval()
+            # HFHubMixin._from_pretrained puts torch_dtype in the cfg before
+            # configure_model builds the LLM, so the backbone is never materialised in
+            # fp32. `.to(dtype)` then catches the perception module.
+            self.model = model_cls.from_pretrained(self.model_path, torch_dtype=dtype).to(dtype).eval()
             if torch.cuda.is_available():
                 try:
                     self.model = self.model.cuda()
@@ -64,83 +119,50 @@ class SALMModel:
                         raise
             else:
                 logger.warning("CUDA not available, running on CPU. Inference might be slow.")
-                
-            # DEBUG: Inspect standard Qwen attributes
-            try:
-                # Assuming model -> llm -> base_model -> model (Qwen3Model)
-                base = self.model.llm
-                if hasattr(base, 'base_model'):
-                    base = base.base_model
-                if hasattr(base, 'model'):
-                    base = base.model
-                
-                # logger.info(f"Model Structure Debug: {base}")
-                # logger.info(f"Model Attributes: {dir(base)}")
-                if hasattr(base, 'embed_tokens'):
-                    logger.info("embed_tokens exists.")
-                else:
-                    logger.error("embed_tokens MISSING.")
-                    # FIX: Search for actual embedding layer in the model hierarchy
-                    logger.info("Searching all modules for Embedding layer...")
-                    try:
-                        full_model = self.model.llm
-                        if hasattr(full_model, 'base_model'):
-                            full_model = full_model.base_model
-                        
-                        # Search ALL modules for an Embedding layer
-                        embedding_layer = None
-                        for name, module in full_model.named_modules():
-                            if isinstance(module, torch.nn.Embedding):
-                                logger.info(f"Found Embedding layer: {name} -> {module}")
-                                if embedding_layer is None:  # Take the first one
-                                    embedding_layer = module
-                        
-                        if embedding_layer is not None:
-                            # Assign to Qwen3Model
-                            if hasattr(full_model, 'model'):
-                                full_model.model.embed_tokens = embedding_layer
-                                logger.info(f"Successfully patched embed_tokens with: {embedding_layer}")
-                            else:
-                                full_model.embed_tokens = embedding_layer
-                                logger.info(f"Successfully patched embed_tokens at top level: {embedding_layer}")
-                        else:
-                            # Last resort: create embedding layer from lm_head's weight
-                            logger.warning("No Embedding layer found! Creating from lm_head weight...")
-                            try:
-                                if hasattr(full_model, 'lm_head'):
-                                    # Create an Embedding layer using lm_head's transposed weight
-                                    vocab_size = full_model.lm_head.out_features
-                                    embed_dim = full_model.lm_head.in_features
-                                    logger.info(f"Creating Embedding({vocab_size}, {embed_dim})")
-                                    
-                                    # Create new embedding and copy weights from lm_head (transposed)
-                                    embedding_layer = torch.nn.Embedding(vocab_size, embed_dim)
-                                    with torch.no_grad():
-                                        embedding_layer.weight.copy_(full_model.lm_head.weight)
-                                    
-                                    # Move to same device as lm_head
-                                    embedding_layer = embedding_layer.to(full_model.lm_head.weight.device)
-                                    
-                                    if hasattr(full_model, 'model'):
-                                        full_model.model.embed_tokens = embedding_layer
-                                        logger.info(f"Created and patched embed_tokens from lm_head")
-                                    else:
-                                        full_model.embed_tokens = embedding_layer
-                                        logger.info(f"Created and patched embed_tokens at top level")
-                                else:
-                                    logger.error("CRITICAL: No lm_head found either! Model is unusable.")
-                            except Exception as create_error:
-                                logger.error(f"Failed to create embedding from lm_head: {create_error}")
-                                logger.error(traceback.format_exc())
-                    except Exception as patch_error:
-                        logger.error(f"Failed to patch embed_tokens: {patch_error}")
-                        logger.error(traceback.format_exc())
-            except Exception as e:
-                logger.error(f"Error inspecting model: {e}")
 
+            self._maybe_override_attn_implementation()
+
+            # NOTE — an "embed_tokens MISSING" repair used to live here. It fixed a
+            # non-bug: SALM.__init__ moves the embedding out of the LLM on purpose
+            # (salm.py:113-118, to keep FSDP/TP hooks clean) and puts it back around
+            # generate() via move_embedding, both via find_embedding_layer, which already
+            # knows every layout we use. Absent is the intended state.
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise e
+
+    def _maybe_override_attn_implementation(self):
+        """Keep Nemotron-H off FlashAttention-2.
+
+        transformers 5.6's flash_attention_forward does ``s_aux.to(query.dtype)``
+        unconditionally, and Nemotron-H has no attention sinks — so s_aux is None and
+        every generate() dies on the first attention block. FA2 is not our choice: it
+        ships in the NeMo base image and gets picked by default. SDPA has no such path
+        and is what the JZ eval env has been running all along.
+
+        Only touches nemotron_h. ATTN_IMPLEMENTATION overrides the target.
+        """
+        llm = getattr(self.model, "llm", None)
+        cfg = getattr(llm, "config", None)
+        if cfg is None:
+            return
+        model_type = str(getattr(cfg, "model_type", ""))
+        wanted = os.getenv("ATTN_IMPLEMENTATION", "").strip()
+        if not wanted:
+            if not model_type.startswith("nemotron_h"):
+                return
+            wanted = "sdpa"
+        current = getattr(cfg, "_attn_implementation", None)
+        if current == wanted:
+            return
+        try:
+            if hasattr(llm, "set_attn_implementation"):
+                llm.set_attn_implementation(wanted)
+            else:
+                cfg._attn_implementation = wanted
+            logger.info(f"Attention implementation: {current} -> {wanted} (model_type={model_type})")
+        except Exception as e:
+            logger.warning(f"Could not switch attention implementation to {wanted}: {e}")
 
     def process_audio(self, input_path, output_path, target_sr=16000):
         """Resamples and converts audio to mono 16kHz."""
