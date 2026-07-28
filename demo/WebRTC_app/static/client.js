@@ -390,7 +390,9 @@ settingsOverlay.querySelectorAll('.settings-segmented').forEach((group) => {
         } else if (setting === 'effortMode') {
             settings.effortMode = value;
             saveSettings(settings);
-            applyEffortUI();
+            // Le sélecteur du composer a été retiré ; ce segmenté est désormais le seul
+            // contrôle de ce réglage, il se rafraîchit lui-même.
+            refreshSegmented(settingsOverlay, 'effortMode', value);
         }
     });
 });
@@ -606,60 +608,6 @@ function pickRecorderMime() {
 
 applyMicModeUI();
 
-// ---- Inline effort picker (next to send button) ----
-const effortPicker = document.querySelector('.effort-picker');
-const effortToggle = document.getElementById('effort-toggle');
-const effortToggleLabel = document.getElementById('effort-toggle-label');
-const effortMenu = document.getElementById('effort-menu');
-
-function applyEffortUI() {
-    if (!effortPicker) return;
-    const mode = settings.effortMode || 'normal';
-    effortPicker.dataset.mode = mode;
-    if (effortToggleLabel) {
-        effortToggleLabel.textContent = mode === 'max' ? 'Max' : 'Normal';
-    }
-    if (effortMenu) {
-        effortMenu.querySelectorAll('.effort-menu-item').forEach((item) => {
-            item.classList.toggle('active', item.dataset.value === mode);
-        });
-    }
-    refreshSegmented(settingsOverlay, 'effortMode', mode);
-}
-
-function closeEffortMenu() {
-    if (effortMenu) effortMenu.classList.add('hidden');
-    if (effortToggle) effortToggle.setAttribute('aria-expanded', 'false');
-}
-
-if (effortToggle && effortMenu) {
-    effortToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const open = !effortMenu.classList.contains('hidden');
-        if (open) closeEffortMenu();
-        else {
-            effortMenu.classList.remove('hidden');
-            effortToggle.setAttribute('aria-expanded', 'true');
-        }
-    });
-    effortMenu.addEventListener('click', (e) => {
-        const item = e.target.closest('.effort-menu-item');
-        if (!item) return;
-        settings.effortMode = item.dataset.value;
-        saveSettings(settings);
-        applyEffortUI();
-        closeEffortMenu();
-    });
-    document.addEventListener('click', (e) => {
-        if (effortMenu.classList.contains('hidden')) return;
-        if (!effortPicker.contains(e.target)) closeEffortMenu();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !effortMenu.classList.contains('hidden')) closeEffortMenu();
-    });
-}
-
-applyEffortUI();
 
 const clearContextBtn = document.getElementById('clear-context-btn');
 if (clearContextBtn) {
@@ -726,6 +674,11 @@ scrollBottomBtn.addEventListener('click', forceScrollToBottom);
 function renderEmptyState() {
     messagesContainer.innerHTML = '';
     lastAssistantTurn = null;
+    // Les requêtes en file appartiennent à la conversation qu'on quitte, et leurs bulles
+    // viennent de disparaître : le suivi (donc le bouton Stop) repart à zéro pour celle qu'on
+    // ouvre. Les générations, elles, continuent et seront rangées dans leur conversation.
+    pendingGenerations.clear();
+    updateStopButton();
     const node = suggestedPromptsTpl.content.cloneNode(true);
     messagesContainer.appendChild(node);
 }
@@ -787,6 +740,11 @@ function loadChat(chatId) {
 
     messagesContainer.innerHTML = '';
     lastAssistantTurn = null;
+    // Les requêtes en file appartiennent à la conversation qu'on quitte, et leurs bulles
+    // viennent de disparaître : le suivi (donc le bouton Stop) repart à zéro pour celle qu'on
+    // ouvre. Les générations, elles, continuent et seront rangées dans leur conversation.
+    pendingGenerations.clear();
+    updateStopButton();
     const tempMessages = currentMessages;
     currentMessages = [];
     // Filter out empty assistant messages from older chats that pre-date the
@@ -1100,18 +1058,35 @@ function setupDataChannel(channel) {
     channel.onmessage = (evt) => {
         const data = JSON.parse(evt.data);
 
-        if (
-            data.generationId !== undefined &&
-            data.generationId !== null &&
-            streamState.currentGenerationId !== undefined &&
-            data.generationId !== streamState.currentGenerationId
-        ) {
-            return; // stale
+        // Plus de filtre « stale ». Il jetait tout ce qui ne portait pas le DERNIER
+        // generationId émis — ce qui était cohérent tant qu'une nouvelle requête en annulait
+        // une ancienne, et devient faux maintenant que les requêtes s'empilent : les réponses
+        // arrivent dans l'ordre de la file, pas dans celui de la dernière saisie. Seul
+        // l'abandon EXPLICITE fait ignorer des tokens.
+        if (cancelledGenerations.has(data.generationId)) return;
+
+        const offscreenChat = offscreenChatFor(data.generationId);
+
+        // Génération partie d'une conversation qu'on a quittée depuis : rien n'est rendu — ni
+        // bulle, ni transcription, ni statut de file — tout irait décorer la mauvaise
+        // conversation. Seul le texte est collecté, puis rangé au 'done'.
+        if (offscreenChat) {
+            if (data.type === 'token') {
+                collectOffscreenToken(data.generationId, data.model, data.text);
+            } else if (data.type === 'done') {
+                flushOffscreen(data.generationId, offscreenChat, data.model);
+            } else if (data.type === 'response' && data.text) {
+                appendToStoredChat(offscreenChat, { role: 'assistant', text: data.text });
+            }
+            return;
         }
 
         if (data.type === 'token') {
+            // Premier token de cette requête : elle n'attend plus, elle génère.
+            setPendingState(pendingGenerations.get(data.generationId), 'running');
             handleStreamToken(data.text, data.generationId, data.model);
         } else if (data.type === 'done') {
+            clearPending(data.generationId);
             finalizeStream({ tokenCount: data.tokenCount, elapsedMs: data.elapsedMs });
         } else if (data.type === 'audio_transcript') {
             applyTranscript(data.text);
@@ -1126,6 +1101,136 @@ function setupDataChannel(channel) {
     };
 }
 
+// =============================================================================
+// Générations qui survivent à un changement de conversation
+// =============================================================================
+// Une génération appartient à la conversation d'où elle est PARTIE. Le rendu, lui, écrit dans
+// le DOM courant et dans `currentMessages` — deux choses qui changent dès que l'utilisateur
+// ouvre une autre conversation pendant que ça génère. D'où la réponse qui atterrissait sous
+// les yeux (et dans l'historique) de la conversation affichée, pas de celle qui l'avait
+// demandée. On note donc l'origine de chaque génération, et ce qui ne concerne plus la
+// conversation à l'écran est rangé directement dans la bonne, sans passer par le DOM.
+const generationOrigin = new Map();   // generationId -> id de conversation
+const offscreenText = new Map();      // `${generationId}|${modèle}` -> texte accumulé
+
+function markGenerationOrigin(generationId) {
+    generationOrigin.set(generationId, sessionId);
+    // Bornage : une session longue ne doit pas traîner une Map qui ne fait que grossir.
+    for (const id of generationOrigin.keys()) {
+        if (typeof id === 'number' && id < generationId - 8) generationOrigin.delete(id);
+    }
+}
+
+// Rend l'id de la conversation d'origine si ce n'est PLUS celle affichée, sinon null (cas
+// normal : rendu à l'écran). Une génération partie avant ce marquage rend null aussi, donc
+// s'affiche comme avant.
+function offscreenChatFor(generationId) {
+    const origin = generationOrigin.get(generationId);
+    return origin && origin !== sessionId ? origin : null;
+}
+
+function appendToStoredChat(chatId, message) {
+    const history = loadChatHistory();
+    const chat = history.chats.find((c) => c.id === chatId);
+    if (!chat) return false;
+    chat.messages.push(message);
+    chat.timestamp = Date.now();
+    saveChatHistory(history);
+    renderChatHistory();
+    return true;
+}
+
+function collectOffscreenToken(generationId, model, token) {
+    const key = `${generationId}|${model || ''}`;
+    offscreenText.set(key, (offscreenText.get(key) || '') + token);
+}
+
+function flushOffscreen(generationId, chatId, model) {
+    const key = `${generationId}|${model || ''}`;
+    const text = offscreenText.get(key);
+    offscreenText.delete(key);
+    if (!text || !text.trim()) return;
+    const message = { role: 'assistant', text: stripChatMLTags(text).trim() };
+    if (model) {
+        message.model = model;
+        // Même clé de tour qu'à l'écran, pour que les deux réponses d'une comparaison
+        // retrouvent leurs colonnes quand la conversation sera rouverte.
+        message.turn = generationId;
+    }
+    if (appendToStoredChat(chatId, message)) {
+        showToast("Réponse rangée dans la conversation d'origine");
+    }
+}
+
+// =============================================================================
+// Requêtes en attente (empilement au sein d'une conversation)
+// =============================================================================
+// Le serveur ne traite qu'une génération à la fois et empile le reste ; rien ne s'annule plus
+// tout seul. Il faut donc suivre, côté client, ce qui est en attente pour pouvoir l'afficher,
+// l'arrêter (bouton Stop = toute la conversation) ou en retirer une seule (suppression d'un
+// message).
+const pendingGenerations = new Map();     // generationId -> bulle utilisateur
+const cancelledGenerations = new Set();   // ce qu'on a annulé : ses tokens sont à ignorer
+
+function setPendingState(msgDiv, state) {
+    if (!msgDiv) return;
+    const label = msgDiv.querySelector('.pending-label');
+    if (state) {
+        msgDiv.dataset.pending = state;
+        if (label) label.textContent = state === 'running' ? 'génération…' : 'en attente…';
+    } else {
+        delete msgDiv.dataset.pending;
+    }
+}
+
+function trackPending(msgDiv, generationId) {
+    if (!msgDiv || generationId === undefined || generationId === null) return;
+    msgDiv._generationId = generationId;
+    pendingGenerations.set(generationId, msgDiv);
+    setPendingState(msgDiv, 'queued');
+    updateStopButton();
+}
+
+function clearPending(generationId) {
+    const msgDiv = pendingGenerations.get(generationId);
+    setPendingState(msgDiv, null);
+    pendingGenerations.delete(generationId);
+    updateStopButton();
+}
+
+// Le bouton Stop ne concerne QUE la conversation affichée : il apparaît dès qu'elle a une
+// requête en vol ou en file, et disparaît quand il n'y a plus rien à arrêter.
+function updateStopButton() {
+    if (!stopBtn) return;
+    const busy = pendingGenerations.size > 0 || streamState.isStreaming;
+    stopBtn.classList.toggle('hidden', !busy);
+}
+
+async function cancelGenerations(generationId) {
+    const ids = generationId === undefined
+        ? Array.from(pendingGenerations.keys())
+        : [generationId];
+    ids.forEach((id) => { cancelledGenerations.add(id); clearPending(id); });
+    // Si c'est la génération à l'écran qui tombe, on ferme sa bulle proprement : le serveur
+    // n'enverra plus de 'done'.
+    if (streamState.isStreaming &&
+        (generationId === undefined || streamState.activeGenerationId === generationId)) {
+        finalizeStream();
+    }
+    updateStopButton();
+    try {
+        await fetchWithTimeout('/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+                generationId === undefined ? { sessionId } : { sessionId, generationId }),
+        }, 10000);
+    } catch (e) {
+        // L'annulation locale a déjà eu lieu ; le serveur finira sa génération dans le vide.
+        showToast("Le serveur n'a pas confirmé l'annulation");
+    }
+}
+
 function handleQueuePosition(data) {
     const pos = data.position;
     const depth = data.depth;
@@ -1134,9 +1239,10 @@ function handleQueuePosition(data) {
 }
 
 function handleRejected(data) {
+    clearPending(data.generationId);
     if (currentThinkingMsg) { currentThinkingMsg.remove(); currentThinkingMsg = null; }
     if (streamState.isStreaming) finalizeStream();
-    if (stopBtn) stopBtn.classList.add('hidden');
+    updateStopButton();
     const reason = data.reason;
     if (reason === 'queue_full') {
         showToast('Server is busy — try again in a moment');
@@ -1281,7 +1387,7 @@ function handleStreamToken(token, incomingGenerationId, model) {
         streamStartTime = performance.now();
         streamTokenCount = 0;
         setStatus('connected', 'Generating…');
-        if (stopBtn) stopBtn.classList.remove('hidden');
+        updateStopButton();
 
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message system';
@@ -1373,7 +1479,7 @@ function handleStreamToken(token, incomingGenerationId, model) {
 
 function finalizeStream(meta = {}) {
     if (!streamState.isStreaming) {
-        if (stopBtn) stopBtn.classList.add('hidden');
+        updateStopButton();
         return;
     }
 
@@ -1431,7 +1537,7 @@ function finalizeStream(meta = {}) {
     streamState.activeGenerationId = null;
     streamState.activeModel = null;
 
-    if (stopBtn) stopBtn.classList.add('hidden');
+    updateStopButton();
 
     // Restore the connected/ready badge once the queue/stream is settled.
     if (dc && dc.readyState === 'open') setStatus('connected', 'Ready');
@@ -1514,6 +1620,13 @@ function buildUserActions(msgDiv) {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
 
+    // Étiquette d'état : « en attente… » tant que la requête est dans la file, « génération… »
+    // dès le premier token. Rendue en permanence (masquée par CSS hors attente) pour que la
+    // mise en page ne saute pas quand elle apparaît.
+    const pending = document.createElement('span');
+    pending.className = 'pending-label';
+    actions.appendChild(pending);
+
     const retryBtn = document.createElement('button');
     retryBtn.className = 'message-action-btn';
     retryBtn.type = 'button';
@@ -1521,8 +1634,81 @@ function buildUserActions(msgDiv) {
     retryBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.4L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15.5 6.4L3 16"></path><path d="M3 21v-5h5"></path></svg><span>Retry</span>';
     retryBtn.addEventListener('click', () => retryUserMessage(msgDiv));
 
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'message-action-btn';
+    deleteBtn.type = 'button';
+    deleteBtn.title = 'Supprimer ce message (et annuler sa requête si elle est en attente)';
+    deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg><span>Delete</span>';
+    deleteBtn.addEventListener('click', () => deleteUserMessage(msgDiv));
+
     actions.appendChild(retryBtn);
+    actions.appendChild(deleteBtn);
     return actions;
+}
+
+// Supprimer un message : c'est le pendant fin du bouton Stop. Stop annule TOUTE la
+// conversation ; ceci ne retire qu'une requête de la file (les suivantes gardent leur tour),
+// ou qu'un tour déjà répondu.
+async function deleteUserMessage(userMsgDiv) {
+    const userData = userMsgDiv && userMsgDiv._messageData;
+    const userIdx = userData ? currentMessages.indexOf(userData) : -1;
+    if (userIdx < 0) {
+        showToast('Message introuvable');
+        return;
+    }
+
+    // Requête encore en attente ou en cours : on l'annule côté serveur. Rien n'a été ajouté à
+    // son historique, donc rien à y défaire ensuite.
+    const generationId = userMsgDiv._generationId;
+    const wasPending = generationId !== undefined && pendingGenerations.has(generationId);
+    if (wasPending) await cancelGenerations(generationId);
+
+    // Index du tour parmi les tours utilisateur : c'est ce que /delete-turn attend.
+    let pairIndex = 0;
+    for (let i = 0; i < userIdx; i++) {
+        if (currentMessages[i].role === 'user') pairIndex += 1;
+    }
+
+    // Les réponses de CE tour (il y en a deux en mode comparaison) partent avec lui ; le
+    // reste de la conversation est conservé tel quel.
+    let end = userIdx + 1;
+    while (end < currentMessages.length && currentMessages[end].role !== 'user') end += 1;
+    const removed = currentMessages.splice(userIdx, end - userIdx);
+    revokeAudioUrls(removed);
+    saveCurrentChat({ flush: true });
+
+    const nodes = Array.from(messagesContainer.querySelectorAll('.message'));
+    const doomed = new Set(removed);
+    let started = false;
+    for (const n of nodes) {
+        if (n._messageData === userData) started = true;
+        if (started && doomed.has(n._messageData)) {
+            const grid = n.parentElement.classList.contains('comparison-grid') ? n.parentElement : null;
+            n.remove();
+            // Une grille de comparaison vidée de ses colonnes ne doit pas rester en place.
+            if (grid && !grid.querySelector('.message')) grid.remove();
+        }
+    }
+    lastAssistantTurn = null;
+
+    if (wasPending) return;   // rien n'était encore dans l'historique serveur
+
+    try {
+        const res = await fetchWithTimeout('/delete-turn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, pairIndex, userText: userData.text || '' }),
+        }, 10000);
+        const out = await res.json();
+        const states = Object.values((out && out.models) || {});
+        // Le serveur refuse de supprimer un tour dont le texte ne correspond pas : le dire
+        // plutôt que de laisser croire que le modèle a oublié ce message.
+        if (states.length && !states.includes('supprime')) {
+            showToast('Message retiré du chat, mais le modèle le garde en contexte');
+        }
+    } catch (e) {
+        showToast('Message retiré du chat, mais le serveur n\'a pas confirmé');
+    }
 }
 
 async function retryUserMessage(userMsgDiv) {
@@ -1587,7 +1773,7 @@ async function retryUserMessage(userMsgDiv) {
         msg._file = blob;
         pendingTranscriptMsg = msg;
         requestUploadTranscript(blob, msg);
-        uploadFile(blob, prompt, { regenerate: true, dropPairs });
+        uploadFile(blob, prompt, { regenerate: true, dropPairs, userMsg: msg });
     } else {
         appendMessage('user', prompt);
         sendTextOnly(prompt, { regenerate: true, dropPairs });
@@ -1660,8 +1846,8 @@ function regenerateMessage(assistantMsgDiv) {
         }
     }
 
-    appendMessage('user', prompt);
-    sendTextOnly(prompt, { regenerate: true, dropPairs });
+    const retried = appendMessage('user', prompt);
+    sendTextOnly(prompt, { regenerate: true, dropPairs, userMsg: retried });
 }
 
 function revokeAudioUrls(messages) {
@@ -1784,13 +1970,14 @@ if (stopBtn) {
     stopBtn.addEventListener('click', stopGeneration);
 }
 
+// Stop = tout ce que CETTE conversation a en cours et en file. L'ancienne version ne faisait
+// que clore la bulle à l'écran : le serveur, lui, continuait de générer. Pire, elle envoyait
+// `{type:'stop'}` sur le datachannel — or côté serveur 'stop' signifie « le micro a fini
+// d'enregistrer », donc ce message-là DÉCLENCHAIT une génération au lieu d'en arrêter une.
 function stopGeneration() {
-    if (!streamState.isStreaming) return;
+    if (pendingGenerations.size === 0 && !streamState.isStreaming) return;
     streamState.stopRequested = true;
-    if (dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'stop', generationId: streamState.currentGenerationId }));
-    }
-    finalizeStream();
+    cancelGenerations();
 }
 
 removeFileBtn.addEventListener('click', () => {
@@ -1988,9 +2175,14 @@ async function stopRecording() {
     if (dc && dc.readyState === 'open') {
         if (streamState.isStreaming) finalizeStream();
         streamState.currentGenerationId += 1;
+        // Origine de la génération + sessionId envoyé à CHAQUE message : le serveur liait son
+        // historique à la conversation en cours au moment du /offer, et ne la voyait donc
+        // jamais changer.
+        markGenerationOrigin(streamState.currentGenerationId);
         dc.send(JSON.stringify({
             type: 'stop',
             text: prompt,
+            sessionId,
             generationId: streamState.currentGenerationId,
             maxTokens: settings.maxTokens,
             instruction: settings.instruction,
@@ -1999,6 +2191,7 @@ async function stopRecording() {
         }));
 
         const userMsg = appendMessage('user', prompt || '', { transcript: '' });
+        trackPending(userMsg, streamState.currentGenerationId);
         pendingMicAudioMsg = userMsg;
         pendingTranscriptMsg = userMsg;
         showThinkingMessage();
@@ -2044,7 +2237,7 @@ function sendMessage() {
         userMsg._file = currentFile;
         pendingTranscriptMsg = userMsg;
         requestUploadTranscript(currentFile, userMsg);
-        uploadFile(currentFile, text);
+        uploadFile(currentFile, text, { userMsg });
         currentFile = null;
         filePreview.classList.add('hidden');
         audioInput.value = '';
@@ -2055,14 +2248,14 @@ function sendMessage() {
 
     if (!text) return;
 
-    appendMessage('user', text);
+    const userMsg = appendMessage('user', text);
     textInput.value = '';
     autoResizeTextarea();
 
-    if (!isRecording) sendTextOnly(text);
+    if (!isRecording) sendTextOnly(text, { userMsg });
 }
 
-async function sendTextOnly(text, { regenerate = false, dropPairs = 1 } = {}) {
+async function sendTextOnly(text, { regenerate = false, dropPairs = 1, userMsg = null } = {}) {
     if (!pc) {
         try {
             await startWebRTC();
@@ -2091,9 +2284,12 @@ async function sendTextOnly(text, { regenerate = false, dropPairs = 1 } = {}) {
     if (dc && dc.readyState === 'open') {
         if (streamState.isStreaming) finalizeStream();
         streamState.currentGenerationId += 1;
+        markGenerationOrigin(streamState.currentGenerationId);
+        trackPending(userMsg, streamState.currentGenerationId);
         dc.send(JSON.stringify({
             type: 'text_only',
             text,
+            sessionId,
             generationId: streamState.currentGenerationId,
             regenerate,
             dropPairs,
@@ -2148,10 +2344,34 @@ async function requestUploadTranscript(file, userMsg) {
     }
 }
 
-async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = {}) {
+// Rend une réponse d'assistant là où elle doit aller : à l'écran si la conversation d'origine
+// est toujours celle affichée, dans le stockage de cette conversation sinon.
+function emitAssistant(originChat, text, opts = {}) {
+    if (originChat === sessionId) {
+        appendMessage('system', text, opts);
+        return;
+    }
+    if (!text || !text.trim()) return;
+    const message = { role: 'assistant', text };
+    if (opts.model) message.model = opts.model;
+    if (opts.turn) message.turn = opts.turn;
+    if (appendToStoredChat(originChat, message)) {
+        showToast("Réponse rangée dans la conversation d'origine");
+    }
+}
+
+async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1, userMsg = null } = {}) {
+    // L'upload passait un generationId figé à 0 côté serveur : ni Stop ni suppression ne
+    // pouvaient le viser. Il prend maintenant un id du même compteur que le streaming.
+    streamState.currentGenerationId += 1;
+    const generationId = streamState.currentGenerationId;
+    markGenerationOrigin(generationId);
+    trackPending(userMsg, generationId);
+
     const formData = new FormData();
     formData.append('audio', file);
     formData.append('sessionId', sessionId);
+    formData.append('generationId', String(generationId));
     // Renvoi d'un tour déjà joué : le serveur doit dérouler son historique d'autant de paires
     // que le client vient d'en jeter, sinon le modèle reverra l'ancien tour en double. Un
     // serveur antérieur ignore simplement ces champs — le cas le plus fréquent (retry parce
@@ -2167,6 +2387,10 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = 
     if (settings.compare) formData.append('compare', 'true');
     else if (settings.model) formData.append('model', settings.model);
 
+    // Même problème que pour le streaming : le fetch est asynchrone, l'utilisateur peut avoir
+    // changé de conversation avant la réponse. On retient d'où part la requête.
+    const originChat = sessionId;
+
     const thinkingMsg = appendMessage('system', '');
     const thinkingIndicator = document.createElement('div');
     thinkingIndicator.className = 'thinking-indicator';
@@ -2176,6 +2400,9 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = 
     try {
         const response = await fetchWithTimeout('/upload', { method: 'POST', body: formData }, 120000);
         thinkingMsg.remove();
+        clearPending(generationId);
+        // Annulée pendant l'attente en file : le serveur n'a rien généré, rien à afficher.
+        if (cancelledGenerations.has(generationId)) return;
 
         if (response.ok) {
             const data = await response.json();
@@ -2195,13 +2422,13 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = 
                 uploadTurnSeq += 1;
                 const turn = `${sessionId}:up${uploadTurnSeq}`;
                 responses.forEach(([name, text]) => {
-                    appendMessage('system', text, {
+                    emitAssistant(originChat, text, {
                         model: label ? name : null,
                         turn: responses.length > 1 ? turn : null,
                     });
                 });
             } else {
-                appendMessage('system', data.text);
+                emitAssistant(originChat, data.text);
             }
         } else {
             let errorText = 'Error uploading file.';
@@ -2215,15 +2442,17 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = 
                     if (errorData) errorText = `Error: ${errorData}`;
                 }
             } catch (e) { /* ignore */ }
-            appendMessage('system', errorText);
+            emitAssistant(originChat, errorText);
         }
     } catch (e) {
         console.error('Upload error:', e);
         thinkingMsg.remove();
+        clearPending(generationId);
+        if (cancelledGenerations.has(generationId)) return;
         const msg = e.name === 'AbortError'
             ? 'The server took too long to respond. Try again or shorten the audio.'
             : 'Error uploading file.';
-        appendMessage('system', msg);
+        emitAssistant(originChat, msg);
     }
 }
 
@@ -2388,7 +2617,10 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (!modalOverlay.classList.contains('hidden')) { closeModal(null); return; }
         if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
-        if (streamState.isStreaming) { stopGeneration(); return; }
+        // Même condition que le bouton Stop : depuis que les requêtes s'empilent, une
+        // conversation peut avoir tout en file et rien encore en train de streamer —
+        // Échap ne faisait alors rien du tout.
+        if (pendingGenerations.size > 0 || streamState.isStreaming) { stopGeneration(); return; }
     }
 
     if (meta && e.key.toLowerCase() === 'k') {

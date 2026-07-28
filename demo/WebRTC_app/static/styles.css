@@ -1691,136 +1691,6 @@ textarea::placeholder {
     text-align: center;
 }
 
-/* Effort picker — inline mode toggle in the input bar */
-.effort-picker {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-.effort-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--secondary));
-    color: hsl(var(--muted-foreground));
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-.effort-toggle:hover {
-    color: hsl(var(--foreground));
-    border-color: hsl(var(--ring) / 0.4);
-}
-
-.effort-toggle:focus-visible {
-    outline: 2px solid hsl(var(--ring));
-    outline-offset: 2px;
-}
-
-.effort-toggle svg {
-    width: 10px;
-    height: 10px;
-}
-
-.effort-toggle-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: hsl(var(--muted-foreground));
-}
-
-.effort-picker[data-mode="max"] .effort-toggle {
-    color: hsl(var(--primary));
-    border-color: hsl(var(--primary) / 0.4);
-    background: hsl(var(--accent));
-}
-
-.effort-picker[data-mode="max"] .effort-toggle-dot {
-    background: hsl(var(--primary));
-    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
-}
-
-.effort-menu {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    right: 0;
-    background: hsl(var(--popover));
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-lg);
-    padding: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 220px;
-    z-index: 60;
-    animation: effort-menu-in 0.12s ease;
-}
-
-.effort-menu.hidden {
-    display: none;
-}
-
-@keyframes effort-menu-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.effort-menu-item {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 8px 10px;
-    border-radius: calc(var(--radius-sm) - 2px);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
-    font-family: inherit;
-    color: hsl(var(--foreground));
-    transition: background 0.12s ease;
-}
-
-.effort-menu-item:hover {
-    background: hsl(var(--accent));
-}
-
-.effort-menu-item.active {
-    background: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
-}
-
-.effort-menu-item.active::after {
-    content: '✓';
-    margin-left: auto;
-    color: hsl(var(--primary));
-    font-weight: 700;
-    font-size: 0.85rem;
-}
-
-.effort-menu-name {
-    font-weight: 600;
-    font-size: 0.825rem;
-}
-
-.effort-menu-hint {
-    font-size: 0.7rem;
-    color: hsl(var(--muted-foreground));
-}
-
-@media (max-width: 600px) {
-    .effort-toggle-label { display: none; }
-}
-
 /* ------------------------------------------------------------
    Thinking indicator
    ------------------------------------------------------------ */
@@ -2680,5 +2550,61 @@ textarea::placeholder {
 
     .model-picker-select {
         max-width: 120px;
+    }
+}
+
+/* ------------------------------------------------------------
+   Messages en attente dans la file (empilement au sein d'une conversation)
+   ------------------------------------------------------------ */
+/* Rendue en permanence mais masquée : la faire apparaître ne doit pas décaler la bulle. */
+.pending-label {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+}
+
+.message[data-pending] .pending-label {
+    display: inline-flex;
+}
+
+/* La barre d'actions n'apparaît qu'au survol ; un message en attente doit se signaler tout
+   seul, et son bouton Delete rester atteignable sans chercher. */
+.message[data-pending] .message-actions {
+    opacity: 1;
+}
+
+/* En attente = pas encore traité : la bulle est en retrait. Une fois la génération lancée,
+   elle reprend sa pleine opacité et le point se met à pulser. */
+.message[data-pending="queued"] .content {
+    opacity: 0.6;
+}
+
+.message[data-pending] .pending-label::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: hsl(var(--muted-foreground));
+    flex: none;
+}
+
+.message[data-pending="running"] .pending-label::before {
+    background: hsl(var(--primary));
+    animation: pendingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pendingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+/* prefers-reduced-motion : le point reste, il cesse simplement de clignoter. */
+@media (prefers-reduced-motion: reduce) {
+    .message[data-pending="running"] .pending-label::before {
+        animation: none;
     }
 }

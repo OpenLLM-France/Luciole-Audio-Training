@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SALeM</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=41">
     <link rel="stylesheet" href="/static/vendor/github.min.css" id="hljs-theme-light">
     <link rel="stylesheet" href="/static/vendor/github-dark.min.css" id="hljs-theme-dark" disabled>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,28 +216,6 @@
                     </button>
                     <textarea id="text-input" placeholder="Send a message..." rows="1" data-gramm="false"
                         wt-ignore-input="true" aria-label="Message"></textarea>
-                    <div class="effort-picker">
-                        <button id="effort-toggle" class="effort-toggle" type="button"
-                            aria-haspopup="true" aria-expanded="false" aria-label="Effort mode"
-                            title="Effort mode">
-                            <span class="effort-toggle-dot" aria-hidden="true"></span>
-                            <span class="effort-toggle-label" id="effort-toggle-label">Normal</span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                        <div id="effort-menu" class="effort-menu hidden" role="menu">
-                            <button data-value="normal" class="effort-menu-item" type="button" role="menuitem">
-                                <span class="effort-menu-name">Normal</span>
-                                <span class="effort-menu-hint">Quick replies — your settings</span>
-                            </button>
-                            <button data-value="max" class="effort-menu-item" type="button" role="menuitem">
-                                <span class="effort-menu-name">Max thinking</span>
-                                <span class="effort-menu-hint">Longer reasoning, lower temperature</span>
-                            </button>
-                        </div>
-                    </div>
                     <button id="stop-btn" class="icon-btn hidden" type="button" aria-label="Stop generation"
                         title="Stop generation (Esc)">
                         <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"
@@ -473,7 +451,7 @@
     <!-- Bumper ce v= à CHAQUE modification de client.js : sans ça le navigateur ressert sa
          copie en cache et l'app tourne avec un JS antérieur. C'est ce qui a rendu le sélecteur
          de modèle invisible — le JS caché ne le connaissait pas. -->
-    <script src="/static/client.js?v=41"></script>
+    <script src="/static/client.js?v=43"></script>
 </body>
 
 </html>
