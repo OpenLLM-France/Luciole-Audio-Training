@@ -43,6 +43,33 @@ BASE_MODEL=Qwen/Qwen3-4B-Thinking-2507
 
 The application expects the SALM model to be located at the path specified in `MODEL_PATH`.
 
+Two optional variables cover the Automodel backend:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MODEL_CLASS` | auto-detected | `SALM` or `SALMAutomodel`. Auto-detection reads `use_nemo_automodel` from the checkpoint's `config.json`; set this only for a checkpoint exported before that flag existed. |
+| `TORCH_DTYPE` | `bfloat16` on GPU, `float32` on CPU | Load dtype. These checkpoints are exported in bf16; fp32 doubles the footprint (32 GB at 8B) for nothing. |
+| `ATTN_IMPLEMENTATION` | `sdpa` on Nemotron-H, untouched elsewhere | transformers 5.6's FlashAttention-2 path does `s_aux.to(query.dtype)` with no None check, and Nemotron-H has no attention sinks, so every generate() would die on the first attention block. FA2 is the default only because flash-attn ships in the NeMo base image. |
+
+## Backends: Luciole-1B vs Luciole-8B
+
+The two model families do not share a runtime.
+
+| | Luciole-1B | Luciole-8B |
+| --- | --- | --- |
+| LLM backbone | Luciole (dense transformer) | Nemotron-H (hybrid Mamba2 + attention) |
+| SALM class | `SALM` | `SALMAutomodel` |
+| Built by | plain HF transformers | `nemo_automodel` |
+| transformers | 4.57 (from the NeMo base image) | 5.6 — the built-in `nemotron_h` only parses the dense `hybrid_override_pattern` (`'-'` = MLP) from 5.6 on |
+| Docker image | `salm-demo:latest` | `salm-demo:8b` (`--build-arg AUTOMODEL=1`) |
+
+`model_handler.py` picks the class on its own, so the same `app.py` serves both — but
+the image has to match the checkpoint, since the two transformers versions can't
+coexist. A wrong *class* does not raise: `hf_hub` keeps only the state-dict keys present
+in both the checkpoint and the freshly built model, so a mismatch drops every LLM tensor
+and leaves a random backbone emitting fluent, unrelated text. Check the startup log line
+`Detected backend: ...`.
+
 
 ## Usage
 

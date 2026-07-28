@@ -164,6 +164,12 @@ class SALMModel:
         except Exception as e:
             logger.warning(f"Could not switch attention implementation to {wanted}: {e}")
 
+    @property
+    def audio_locator_tag(self):
+        """Exposé au même niveau que sur RemoteSALMModel, pour que app.py puisse
+        construire un tour d'historique sans savoir quel backend il a en face."""
+        return self.model.audio_locator_tag
+
     def process_audio(self, input_path, output_path, target_sr=16000):
         """Resamples and converts audio to mono 16kHz."""
         try:

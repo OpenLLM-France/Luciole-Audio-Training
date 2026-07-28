@@ -7,8 +7,10 @@
 #   docker build --build-context nemo=/home/abert/NeMo --build-arg AUTOMODEL=1 \
 #                -t salm-demo:8b .
 #
-# DEUX images, pas une : le 8B impose transformers 5.x et le 1B tourne sur les 4.57 de
-# la base. Recette identique par ailleurs, d'où le build-arg.
+# AUTOMODEL=1 sert les DEUX backends : le 8B parce qu'il apporte nemo_automodel et
+# transformers 5.6, le 1B parce qu'on laisse PEFT à la version de la base (voir plus bas).
+# C'est donc l'image à utiliser par défaut. Le build sans le flag reste là
+# pour reconstruire salm-demo:latest à l'identique en cas de besoin (transformers 4.57).
 #
 # --build-context REQUIS : le NeMo de la base (2.7.1) ignore llm_backbone/ et aucun
 # checkpoint récent ne charge. Le fork apporte la redirection + 18 commits d'inférence.
@@ -36,11 +38,13 @@ RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/req
 # --no-deps : sinon pip réinstalle torch/transformers depuis PyPI par-dessus les roues NVIDIA.
 RUN rm -rf /opt/NeMo
 COPY --from=nemo . /opt/NeMo
-RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e /opt/NeMo
-
-# Les 4 dépendances que le fork déclare et que la base ne satisfait pas. Bornées : un `>=`
-# ouvert tire la dernière version publiée (datasets 5.0.0, fsspec +2 ans).
-RUN python -m pip install --no-cache-dir --no-deps \
+#
+# Enchaîné avec les 4 dépendances que le fork déclare et que la base ne satisfait pas —
+# bornées, car un `>=` ouvert tire la dernière version publiée (datasets 5.0.0, fsspec +2
+# ans). Un seul RUN : la base NeMo arrive déjà à ~120 couches et overlay2 en refuse plus de
+# 127 — au-delà, le build passe mais tout `docker run` échoue sur "max depth exceeded".
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e /opt/NeMo && \
+    python -m pip install --no-cache-dir --no-deps \
         "lhotse>=1.33.0,<1.34" \
         "datasets>=3.2.0,<4" \
         "fsspec>=2024.12.0,<2025" \
@@ -54,17 +58,10 @@ RUN python -m pip install --no-cache-dir --no-deps \
 #     ('-' = MLP) que depuis la 5.6 (KeyError: '-' sur 5.3-5.5). Le code remote n'est pas
 #     une échappatoire : son prepare_inputs_for_generation découpe input_ids, None sur le
 #     chemin inputs_embeds-only (audio) de SALM — d'où trust_remote_code=false à l'export.
-#   - peft/accelerate : le config du checkpoint porte un bloc lora, donc
-#     maybe_install_lora() s'exécute au chargement.
+#   - accelerate : requis par transformers 5.6. PEFT, lui, n'est PAS mis à jour — c'est la
+#     clé de la compatibilité avec le 1B, voir le bloc dédié plus bas.
 # Versions relevées sur l'env JZ de référence (nemo27-salm_automodel), pas devinées.
 ARG AUTOMODEL=0
-RUN if [ "$AUTOMODEL" = "1" ]; then \
-        python -m pip install --no-cache-dir \
-            "transformers==5.6.0" \
-            "peft==0.19.1" \
-            "accelerate==1.14.0" && \
-        python -m pip install --no-cache-dir --no-deps "nemo-automodel==0.4.0" ; \
-    fi
 
 # mamba-ssm recompilé POUR L'ARCHI DE LA MACHINE. La base livre un `selective_scan_cuda`
 # x86 : dans un conteneur arm64 `import mamba_ssm` échoue, transformers met alors ses cinq
@@ -82,8 +79,30 @@ RUN if [ "$AUTOMODEL" = "1" ]; then \
 # --no-deps : mamba-ssm réclame `triton`, absent de PyPI en aarch64 ; la base le fournit
 # sous le nom `pytorch-triton`, que pip ne sait pas rapprocher. Toutes les dépendances
 # réelles sont déjà dans l'image.
+
+# PEFT VOLONTAIREMENT PAS MIS À JOUR — on garde le 0.13.2 de la base, alors que l'env JZ
+# de référence a 0.19.1. C'est ce qui permet à UNE image de servir les deux backends :
+#   - Luciole-8B (SALMAutomodel) applique le LoRA de nemo_automodel, il ne touche pas à HF
+#     PEFT et se moque de sa version ;
+#   - Luciole-1B (SALM) passe par HF PEFT, et le 0.19.1 y inspecte ses back-ends à
+#     l'injection des adaptateurs : il tombe sur le torchao 0.14 de la base et LÈVE au lieu
+#     de l'ignorer ("only versions above 0.16.0 are supported", peft/tuners/lora/torchao.py).
+#     Le 0.13.2 est antérieur à ce dispatch et charge sans broncher.
+# Les deux fausses pistes, pour ne pas les reprendre : monter torchao en 0.17 échoue (il
+# importe `ScalingType` d'un torch plus récent que le 2.10 de l'image), et le SUPPRIMER
+# débloque le 1B mais casse le 8B, nemo_automodel l'important de son côté.
+#
+# Vérifié le 2026-07-27 dans une seule image : 8B et 1B chargent et répondent, transformers
+# 5.6.0, sortie du 1B identique à celle qu'il donne en 4.57.
+# UN SEUL RUN pour toutes les étapes : la base NeMo arrive déjà à ~120 couches et overlay2
+# en refuse plus de 127. Au-delà le build passe, mais tout `docker run` échoue aussitôt sur
+# "max depth exceeded" — c'est arrivé en ajoutant naïvement une couche par étape.
 RUN if [ "$AUTOMODEL" = "1" ]; then \
-        python -m pip uninstall -y mamba-ssm >/dev/null 2>&1 || true; \
+        python -m pip install --no-cache-dir \
+            "transformers==5.6.0" \
+            "accelerate==1.14.0" && \
+        python -m pip install --no-cache-dir --no-deps "nemo-automodel==0.4.0" && \
+        python -m pip uninstall -y mamba-ssm >/dev/null 2>&1; \
         MAMBA_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="12.1" MAX_JOBS=8 \
         python -m pip install --no-cache-dir --no-build-isolation --no-deps \
             "mamba-ssm==2.3.1" && \

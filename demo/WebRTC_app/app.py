@@ -20,6 +20,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from av.audio.resampler import AudioResampler
 
 from model_handler import SALMModel
+from remote_model import RemoteSALMModel
 
 # Configuration
 ROOT = Path(__file__).parent
@@ -30,6 +31,11 @@ MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llam
 # sur les 119 Go d'une DGX Spark) ; c'est le GPU qui les sérialise, d'où des générations
 # successives et non parallèles en mode comparaison.
 MODEL_PATHS = os.getenv("MODEL_PATHS", "")
+# Servir les modèles depuis des serveurs vLLM au lieu de les charger ici :
+# "nom=http://host:port,nom=http://host:port". Renseigné, il REMPLACE MODEL_PATHS —
+# la démo ne charge plus aucun poids et devient un simple client HTTP. Un serveur
+# par modèle : vLLM n'en sert qu'un par processus.
+MODEL_ENDPOINTS = os.getenv("MODEL_ENDPOINTS", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
 MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
@@ -43,25 +49,43 @@ if _sys_prompt_file:
     SYSTEM_PROMPT = Path(_sys_prompt_file).read_text()
 
 
-def _parse_model_specs():
-    """Rend [(nom, chemin)] à charger, depuis MODEL_PATHS ou à défaut MODEL_PATH.
+def _parse_specs(raw, fallback=None):
+    """Découpe "nom=cible,nom=cible" en [(nom, cible)].
 
     Les noms viennent du client (sélecteur) et reviennent dans chaque message de token pour
     router l'affichage : ils doivent être stables et lisibles. Sans nom explicite on prend le
-    basename du dossier, qui est déjà ce qu'affiche _model_display_name.
+    basename de la cible, qui est déjà ce qu'affiche _model_display_name.
     """
     specs = []
-    for chunk in MODEL_PATHS.split(","):
+    for chunk in (raw or "").split(","):
         chunk = chunk.strip()
         if not chunk:
             continue
-        name, sep, path = chunk.partition("=")
+        name, sep, target = chunk.partition("=")
         if not sep:
-            name, path = os.path.basename(chunk.rstrip("/")), chunk
-        specs.append((name.strip(), path.strip()))
-    if not specs and MODEL_PATH:
-        specs.append((os.path.basename(MODEL_PATH.rstrip("/")) or "model", MODEL_PATH))
+            name, target = os.path.basename(chunk.rstrip("/")), chunk
+        specs.append((name.strip(), target.strip()))
+    if not specs and fallback:
+        specs.append((os.path.basename(fallback.rstrip("/")) or "model", fallback))
     return specs
+
+
+def _parse_model_specs():
+    """Rend [(nom, cible)] à servir, et le mode qui va avec.
+
+    MODEL_ENDPOINTS l'emporte : renseigné, la démo est un client de serveurs vLLM et ne
+    charge rien. Sinon on retombe sur MODEL_PATHS, puis MODEL_PATH — le comportement
+    historique, inchangé.
+    """
+    if MODEL_ENDPOINTS.strip():
+        return _parse_specs(MODEL_ENDPOINTS)
+    return _parse_specs(MODEL_PATHS, fallback=MODEL_PATH)
+
+
+# "vllm" = modèles servis à distance, "local" = poids chargés dans ce processus.
+# Exposé par /healthz et /metrics : c'est la première chose à vérifier quand les
+# latences ou les sorties ne ressemblent pas à ce qu'on attend.
+BACKEND = "vllm" if MODEL_ENDPOINTS.strip() else "local"
 
 
 def new_session():
@@ -107,16 +131,21 @@ async def stream_generator_in_thread(generator_func, *args, **kwargs):
             break
         yield item
 
-# Chargement des modèles, séquentiel et au démarrage : un 8B met ~4,5 min à charger, on ne
-# veut pas payer ça sur la première requête. Un modèle qui échoue ne condamne pas les autres
-# — la démo reste utilisable avec ceux qui ont chargé.
+# Mise en place des modèles, séquentielle et au démarrage : en local un 8B met ~4,5 min à
+# charger, on ne veut pas payer ça sur la première requête ; en mode vLLM on vérifie juste
+# que chaque serveur répond. Un modèle qui échoue ne condamne pas les autres — la démo reste
+# utilisable avec ceux qui ont abouti.
 MODELS = {}
-for _name, _path in _parse_model_specs():
+for _name, _target in _parse_model_specs():
     try:
-        MODELS[_name] = SALMModel(_path, default_instruction=DEFAULT_INSTRUCTION)
-        logger.info(f"Modèle '{_name}' chargé depuis {_path}")
+        if BACKEND == "vllm":
+            MODELS[_name] = RemoteSALMModel(_target, default_instruction=DEFAULT_INSTRUCTION, name=_name)
+            logger.info(f"Modèle '{_name}' servi par {_target}")
+        else:
+            MODELS[_name] = SALMModel(_target, default_instruction=DEFAULT_INSTRUCTION)
+            logger.info(f"Modèle '{_name}' chargé depuis {_target}")
     except Exception as e:
-        logger.error(f"Could not load model '{_name}' from {_path}: {e}")
+        logger.error(f"Could not set up model '{_name}' from {_target}: {e}")
 
 # Modèle par défaut : le premier déclaré. C'est celui qui répond quand le client ne précise
 # rien — donc aussi tout client antérieur au sélecteur.
@@ -986,7 +1015,7 @@ async def upload_audio(request):
                         logger.info(f"Generation complete for session {session_id} ({model_name})")
 
                         instruction = text_prompt or custom_instruction or model.default_instruction
-                        prompt_content = f"{instruction}\n{model.model.audio_locator_tag}\n"
+                        prompt_content = f"{instruction}\n{model.audio_locator_tag}\n"
 
                         user_turn = {
                             "role": "user",
@@ -1171,6 +1200,7 @@ async def metrics(request):
         "model_name": _model_display_name(),
         "models": list(MODELS),
         "default_model": DEFAULT_MODEL,
+        "backend": BACKEND,
         "queue": _GENERATION_QUEUE.metrics(),
         "sessions": len(SESSIONS),
         "active_pcs": len(pcs),
@@ -1299,6 +1329,7 @@ if __name__ == "__main__":
         "model_name": _model_display_name(),
         "models": list(MODELS),
         "default_model": DEFAULT_MODEL,
+        "backend": BACKEND,
     }))
     app.router.add_static("/static/", path=ROOT / "static", name="static")
     
