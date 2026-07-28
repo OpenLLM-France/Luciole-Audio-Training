@@ -3,7 +3,10 @@ aiortc
 av
 librosa
 soundfile
-# torch
-# nemo_toolkit[all]
 python-dotenv
-huggingface_hub
+# remote_model : client HTTP des serveurs vLLM (chat completions + SSE). L'image de base le
+# fournit déjà, mais rien ne le garantit — il est ici parce que le code l'importe.
+requests
+# torch, nemo_toolkit et vllm viennent de l'image de base (roues NVIDIA arm64) : les
+# réinstaller depuis PyPI les remplacerait par des versions sans support GB10. Voir le
+# Dockerfile, qui installe le fork NeMo avec --no-deps pour la même raison.

@@ -759,6 +759,7 @@ function loadChat(chatId) {
     // boutons Retry / Regenerate d'une conversation rouverte ne savent pas à quel tour ils
     // se rapportent.
     cleaned.forEach((msg) => { appendMessage(msg.role, msg.text, {
+        stats: msg.stats || null,
         silent: true,
         // Preserve the empty-string "pending" transcript shape; only omit when
         // the field was never set on this message.
@@ -1516,6 +1517,9 @@ function finalizeStream(meta = {}) {
         if (streamState.activeModel && streamState.activeGenerationId !== null) {
             data.turn = streamState.activeGenerationId;
         }
+        // La mesure est déjà sous la bulle ; on la garde dans le message pour que rouvrir
+        // la conversation ne la fasse pas disparaître.
+        if (tokenCount || elapsedMs) data.stats = { tokenCount, elapsedMs };
         currentMessages.push(data);
         if (streamState.messageDiv) streamState.messageDiv._messageData = data;
         saveCurrentChat();
@@ -2355,6 +2359,7 @@ function emitAssistant(originChat, text, opts = {}) {
     const message = { role: 'assistant', text };
     if (opts.model) message.model = opts.model;
     if (opts.turn) message.turn = opts.turn;
+    if (opts.stats) message.stats = opts.stats;
     if (appendToStoredChat(originChat, message)) {
         showToast("Réponse rangée dans la conversation d'origine");
     }
@@ -2425,10 +2430,14 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1, use
                     emitAssistant(originChat, text, {
                         model: label ? name : null,
                         turn: responses.length > 1 ? turn : null,
+                        // En comparaison les deux bulles apparaissent ensemble (l'upload
+                        // n'est pas streamé) : sans cette mesure par modèle, rien ne dit
+                        // que l'un a mis dix fois plus longtemps que l'autre.
+                        stats: (data.stats && data.stats[name]) || null,
                     });
                 });
             } else {
-                emitAssistant(originChat, data.text);
+                emitAssistant(originChat, data.text, { stats: (data.stats && Object.values(data.stats)[0]) || null });
             }
         } else {
             let errorText = 'Error uploading file.';
@@ -2474,7 +2483,7 @@ function ensureEmptyStateRemoved() {
 
 // `transcript`: pass `null` to omit the dropdown entirely, `''` to render the
 // "Transcribing…" placeholder, or any non-empty string to render the text.
-function appendMessage(role, text, { silent = false, audioUrl = null, transcript = null, model = null, turn = null } = {}) {
+function appendMessage(role, text, { silent = false, audioUrl = null, transcript = null, model = null, turn = null, stats = null } = {}) {
     ensureEmptyStateRemoved();
 
     // Storage uses 'assistant' (set by finalizeStream) but the existing CSS
@@ -2543,6 +2552,11 @@ function appendMessage(role, text, { silent = false, audioUrl = null, transcript
 
         wrapper.appendChild(contentDiv);
         if (text) {
+            // La mesure vient du serveur pour un upload ou une relecture d'historique ;
+            // le flux temps réel, lui, passe par finalizeStream. Les deux aboutissent ici,
+            // pour que la ligne soit la même partout.
+            const metaEl = stats ? buildMessageMeta(stats) : null;
+            if (metaEl) wrapper.appendChild(metaEl);
             wrapper.appendChild(buildAssistantActions(text, msgDiv));
         }
     } else {

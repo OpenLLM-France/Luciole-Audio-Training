@@ -1,80 +1,120 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# run_docker.sh — Launch the WebRTC SALM app container
+# run_docker.sh — Lance la démo à la main : un serveur vLLM par modèle, puis l'app.
+#
+# Le chemin normal est le DAG Airflow `demo_on_dgx`, qui fait la même chose en
+# résolvant le checkpoint, en rsyncant depuis le data-server et en posant un chien
+# de garde. Ce script est là pour un poste sans Airflow, ou pour déboguer.
 #
 # Usage:
-#   ./run_docker.sh [MODEL_DIR] [HOST_PORT] [IMAGE_TAG]
+#   ./run_docker.sh MODEL_DIR[:NOM] [MODEL_DIR[:NOM] ...]
 #
-#   MODEL_DIR  : Absolute path to your local SALM model directory
-#                (default: /home/hnaouara/salm_models/linagora_canary_luciole-1B-SFT-1.1_s082829)
-#   HOST_PORT  : Host port to expose the web UI on  (default: 9009)
-#   IMAGE_TAG  : Docker image tag to run            (default: salm-webrtc-app:latest)
+#   Un argument par modèle. Le nom (après ':') est celui affiché dans le sélecteur
+#   du chat ; sans lui, on prend le nom du dossier. Deux modèles ou plus font
+#   apparaître le sélecteur et la case « comparer ».
 #
-# Examples:
-#   ./run_docker.sh
-#   ./run_docker.sh /data/models/MyModel 8080
-#   ./run_docker.sh /data/models/MyModel 8080 salm-webrtc-app:v2
+#   IMAGE      : tag de l'image                     (défaut: salm-demo:vllm)
+#   HOST_PORT  : port de l'app                      (défaut: 9009 ; serveurs sur 9010, 9011…)
+#   KV_GIB     : cache KV par serveur, en Gio       (défaut: 6)
+#   GPU_FRAC   : gpu-memory-utilization par serveur (défaut: 0.35)
+#
+# Exemples:
+#   ./run_docker.sh /home/abert/models/salm/Luciole-1B/xp/hf_checkpoints/step_100000
+#   ./run_docker.sh /path/ckpt1:Luciole-1B /path/ckpt2:Luciole-8B
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# Load .env file safely if it exists
-if [ -f .env ]; then
-    while IFS='=' read -r key value || [ -n "$key" ]; do
-        # Skip comments and empty lines
-        if [[ ! "$key" =~ ^# ]] && [ -n "$key" ]; then
-            # Strip potential surrounding quotes
-            value="${value%\"}"
-            value="${value#\"}"
-            export "$key"="$value"
-        fi
-    done < .env
+if [ "$#" -lt 1 ]; then
+    sed -n '3,23p' "$0"
+    exit 1
 fi
 
-# Use arguments if provided, otherwise fallback to .env vars or defaults
-MODEL_DIR="${1:-${MODEL_PATH:-/home/hnaouara/salm_models/linagora_canary_luciole-1B-SFT-1.1_s082829}}"
-HOST_PORT="${2:-${PORT:-9009}}"
-IMAGE_TAG="${3:-salm-webrtc-app:v2}"
-CONTAINER_NAME="salm-webrtc-app"
+IMAGE="${IMAGE:-salm-demo:vllm}"
+HOST_PORT="${HOST_PORT:-9009}"
+KV_GIB="${KV_GIB:-6}"
+GPU_FRAC="${GPU_FRAC:-0.35}"
+APP_NAME="salm-webrtc-app"
+SRV_PREFIX="salm-webrtc-vllm"
 
-# Check if model directory exists and has files. If not, download the model!
-if [ ! -d "${MODEL_DIR}" ] || [ -z "$(ls -A "${MODEL_DIR}")" ]; then
-    echo "Model directory '${MODEL_DIR}' is missing or empty."
-    if [ -n "${HF_TOKEN:-}" ] && [ -n "${BASE_MODEL:-}" ]; then
-        echo "Downloading base model '${BASE_MODEL}' from Hugging Face to '${MODEL_DIR}'..."
-        mkdir -p "${MODEL_DIR}"
-        # Use a temporary python container with huggingface-cli to download the model to the host folder
-        docker run --rm -it \
-            -v "${MODEL_DIR}:/model_data" \
-            python:3.9-slim bash -c "pip install -q huggingface_hub && huggingface-cli login --token ${HF_TOKEN} && huggingface-cli download ${BASE_MODEL} --local-dir /model_data"
-        echo "✅ Model downloaded successfully."
-    else
-        echo "❌ Error: HF_TOKEN and BASE_MODEL must be defined in .env to auto-download the model."
+# Plafond mémoire à 90 % de la RAM. Sur GB10 la mémoire GPU EST la RAM système : un
+# conteneur qui déborde emmène la machine entière, pas seulement lui-même.
+MEM=$(awk '/MemTotal/{printf "%d", $2*0.9/1024}' /proc/meminfo)
+
+# Ménage : sans ça les anciens conteneurs tiennent le GPU et les ports.
+docker rm -f "${APP_NAME}" >/dev/null 2>&1 || true
+OLD=$(docker ps -aq --filter "name=^${SRV_PREFIX}" 2>/dev/null || true)
+if [ -n "${OLD}" ]; then docker rm -f ${OLD} >/dev/null 2>&1 || true; fi
+
+ENDPOINTS=""
+INDEX=0
+for SPEC in "$@"; do
+    INDEX=$((INDEX + 1))
+    PORT=$((HOST_PORT + INDEX))
+    DIR="${SPEC%%:*}"
+    NAME="${SPEC#*:}"
+    if [ "${NAME}" = "${SPEC}" ]; then NAME="$(basename "${DIR}")"; fi
+
+    if [ ! -d "${DIR}" ] || [ -z "$(ls -A "${DIR}")" ]; then
+        echo "❌ Dossier de modèle vide ou absent : ${DIR}" >&2
         exit 1
     fi
-fi
 
-# Stop & remove any existing container with the same name
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo "Stopping existing container '${CONTAINER_NAME}'..."
-    docker rm -f "${CONTAINER_NAME}"
-fi
+    echo "Serveur vLLM '${NAME}' sur le port ${PORT}…"
+    # serve_salm.py, pas `vllm serve` : le plugin s'enregistre par l'entry point
+    # vllm.general_plugins, que vLLM ne charge que dans le processus moteur, alors que
+    # le front-end de l'API valide la config AVANT, dans le processus principal.
+    # --kv-cache-memory-bytes : sur GB10 le profilage mémoire de vLLM échoue dès qu'un
+    # autre conteneur bouge (le « libre » remonte pendant la mesure). Le fixer court-
+    # circuite tout le profilage.
+    docker run --init -d --name "${SRV_PREFIX}${INDEX}" \
+        --network host --gpus all --shm-size=8g \
+        --memory="${MEM}m" --memory-swap="${MEM}m" \
+        -v "${DIR}":/app/model:ro \
+        -v "$(pwd)":/app \
+        --entrypoint python "${IMAGE}" /app/serve_salm.py serve /app/model \
+        --served-model-name "${NAME}" --port "${PORT}" \
+        --enforce-eager --dtype bfloat16 --max-model-len 16384 \
+        --limit-mm-per-prompt '{"audio":1}' \
+        --gpu-memory-utilization "${GPU_FRAC}" \
+        --kv-cache-memory-bytes $((KV_GIB * 1073741824)) >/dev/null
 
-echo "Starting container '${CONTAINER_NAME}' on port ${HOST_PORT}..."
-echo "  Model : ${MODEL_DIR}"
-echo "  Image : ${IMAGE_TAG}"
+    if [ -n "${ENDPOINTS}" ]; then ENDPOINTS="${ENDPOINTS},"; fi
+    ENDPOINTS="${ENDPOINTS}${NAME}=http://localhost:${PORT}"
+done
 
-docker run --init -d \
-    --name "${CONTAINER_NAME}" \
-    --gpus all \
-    -p "${HOST_PORT}":9009 \
-    -p 3478:3478/udp \
-    -p 50000-50100:50000-50100/udp \
-    -v "${MODEL_DIR}":/app/model:ro \
+# Un 8B met ~2 min à charger, et l'app refuse un serveur qui ne répond pas encore.
+INDEX=0
+for SPEC in "$@"; do
+    INDEX=$((INDEX + 1))
+    PORT=$((HOST_PORT + INDEX))
+    echo -n "Attente du serveur sur ${PORT} "
+    for _ in $(seq 1 90); do
+        if curl -sf -m 3 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then break; fi
+        echo -n "."; sleep 5
+    done
+    if curl -sf -m 3 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then
+        echo "→ prêt"
+    else
+        echo ""
+        echo "❌ Le serveur sur ${PORT} n'a pas répondu. Logs :" >&2
+        docker logs --tail 40 "${SRV_PREFIX}${INDEX}" >&2
+        exit 1
+    fi
+done
+
+# --network host : indispensable pour le chat TEXTE. Sans permission micro, le navigateur
+# n'annonce que des candidats ICE mDNS « .local », qu'aiortc résout par une requête
+# multicast — laquelle ne sort pas d'un conteneur en bridge.
+echo "Démarrage de l'app sur le port ${HOST_PORT}…"
+docker run --init -d --name "${APP_NAME}" \
+    --network host \
     -v "$(pwd)":/app \
-    -e MODEL_PATH=/app/model \
-    "${IMAGE_TAG}"
+    -e MODEL_ENDPOINTS="${ENDPOINTS}" \
+    -e PORT="${HOST_PORT}" \
+    "${IMAGE}" >/dev/null
 
 echo ""
-echo "✅ Container started. Open http://localhost:${HOST_PORT} in your browser."
-echo "   To follow logs : docker logs -f ${CONTAINER_NAME}"
-echo "   To stop        : docker stop ${CONTAINER_NAME}"
+echo "✅ Démo lancée. Ouvre http://localhost:${HOST_PORT}"
+echo "   Modèles : ${ENDPOINTS}"
+echo "   Logs    : docker logs -f ${APP_NAME}"
+echo "   Arrêt   : docker rm -f ${APP_NAME} \$(docker ps -aq --filter name=^${SRV_PREFIX})"

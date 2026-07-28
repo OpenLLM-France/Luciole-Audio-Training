@@ -41,35 +41,51 @@ HF_TOKEN=your_huggingface_token
 BASE_MODEL=Qwen/Qwen3-4B-Thinking-2507
 ```
 
-The application expects the SALM model to be located at the path specified in `MODEL_PATH`.
+The demo does not load any weights. Models are served by vLLM servers, one per model,
+and the app is an HTTP client:
 
-Two optional variables cover the Automodel backend:
+| Variable | Purpose |
+| --- | --- |
+| `MODEL_ENDPOINTS` | `name=http://host:port,name=http://host:port`. More than one name turns on the model selector and the "compare all models" checkbox in the chat. |
+| `MODEL_PATH` | Only read by `/model-config`, to display the checkpoint's `config.json`. Nothing loads from it. |
+| `MODEL_ENDPOINT_READY_TIMEOUT` | How long to wait for each server at startup (default 300 s; an 8B takes ~2 min to load). |
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MODEL_CLASS` | auto-detected | `SALM` or `SALMAutomodel`. Auto-detection reads `use_nemo_automodel` from the checkpoint's `config.json`; set this only for a checkpoint exported before that flag existed. |
-| `TORCH_DTYPE` | `bfloat16` on GPU, `float32` on CPU | Load dtype. These checkpoints are exported in bf16; fp32 doubles the footprint (32 GB at 8B) for nothing. |
-| `ATTN_IMPLEMENTATION` | `sdpa` on Nemotron-H, untouched elsewhere | transformers 5.6's FlashAttention-2 path does `s_aux.to(query.dtype)` with no None check, and Nemotron-H has no attention sinks, so every generate() would die on the first attention block. FA2 is the default only because flash-attn ships in the NeMo base image. |
+Start a server with `serve_salm.py`, not `vllm serve` — the NeMo plugin registers through
+the `vllm.general_plugins` entry point, which vLLM only loads in the engine process, while
+the API front-end validates the model config *before* that, in the main process.
 
-## Backends: Luciole-1B vs Luciole-8B
+```bash
+python serve_salm.py serve <checkpoint> --served-model-name Luciole-1B --port 9010 \
+    --enforce-eager --dtype bfloat16 --max-model-len 16384 \
+    --limit-mm-per-prompt '{"audio":1}' \
+    --gpu-memory-utilization 0.35 --kv-cache-memory-bytes 6442450944
+```
 
-The two model families do not share a runtime.
+`--kv-cache-memory-bytes` is not optional on a DGX Spark: GPU memory there *is* system RAM,
+so the free-memory reading climbs during vLLM's profiling as soon as another container moves,
+and the startup assert fires. Pinning the KV cache skips profiling entirely.
+
+## Backbones: Luciole-1B vs Luciole-8B
+
+One image, one runtime, both families — the vLLM plugin picks its path from the
+`architectures` field of the checkpoint's `llm_backbone/`.
 
 | | Luciole-1B | Luciole-8B |
 | --- | --- | --- |
-| LLM backbone | Luciole (dense transformer) | Nemotron-H (hybrid Mamba2 + attention) |
-| SALM class | `SALM` | `SALMAutomodel` |
-| Built by | plain HF transformers | `nemo_automodel` |
-| transformers | 4.57 (from the NeMo base image) | 5.6 — the built-in `nemotron_h` only parses the dense `hybrid_override_pattern` (`'-'` = MLP) from 5.6 on |
-| Docker image | `salm-demo:latest` | `salm-demo:8b` (`--build-arg AUTOMODEL=1`) |
+| LLM backbone | Nemotron (dense transformer) | Nemotron-H (hybrid Mamba2 + attention) |
+| vLLM inner model | `NemotronForCausalLM` | `NemotronHForCausalLM` |
+| LoRA | HF PEFT naming, 48 pairs | NeMo naming, 56 pairs |
+| Image | `salm-demo:vllm` | `salm-demo:vllm` |
 
-`model_handler.py` picks the class on its own, so the same `app.py` serves both — but
-the image has to match the checkpoint, since the two transformers versions can't
-coexist. A wrong *class* does not raise: `hf_hub` keeps only the state-dict keys present
-in both the checkpoint and the freshly built model, so a mismatch drops every LLM tensor
-and leaves a random backbone emitting fluent, unrelated text. Check the startup log line
-`Detected backend: ...`.
+LoRA adapters are merged into the base weights at load time, in float32, by the plugin
+itself (`backends.py::_merge_lora_weights`) — no PEFT involved. Both spellings of the LoRA
+config are handled (`lora_alpha`/`r` for the 1B, `alpha`/`dim` for the 8B). The merge is
+silent: vLLM only configures logging for its own `vllm.*` namespace, so the plugin's
+"Merged N LoRA weight pairs" line never reaches the log.
 
+`transformers` must stay at 5.6: the built-in `nemotron_h` only parses the dense
+`hybrid_override_pattern` (`'-'` = MLP) from 5.6 on, and vLLM 0.14 ships no fallback config
+class for that `model_type`. The 1B alone would run on 4.57.
 
 ## Usage
 
@@ -108,37 +124,34 @@ docker build \
   -t webrtc-app .
 ```
 
-### 2. Run the Container
+### 2. Run it
 
-The model (`Qwen/Qwen3-4B-Thinking-2507`) is baked into the image. If you wish to use a different model, you can just re-build the image with the `BASE_MODEL` argument or just download it inside the container:
+`run_docker.sh` starts one vLLM server per model, waits for each to answer, then starts
+the app pointed at them:
 
 ```bash
-# Go to the project directory
 cd <PATH-TO-REPO>/demo/WebRTC_app
-
-# Run the container
-docker run --init -d \
-  --name salm-webrtc-app \
-  --gpus all \
-  -p <PORT-LOCAL-USER>:9009 \
-  -p 3478:3478/udp \
-  -p 50000-50100:50000-50100/udp \
-  -v /home/hnaouara/SPEECHLM2_MODELS/Canary-Qwen3.5B-Thinking:/app/model \
-  -v "$(pwd)":/app \
-  -e MODEL_PATH=/app/model \
-  webrtc-app
+./run_docker.sh /path/ckpt1:Luciole-1B /path/ckpt2:Luciole-8B
 ```
+
+Two models or more turn on the model selector and the "compare all models" checkbox.
+`IMAGE`, `HOST_PORT`, `KV_GIB` and `GPU_FRAC` override the defaults.
+
+On the DGX the supported path is the Airflow DAG `demo_on_dgx`, which additionally
+resolves the checkpoint, rsyncs it from the data-server if missing, and arms a TTL
+watchdog. `run_docker.sh` is for a machine without Airflow, or for debugging.
+
 ### Note
- * the `-p 3478:3478/udp` and `-p 50000-50100:50000-50100/udp` are required for WebRTC to access the microphone if the app was not built locally (runned on a remote server).
- * the `-p <PORT-LOCAL-USER>:9009` is the port on which the application is running.
- * the `-v /PTH/TO/SALM/MODEL:/app/model` is the path to the SALM model.
- * the `-v "$(pwd):/app"` is the path to the project directory.
- * the `-e MODEL_PATH=/app/model` is the path to the SALM model.
+ * `--network host` is required for the TEXT chat, not just for the microphone: without a
+   media permission the browser only advertises obfuscated `.local` mDNS ICE candidates,
+   and the multicast query aiortc uses to resolve them never leaves a bridged container.
+ * the app writes `sessions.json` and `uploads/` into the mounted project directory.
 
 ## Project Structure
 
 - `app.py`: Main application server (aiohttp) handling WebRTC signaling and HTTP requests.
-- `model_handler.py`: Wrapper class for loading and interacting with the SALM model.
+- `remote_model.py`: vLLM client (OpenAI chat completions + SSE), the app's only model interface.
+- `serve_salm.py`: `vllm serve` launcher that registers the NeMo SpeechLM plugin first.
 - `static/`: Contains frontend assets (`index.html`, `client.js`, `styles.css`).
 - `requirements.txt`: Python dependency list.
 

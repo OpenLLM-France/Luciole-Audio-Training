@@ -19,29 +19,30 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from av.audio.resampler import AudioResampler
 
-from model_handler import SALMModel
 from remote_model import RemoteSALMModel
 
 # Configuration
 ROOT = Path(__file__).parent
-MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B")
-# Plusieurs modèles chargés en même temps, à comparer depuis le chat : "nom=chemin,nom=chemin".
-# Vide (défaut) = un seul modèle, MODEL_PATH, nommé d'après son dossier — comportement
-# historique. Les modèles cohabitent sans problème en mémoire (un 1B ~2,5 Gio, un 8B ~17 Gio
-# sur les 119 Go d'une DGX Spark) ; c'est le GPU qui les sérialise, d'où des générations
-# successives et non parallèles en mode comparaison.
-MODEL_PATHS = os.getenv("MODEL_PATHS", "")
-# Servir les modèles depuis des serveurs vLLM au lieu de les charger ici :
-# "nom=http://host:port,nom=http://host:port". Renseigné, il REMPLACE MODEL_PATHS —
-# la démo ne charge plus aucun poids et devient un simple client HTTP. Un serveur
-# par modèle : vLLM n'en sert qu'un par processus.
+# Les modèles sont servis par des serveurs vLLM : "nom=http://host:port,nom=http://host:port",
+# un serveur par modèle (vLLM n'en sert qu'un par processus). La démo ne charge aucun poids,
+# elle n'est qu'un client HTTP — c'est ce qui lui permet d'en exposer plusieurs, avec le
+# sélecteur et la comparaison, sans rien payer en mémoire.
+#
+# Le chargement des poids DANS ce processus (model_handler.SALMModel, NeMo en direct) a été
+# retiré le 2026-07-28. Il vit dans l'historique git jusqu'au commit 7db1bbf, avec l'image
+# salm-demo:8b qui allait avec. Motifs : décodage x1,2 à x1,8 plus lent, aucun batching, et
+# une image entière de contraintes croisées (nemo_automodel, PEFT épinglé par torchao) dont
+# le chemin vLLM n'a pas besoin.
 MODEL_ENDPOINTS = os.getenv("MODEL_ENDPOINTS", "")
+# Chemin du checkpoint, monté en lecture seule et utilisé UNIQUEMENT par /model-config pour
+# afficher le config.json dans l'interface. Plus rien ne charge de poids depuis ici.
+MODEL_PATH = os.getenv("MODEL_PATH", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
 MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 # Optional system prompt seeded into every new session. Empty (the default) = no system
 # turn at all, i.e. the plain demo behaviour. SALM's formatter only knows user/assistant,
-# so model_handler folds any system turn into the first user message.
+# so remote_model folds any system turn into the first user message.
 # SYSTEM_PROMPT_FILE wins over SYSTEM_PROMPT (easier to pass a long prompt via a mount).
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "")
 _sys_prompt_file = os.getenv("SYSTEM_PROMPT_FILE", "")
@@ -49,43 +50,23 @@ if _sys_prompt_file:
     SYSTEM_PROMPT = Path(_sys_prompt_file).read_text()
 
 
-def _parse_specs(raw, fallback=None):
-    """Découpe "nom=cible,nom=cible" en [(nom, cible)].
+def _parse_model_specs():
+    """Découpe MODEL_ENDPOINTS ("nom=url,nom=url") en [(nom, url)].
 
     Les noms viennent du client (sélecteur) et reviennent dans chaque message de token pour
     router l'affichage : ils doivent être stables et lisibles. Sans nom explicite on prend le
-    basename de la cible, qui est déjà ce qu'affiche _model_display_name.
+    dernier segment de l'URL, ce qui donne un port — utilisable, mais autant les nommer.
     """
     specs = []
-    for chunk in (raw or "").split(","):
+    for chunk in MODEL_ENDPOINTS.split(","):
         chunk = chunk.strip()
         if not chunk:
             continue
-        name, sep, target = chunk.partition("=")
+        name, sep, url = chunk.partition("=")
         if not sep:
-            name, target = os.path.basename(chunk.rstrip("/")), chunk
-        specs.append((name.strip(), target.strip()))
-    if not specs and fallback:
-        specs.append((os.path.basename(fallback.rstrip("/")) or "model", fallback))
+            name, url = os.path.basename(chunk.rstrip("/")), chunk
+        specs.append((name.strip(), url.strip()))
     return specs
-
-
-def _parse_model_specs():
-    """Rend [(nom, cible)] à servir, et le mode qui va avec.
-
-    MODEL_ENDPOINTS l'emporte : renseigné, la démo est un client de serveurs vLLM et ne
-    charge rien. Sinon on retombe sur MODEL_PATHS, puis MODEL_PATH — le comportement
-    historique, inchangé.
-    """
-    if MODEL_ENDPOINTS.strip():
-        return _parse_specs(MODEL_ENDPOINTS)
-    return _parse_specs(MODEL_PATHS, fallback=MODEL_PATH)
-
-
-# "vllm" = modèles servis à distance, "local" = poids chargés dans ce processus.
-# Exposé par /healthz et /metrics : c'est la première chose à vérifier quand les
-# latences ou les sorties ne ressemblent pas à ce qu'on attend.
-BACKEND = "vllm" if MODEL_ENDPOINTS.strip() else "local"
 
 
 def new_session():
@@ -131,21 +112,16 @@ async def stream_generator_in_thread(generator_func, *args, **kwargs):
             break
         yield item
 
-# Mise en place des modèles, séquentielle et au démarrage : en local un 8B met ~4,5 min à
-# charger, on ne veut pas payer ça sur la première requête ; en mode vLLM on vérifie juste
-# que chaque serveur répond. Un modèle qui échoue ne condamne pas les autres — la démo reste
-# utilisable avec ceux qui ont abouti.
+# Mise en place des modèles au démarrage : on vérifie que chaque serveur répond, et on retient
+# l'identifiant qu'il sert. Un serveur injoignable ne condamne pas les autres — la démo reste
+# utilisable avec ceux qui ont répondu, et /healthz dit lesquels.
 MODELS = {}
-for _name, _target in _parse_model_specs():
+for _name, _url in _parse_model_specs():
     try:
-        if BACKEND == "vllm":
-            MODELS[_name] = RemoteSALMModel(_target, default_instruction=DEFAULT_INSTRUCTION, name=_name)
-            logger.info(f"Modèle '{_name}' servi par {_target}")
-        else:
-            MODELS[_name] = SALMModel(_target, default_instruction=DEFAULT_INSTRUCTION)
-            logger.info(f"Modèle '{_name}' chargé depuis {_target}")
+        MODELS[_name] = RemoteSALMModel(_url, default_instruction=DEFAULT_INSTRUCTION, name=_name)
+        logger.info(f"Modèle '{_name}' servi par {_url}")
     except Exception as e:
-        logger.error(f"Could not set up model '{_name}' from {_target}: {e}")
+        logger.error(f"Could not reach model '{_name}' at {_url}: {e}")
 
 # Modèle par défaut : le premier déclaré. C'est celui qui répond quand le client ne précise
 # rien — donc aussi tout client antérieur au sélecteur.
@@ -155,14 +131,14 @@ salm_model = MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
 
 
 def get_model(name=None):
-    """Le SALMModel demandé, ou celui par défaut. None si rien n'a chargé."""
+    """Le modèle demandé, ou celui par défaut. None si aucun serveur n'a répondu."""
     if name and name in MODELS:
         return MODELS[name]
     return MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
 
 
 def selected_models(data):
-    """Rend [(nom, SALMModel)] pour une requête : un seul modèle, ou tous si comparaison.
+    """Rend [(nom, modèle)] pour une requête : un seul modèle, ou tous si comparaison.
 
     `compare: true` l'emporte sur `model`. Les générations se feront en séquence dans cet
     ordre (le GPU est unique), et chaque message émis porte son nom de modèle pour que le
@@ -986,6 +962,11 @@ async def upload_audio(request):
     # Réponses par modèle. L'upload n'est pas streamé : on rend les deux d'un coup, ce qui
     # rend la comparaison plus simple à afficher que deux flux entrelacés.
     responses = {}
+    # Chronométrage PAR MODÈLE. Sans lui, la comparaison est trompeuse : les deux bulles
+    # apparaissent ensemble à la fin, ce qui donne l'impression que les modèles ont mis le
+    # même temps alors qu'on a attendu la somme des deux. Même forme que le message `done`
+    # du flux temps réel, pour que le client n'ait qu'un seul rendu à écrire.
+    stats = {}
     if targets:
         clean_audio_path = None
         try:
@@ -1008,8 +989,17 @@ async def upload_audio(request):
                     for model_name, model in targets:
                         current_history = session_history(session_id, model_name)
                         full_response = ""
+                        t0 = time.perf_counter()
+                        token_count = 0
                         async for token in stream_generator_in_thread(model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, stop_callback=stop_check, **_effort_overrides(effort_mode, max_tokens)):
                             full_response += token
+                            token_count += 1
+                        # Un fragment SSE = un token côté vLLM ; c'est le même comptage que
+                        # dans le flux temps réel, donc les deux chemins sont comparables.
+                        stats[model_name] = {
+                            "tokenCount": token_count,
+                            "elapsedMs": int((time.perf_counter() - t0) * 1000),
+                        }
 
                         clean_response = _strip_chatml_assistant(full_response)
                         logger.info(f"Generation complete for session {session_id} ({model_name})")
@@ -1056,7 +1046,7 @@ async def upload_audio(request):
 
     # `text` reste la réponse du premier modèle : les clients d'avant le sélecteur
     # continuent de marcher sans rien savoir de `responses`.
-    return web.json_response({"text": response, "responses": responses})
+    return web.json_response({"text": response, "responses": responses, "stats": stats})
 
 TRANSCRIBE_INSTRUCTION = (
     "Transcribe the audio verbatim. Output only the transcription, "
@@ -1200,7 +1190,7 @@ async def metrics(request):
         "model_name": _model_display_name(),
         "models": list(MODELS),
         "default_model": DEFAULT_MODEL,
-        "backend": BACKEND,
+        "backend": "vllm",
         "queue": _GENERATION_QUEUE.metrics(),
         "sessions": len(SESSIONS),
         "active_pcs": len(pcs),
@@ -1329,7 +1319,7 @@ if __name__ == "__main__":
         "model_name": _model_display_name(),
         "models": list(MODELS),
         "default_model": DEFAULT_MODEL,
-        "backend": BACKEND,
+        "backend": "vllm",
     }))
     app.router.add_static("/static/", path=ROOT / "static", name="static")
     
