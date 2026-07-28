@@ -2529,3 +2529,156 @@ textarea::placeholder {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* Sélecteur de modèle (masqué quand le serveur n'en annonce qu'un) : la case « comparer »
+   se pose sous le menu déroulant, dans la même cellule de la grille des réglages. */
+.settings-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    cursor: pointer;
+}
+
+.settings-check input {
+    cursor: pointer;
+}
+
+/* ------------------------------------------------------------
+   Comparaison de modèles : les réponses d'un même tour côte à côte
+   ------------------------------------------------------------ */
+/* auto-fit + minmax : deux colonnes quand la place le permet, empilement automatique en
+   dessous de ~560 px de zone de chat — inutile de dupliquer le point de rupture ici. */
+.comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 22px;
+}
+
+/* En colonne, la marge du message est portée par la grille, et la bulle prend toute la
+   largeur disponible : le plafond à 75 % (pensé pour une pleine largeur) rendrait des
+   colonnes ridiculement étroites. */
+.comparison-grid .message {
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.comparison-grid .message-content-wrapper {
+    max-width: 100%;
+    flex: 1 1 auto;
+}
+
+/* Les actions (Copy / Regenerate) sont révélées au survol du message ; dans une grille on
+   veut pouvoir comparer les deux réponses sans que la mise en page ne bouge, d'où une
+   réserve de hauteur permanente. */
+.comparison-grid .message-actions {
+    min-height: 24px;
+}
+
+/* ------------------------------------------------------------
+   Sélecteur de modèle (en-tête du chat, à côté de la pastille de nom)
+   ------------------------------------------------------------ */
+/* Cette feuille n'a pas de `.hidden` global : chaque composant déclare le sien. Sans cette
+   règle, le sélecteur resterait visible même avec un seul modèle chargé (c'est ce qui
+   arrivait à l'ancienne ligne de réglages, qui n'avait jamais eu la sienne). */
+.model-picker.hidden {
+    display: none;
+}
+
+.model-picker {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    overflow: hidden;
+    background: hsl(var(--card));
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    line-height: 1;
+}
+
+.model-picker-select {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: hsl(var(--foreground));
+    font: inherit;
+    padding: 4px 22px 4px 10px;
+    cursor: pointer;
+    max-width: 180px;
+    /* Chevron dessiné en CSS : pas de requête réseau, et la CSP de la démo n'autorise de
+       toute façon aucun asset externe. */
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: right 10px center, right 6px center;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+}
+
+.model-picker-select:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+}
+
+/* Grisé quand « Compare » est coché : comparer, c'est interroger TOUS les modèles, le choix
+   d'un seul n'a alors plus de sens. */
+.model-picker-select:disabled {
+    color: hsl(var(--muted-foreground));
+    cursor: not-allowed;
+}
+
+.model-picker-compare {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-left: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    user-select: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.62rem;
+    font-weight: 600;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.model-picker-compare:hover {
+    color: hsl(var(--foreground));
+}
+
+/* Coché : l'état actif doit se lire d'un coup d'œil depuis le chat, c'est lui qui explique
+   pourquoi chaque question produit deux réponses (et prend deux fois plus de temps). */
+.model-picker-compare:has(input:checked) {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+}
+
+.model-picker-compare input {
+    accent-color: hsl(var(--primary));
+    margin: 0;
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+}
+
+.model-picker-compare:has(input:checked) input {
+    accent-color: hsl(var(--primary-foreground));
+}
+
+/* Sur petit écran l'en-tête est déjà chargé : on garde le sélecteur (c'est l'objet du
+   changement) mais on laisse tomber le libellé du bouton, l'état de la case suffit. */
+@media (max-width: 640px) {
+    .model-picker-compare span {
+        display: none;
+    }
+
+    .model-picker-select {
+        max-width: 120px;
+    }
+}

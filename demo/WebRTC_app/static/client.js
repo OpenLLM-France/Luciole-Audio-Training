@@ -35,6 +35,9 @@ const settingsReset = document.getElementById('settings-reset');
 const setSilenceMs = document.getElementById('set-silence-ms');
 const setSpeechThreshold = document.getElementById('set-speech-threshold');
 const setMaxTokens = document.getElementById('set-max-tokens');
+const modelRow = document.getElementById('model-row');
+const setModel = document.getElementById('set-model');
+const setCompare = document.getElementById('set-compare');
 const setInstruction = document.getElementById('set-instruction');
 const micMeter = document.getElementById('mic-meter');
 const micMeterBar = micMeter ? micMeter.querySelector('.mic-meter-bar') : null;
@@ -80,8 +83,16 @@ const streamState = {
     buffer: '',
     currentGenerationId: 0,   // last gen ID we *sent* to the server
     activeGenerationId: null, // gen ID of the message currently being rendered
+    activeModel: null,        // nom du modèle dont on rend la réponse (mode comparaison)
     stopRequested: false,
 };
+
+// Modèles disponibles côté serveur, remplis par /healthz au démarrage. Vide = serveur
+// mono-modèle (ou antérieur au sélecteur) : on n'affiche aucun contrôle.
+let availableModels = [];
+// Compteur de tours d'upload, pour donner une clé de groupe aux réponses comparées (l'upload
+// n'a pas de generationId, contrairement au streaming).
+let uploadTurnSeq = 0;
 
 const STORAGE_KEY = 'salem_chat_history';
 const THEME_KEY = 'salem_theme';
@@ -94,6 +105,8 @@ const DEFAULT_SETTINGS = {
     maxTokens: 256,
     instruction: 'Listen to the audio and answer the question:',
     effortMode: 'normal',    // 'normal' | 'max' — server pins decoding params when 'max'
+    model: '',               // '' = modèle par défaut du serveur
+    compare: false,          // true = tous les modèles répondent, l'un après l'autre
 };
 
 // VAD tunables (silenceMs and speechThreshold are read from settings)
@@ -331,6 +344,13 @@ function syncSettingsForm() {
     setSilenceMs.value = settings.silenceMs;
     setSpeechThreshold.value = settings.speechThreshold;
     setMaxTokens.value = settings.maxTokens;
+    if (setModel) setModel.value = settings.model || '';
+    if (setCompare) {
+        setCompare.checked = !!settings.compare;
+        // Comparer, c'est interroger TOUS les modèles : le choix d'un modèle unique n'a
+        // alors plus de sens, on grise le sélecteur plutôt que de le laisser mentir.
+        if (setModel) setModel.disabled = !!settings.compare;
+    }
     setInstruction.value = settings.instruction;
 }
 
@@ -705,6 +725,7 @@ scrollBottomBtn.addEventListener('click', forceScrollToBottom);
 // =============================================================================
 function renderEmptyState() {
     messagesContainer.innerHTML = '';
+    lastAssistantTurn = null;
     const node = suggestedPromptsTpl.content.cloneNode(true);
     messagesContainer.appendChild(node);
 }
@@ -765,6 +786,7 @@ function loadChat(chatId) {
     currentMessages = [...chat.messages];
 
     messagesContainer.innerHTML = '';
+    lastAssistantTurn = null;
     const tempMessages = currentMessages;
     currentMessages = [];
     // Filter out empty assistant messages from older chats that pre-date the
@@ -774,7 +796,11 @@ function loadChat(chatId) {
         if (msg.role !== 'system') return true;
         return Boolean(msg.text && msg.text.trim());
     });
-    cleaned.forEach((msg) => appendMessage(msg.role, msg.text, {
+    // `silent` empêche appendMessage de re-pousser dans currentMessages (on restaure, on
+    // n'ajoute pas) — mais il faut quand même relier chaque bulle à SA donnée, sinon les
+    // boutons Retry / Regenerate d'une conversation rouverte ne savent pas à quel tour ils
+    // se rapportent.
+    cleaned.forEach((msg) => { appendMessage(msg.role, msg.text, {
         silent: true,
         // Preserve the empty-string "pending" transcript shape; only omit when
         // the field was never set on this message.
@@ -782,7 +808,9 @@ function loadChat(chatId) {
         // Blob URLs survive in-session (no reload). They die on full reload —
         // IndexedDB would be needed to persist the actual bytes.
         audioUrl: msg.audioUrl || null,
-    }));
+        model: msg.model || null,
+        turn: msg.turn || null,
+    })._messageData = msg; });
     currentMessages = cleaned;
 
     history.currentChatId = chatId;
@@ -1082,7 +1110,7 @@ function setupDataChannel(channel) {
         }
 
         if (data.type === 'token') {
-            handleStreamToken(data.text, data.generationId);
+            handleStreamToken(data.text, data.generationId, data.model);
         } else if (data.type === 'done') {
             finalizeStream({ tokenCount: data.tokenCount, elapsedMs: data.elapsedMs });
         } else if (data.type === 'audio_transcript') {
@@ -1177,8 +1205,59 @@ function appendMainContent(textChunk) {
     }
 }
 
-function handleStreamToken(token, incomingGenerationId) {
+// Les réponses d'un MÊME tour vont côte à côte, une colonne par modèle. On ne bascule en
+// grille qu'à l'arrivée de la SECONDE réponse : un tour à un seul modèle garde exactement la
+// mise en page d'avant, et le mode comparaison ne coûte rien tant qu'il n'y a rien à comparer.
+// En streaming les modèles répondent l'un après l'autre (GPU unique) — la première colonne se
+// remplit donc entièrement avant que la seconde n'apparaisse.
+let lastAssistantTurn = null;   // {key, first, grid}
+
+function placeMessage(msgDiv, turnKey) {
+    if (!turnKey) {
+        messagesContainer.appendChild(msgDiv);
+        // Tout message hors comparaison (un tour utilisateur, typiquement) clôt le groupe
+        // courant : sans ça, deux tours voisins portant la même clé — les generationId
+        // repartent de zéro au rechargement de la page — se retrouveraient fusionnés.
+        lastAssistantTurn = null;
+        return msgDiv;
+    }
+    if (lastAssistantTurn && lastAssistantTurn.key === turnKey) {
+        if (!lastAssistantTurn.grid) {
+            const grid = document.createElement('div');
+            grid.className = 'comparison-grid';
+            messagesContainer.insertBefore(grid, lastAssistantTurn.first);
+            grid.appendChild(lastAssistantTurn.first);
+            lastAssistantTurn.grid = grid;
+        }
+        lastAssistantTurn.grid.appendChild(msgDiv);
+        return msgDiv;
+    }
+    messagesContainer.appendChild(msgDiv);
+    lastAssistantTurn = { key: turnKey, first: msgDiv, grid: null };
+    return msgDiv;
+}
+
+// Deux ou trois caractères tirés du nom : "luciole-8b" -> "8B", faute de quoi les initiales.
+function modelBadge(name) {
+    const m = String(name).match(/(\d+\s*[bB])\b/);
+    if (m) return m[1].toUpperCase().replace(/\s+/g, '');
+    return String(name).slice(0, 3).toUpperCase();
+}
+
+function handleStreamToken(token, incomingGenerationId, model) {
     if (currentThinkingMsg) { currentThinkingMsg.remove(); currentThinkingMsg = null; }
+
+    // Comparaison : les modèles répondent l'un après l'autre, dans le MÊME generationId.
+    // Un changement de `model` clôt donc la bulle courante et en ouvre une autre — sans
+    // ça, les deux réponses se concaténeraient dans la même.
+    if (
+        streamState.isStreaming &&
+        model !== undefined &&
+        streamState.activeModel !== null &&
+        streamState.activeModel !== model
+    ) {
+        finalizeStream();
+    }
 
     // If we're already rendering a stream but this token belongs to a different
     // generation, finalize the old one first so this message gets its own bubble.
@@ -1198,6 +1277,7 @@ function handleStreamToken(token, incomingGenerationId) {
         streamState.stopRequested = false;
         streamState.mainContentText = '';
         streamState.activeGenerationId = incomingGenerationId !== undefined ? incomingGenerationId : streamState.currentGenerationId;
+        streamState.activeModel = model !== undefined ? model : null;
         streamStartTime = performance.now();
         streamTokenCount = 0;
         setStatus('connected', 'Generating…');
@@ -1209,7 +1289,15 @@ function handleStreamToken(token, incomingGenerationId) {
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';
         avatarDiv.setAttribute('aria-hidden', 'true');
-        avatarDiv.textContent = 'AI';
+        // Avec plusieurs modèles, l'avatar porte le nom du modèle : c'est le seul repère
+        // qui distingue les deux réponses d'une comparaison.
+        if (model) {
+            avatarDiv.textContent = modelBadge(model);
+            avatarDiv.title = model;
+            msgDiv.dataset.model = model;
+        } else {
+            avatarDiv.textContent = 'AI';
+        }
 
         const wrapper = document.createElement('div');
         wrapper.className = 'message-content-wrapper';
@@ -1225,7 +1313,10 @@ function handleStreamToken(token, incomingGenerationId) {
         msgDiv.appendChild(avatarDiv);
         msgDiv.appendChild(wrapper);
 
-        messagesContainer.appendChild(msgDiv);
+        // Le generationId est partagé par les deux modèles d'une comparaison, et unique d'un
+        // tour à l'autre : il fait donc une clé de groupe directe, sans avoir à consulter
+        // settings.compare (qui pourrait avoir changé depuis l'envoi).
+        placeMessage(msgDiv, model ? streamState.activeGenerationId : null);
         streamState.messageDiv = msgDiv;
         streamState.buffer = '';
         streamState.inThinkingBlock = false;
@@ -1313,6 +1404,12 @@ function finalizeStream(meta = {}) {
     // stream is cancelled by a newer request.
     if (currentMessages.length > 0 && finalText.trim()) {
         const data = { role: 'assistant', text: finalText };
+        // Qui a répondu fait partie du message : sans ça, rouvrir la conversation rend deux
+        // réponses de comparaison indistinguables.
+        if (streamState.activeModel) data.model = streamState.activeModel;
+        if (streamState.activeModel && streamState.activeGenerationId !== null) {
+            data.turn = streamState.activeGenerationId;
+        }
         currentMessages.push(data);
         if (streamState.messageDiv) streamState.messageDiv._messageData = data;
         saveCurrentChat();
@@ -1332,6 +1429,7 @@ function finalizeStream(meta = {}) {
     streamState.buffer = '';
     streamState.inThinkingBlock = false;
     streamState.activeGenerationId = null;
+    streamState.activeModel = null;
 
     if (stopBtn) stopBtn.classList.add('hidden');
 
@@ -1406,6 +1504,94 @@ function buildAssistantActions(text, msgDiv) {
     actions.appendChild(copyBtn);
     actions.appendChild(regenBtn);
     return actions;
+}
+
+// Le bouton « Regenerate » de la réponse ne sert à rien quand il n'y A PAS de réponse : serveur
+// muet, datachannel qui se ferme, génération avortée. Le tour utilisateur porte donc son propre
+// bouton, qui renvoie la MÊME requête (texte et/ou audio) sans avoir à la retaper — ni à
+// re-sélectionner le fichier, qu'on garde sous le coude sur la bulle.
+function buildUserActions(msgDiv) {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'message-action-btn';
+    retryBtn.type = 'button';
+    retryBtn.title = 'Renvoyer cette requête';
+    retryBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.4L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15.5 6.4L3 16"></path><path d="M3 21v-5h5"></path></svg><span>Retry</span>';
+    retryBtn.addEventListener('click', () => retryUserMessage(msgDiv));
+
+    actions.appendChild(retryBtn);
+    return actions;
+}
+
+async function retryUserMessage(userMsgDiv) {
+    if (streamState.isStreaming) {
+        showToast('Génération en cours');
+        return;
+    }
+    const userData = userMsgDiv && userMsgDiv._messageData;
+    const userIdx = userData ? currentMessages.indexOf(userData) : -1;
+    if (userIdx < 0) {
+        showToast('Nothing to retry');
+        return;
+    }
+
+    const prompt = (userData.text || '').trim();
+    // L'audio d'origine : le File pour un fichier déposé, sinon la blob URL de l'enregistrement
+    // micro. Les blob URLs ne survivent pas à un rechargement complet de la page — on le dit
+    // plutôt que de renvoyer une requête muette.
+    const audioUrl = userMsgDiv._audioUrl || userData.audioUrl || null;
+    let blob = userMsgDiv._file || null;
+    if (!blob && audioUrl) {
+        try {
+            blob = await (await fetch(audioUrl)).blob();
+        } catch (e) {
+            showToast("L'audio de ce message n'est plus en mémoire (page rechargée)");
+            return;
+        }
+    }
+    if (!blob && !prompt) {
+        showToast('Nothing to retry');
+        return;
+    }
+
+    // Nombre de paires user+assistant que le SERVEUR doit dérouler pour que son historique
+    // colle à notre troncature. Même calcul que regenerateMessage.
+    let dropPairs = 0;
+    for (let i = userIdx; i < currentMessages.length; i++) {
+        if (currentMessages[i].role === 'user') dropPairs++;
+    }
+
+    // On tronque à AVANT le tour visé ; il sera réémis juste après. La blob URL de ce
+    // message-là est exclue de la révocation : on vient d'en tirer le blob, mais le <audio>
+    // de la nouvelle bulle recevra une URL neuve, et révoquer l'ancienne casserait un
+    // éventuel lecteur encore ouvert le temps du remplacement.
+    const removed = currentMessages.splice(userIdx);
+    revokeAudioUrls(removed.filter((m) => m !== userData));
+    saveCurrentChat({ flush: true });
+
+    const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+    let foundTarget = false;
+    for (const m of allMessages) {
+        if (foundTarget) { m.remove(); continue; }
+        if (m._messageData === userData) {
+            m.remove();
+            foundTarget = true;
+        }
+    }
+
+    if (blob) {
+        const url = URL.createObjectURL(blob);
+        const msg = appendMessage('user', prompt, { audioUrl: url, transcript: '' });
+        msg._file = blob;
+        pendingTranscriptMsg = msg;
+        requestUploadTranscript(blob, msg);
+        uploadFile(blob, prompt, { regenerate: true, dropPairs });
+    } else {
+        appendMessage('user', prompt);
+        sendTextOnly(prompt, { regenerate: true, dropPairs });
+    }
 }
 
 function userPromptOf(msg) {
@@ -1526,6 +1712,58 @@ async function negotiate() {
 // =============================================================================
 // Composer
 // =============================================================================
+// Le choix de modèle voyage avec CHAQUE requête plutôt que dans un état de session :
+// le serveur reste sans mémoire là-dessus, et changer de modèle en cours de conversation
+// ne demande aucune resynchronisation.
+async function loadAvailableModels() {
+    try {
+        const res = await fetch('/healthz');
+        const data = await res.json();
+        availableModels = Array.isArray(data.models) ? data.models : [];
+    } catch (e) {
+        availableModels = [];
+    }
+    if (!setModel || !modelRow) return;
+    setModel.innerHTML = '';
+    availableModels.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        setModel.appendChild(opt);
+    });
+    // Un seul modèle : rien à choisir ni à comparer, la ligne reste masquée.
+    if (availableModels.length > 1) modelRow.classList.remove('hidden');
+    if (settings.model && availableModels.includes(settings.model)) {
+        setModel.value = settings.model;
+    } else {
+        settings.model = availableModels[0] || '';
+        setModel.value = settings.model;
+    }
+    if (setCompare) setModel.disabled = !!settings.compare;
+}
+
+if (setModel) {
+    setModel.addEventListener('change', () => {
+        settings.model = setModel.value;
+        saveSettings(settings);
+    });
+}
+if (setCompare) {
+    setCompare.addEventListener('change', () => {
+        settings.compare = setCompare.checked;
+        if (setModel) setModel.disabled = settings.compare;
+        saveSettings(settings);
+    });
+}
+loadAvailableModels();
+
+function modelPayload() {
+    const p = {};
+    if (settings.compare) p.compare = true;
+    else if (settings.model) p.model = settings.model;
+    return p;
+}
+
 function autoResizeTextarea() {
     textInput.style.height = 'auto';
     textInput.style.height = Math.min(textInput.scrollHeight, 200) + 'px';
@@ -1757,6 +1995,7 @@ async function stopRecording() {
             maxTokens: settings.maxTokens,
             instruction: settings.instruction,
             effortMode: settings.effortMode,
+            ...modelPayload(),
         }));
 
         const userMsg = appendMessage('user', prompt || '', { transcript: '' });
@@ -1800,6 +2039,9 @@ function sendMessage() {
             text || '',
             { audioUrl: blobUrl, transcript: '' },
         );
+        // Le fichier lui-même, gardé sur la bulle : c'est ce qui permet à Retry de renvoyer
+        // la requête sans redemander de sélectionner le fichier.
+        userMsg._file = currentFile;
         pendingTranscriptMsg = userMsg;
         requestUploadTranscript(currentFile, userMsg);
         uploadFile(currentFile, text);
@@ -1857,6 +2099,7 @@ async function sendTextOnly(text, { regenerate = false, dropPairs = 1 } = {}) {
             dropPairs,
             maxTokens: settings.maxTokens,
             effortMode: settings.effortMode,
+            ...modelPayload(),
         }));
         showThinkingMessage();
     }
@@ -1905,14 +2148,24 @@ async function requestUploadTranscript(file, userMsg) {
     }
 }
 
-async function uploadFile(file, prompt) {
+async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1 } = {}) {
     const formData = new FormData();
     formData.append('audio', file);
     formData.append('sessionId', sessionId);
+    // Renvoi d'un tour déjà joué : le serveur doit dérouler son historique d'autant de paires
+    // que le client vient d'en jeter, sinon le modèle reverra l'ancien tour en double. Un
+    // serveur antérieur ignore simplement ces champs — le cas le plus fréquent (retry parce
+    // que rien n'est revenu) n'a de toute façon rien à dérouler.
+    if (regenerate) {
+        formData.append('regenerate', 'true');
+        formData.append('dropPairs', String(dropPairs));
+    }
     if (prompt) formData.append('text', prompt);
     formData.append('maxTokens', String(settings.maxTokens));
     formData.append('instruction', settings.instruction);
     formData.append('effortMode', settings.effortMode);
+    if (settings.compare) formData.append('compare', 'true');
+    else if (settings.model) formData.append('model', settings.model);
 
     const thinkingMsg = appendMessage('system', '');
     const thinkingIndicator = document.createElement('div');
@@ -1926,7 +2179,30 @@ async function uploadFile(file, prompt) {
 
         if (response.ok) {
             const data = await response.json();
-            appendMessage('system', data.text);
+            // /upload n'est pas streamé : il rend `responses` ({modèle: texte}) en plus du
+            // `text` historique (= la réponse du premier modèle seulement). Afficher `text`
+            // seul faisait disparaître la réponse du second modèle en mode comparaison — la
+            // génération avait bien lieu côté serveur, le client la jetait.
+            const responses = data.responses && typeof data.responses === 'object'
+                ? Object.entries(data.responses)
+                : [];
+            if (responses.length) {
+                // Un modèle : pas de pastille si le serveur n'en sert qu'un, l'avatar 'AI'
+                // générique suffit et ne surcharge pas l'UI mono-modèle.
+                const label = availableModels.length > 1;
+                // Une clé de tour par upload : elle regroupe les réponses en colonnes. Pas de
+                // Date.now() ici — un simple compteur suffit et reste lisible dans le stockage.
+                uploadTurnSeq += 1;
+                const turn = `${sessionId}:up${uploadTurnSeq}`;
+                responses.forEach(([name, text]) => {
+                    appendMessage('system', text, {
+                        model: label ? name : null,
+                        turn: responses.length > 1 ? turn : null,
+                    });
+                });
+            } else {
+                appendMessage('system', data.text);
+            }
         } else {
             let errorText = 'Error uploading file.';
             try {
@@ -1969,7 +2245,7 @@ function ensureEmptyStateRemoved() {
 
 // `transcript`: pass `null` to omit the dropdown entirely, `''` to render the
 // "Transcribing…" placeholder, or any non-empty string to render the text.
-function appendMessage(role, text, { silent = false, audioUrl = null, transcript = null } = {}) {
+function appendMessage(role, text, { silent = false, audioUrl = null, transcript = null, model = null, turn = null } = {}) {
     ensureEmptyStateRemoved();
 
     // Storage uses 'assistant' (set by finalizeStream) but the existing CSS
@@ -1983,7 +2259,16 @@ function appendMessage(role, text, { silent = false, audioUrl = null, transcript
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'avatar';
     avatarDiv.setAttribute('aria-hidden', 'true');
-    avatarDiv.textContent = isAssistant ? 'AI' : 'U';
+    // Même repère que dans le flux temps réel (handleStreamToken) : avec plusieurs modèles,
+    // l'avatar porte le nom de CELUI qui a répondu. Sans ça, une réponse d'upload est
+    // anonyme — et deux réponses de comparaison sont indiscernables.
+    if (isAssistant && model) {
+        avatarDiv.textContent = modelBadge(model);
+        avatarDiv.title = model;
+        msgDiv.dataset.model = model;
+    } else {
+        avatarDiv.textContent = isAssistant ? 'AI' : 'U';
+    }
 
     const wrapper = document.createElement('div');
     wrapper.className = 'message-content-wrapper';
@@ -2070,17 +2355,22 @@ function appendMessage(role, text, { silent = false, audioUrl = null, transcript
         }
 
         wrapper.appendChild(contentDiv);
+        wrapper.appendChild(buildUserActions(msgDiv));
     }
 
     msgDiv.appendChild(avatarDiv);
     msgDiv.appendChild(wrapper);
-    messagesContainer.appendChild(msgDiv);
+    placeMessage(msgDiv, isAssistant ? turn : null);
     maybeScrollToBottom();
 
     if (!silent && (currentMessages.length > 0 || role === 'user')) {
         const data = { role, text };
         if (transcript !== null) data.transcript = transcript;
         if (audioUrl) data.audioUrl = audioUrl;
+        if (model) data.model = model;
+        // Persisté pour que rouvrir la conversation retrouve les colonnes : sans la clé de
+        // tour, deux réponses comparées se réempileraient l'une sous l'autre.
+        if (turn) data.turn = turn;
         currentMessages.push(data);
         msgDiv._messageData = data;
         saveCurrentChat();

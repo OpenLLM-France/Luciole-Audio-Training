@@ -23,6 +23,12 @@ from model_handler import SALMModel
 # Configuration
 ROOT = Path(__file__).parent
 MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B")
+# Plusieurs modèles chargés en même temps, à comparer depuis le chat : "nom=chemin,nom=chemin".
+# Vide (défaut) = un seul modèle, MODEL_PATH, nommé d'après son dossier — comportement
+# historique. Les modèles cohabitent sans problème en mémoire (un 1B ~2,5 Gio, un 8B ~17 Gio
+# sur les 119 Go d'une DGX Spark) ; c'est le GPU qui les sérialise, d'où des générations
+# successives et non parallèles en mode comparaison.
+MODEL_PATHS = os.getenv("MODEL_PATHS", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
 MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
@@ -36,10 +42,40 @@ if _sys_prompt_file:
     SYSTEM_PROMPT = Path(_sys_prompt_file).read_text()
 
 
+def _parse_model_specs():
+    """Rend [(nom, chemin)] à charger, depuis MODEL_PATHS ou à défaut MODEL_PATH.
+
+    Les noms viennent du client (sélecteur) et reviennent dans chaque message de token pour
+    router l'affichage : ils doivent être stables et lisibles. Sans nom explicite on prend le
+    basename du dossier, qui est déjà ce qu'affiche _model_display_name.
+    """
+    specs = []
+    for chunk in MODEL_PATHS.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        name, sep, path = chunk.partition("=")
+        if not sep:
+            name, path = os.path.basename(chunk.rstrip("/")), chunk
+        specs.append((name.strip(), path.strip()))
+    if not specs and MODEL_PATH:
+        specs.append((os.path.basename(MODEL_PATH.rstrip("/")) or "model", MODEL_PATH))
+    return specs
+
+
 def new_session():
-    """Fresh session state, seeded with the system turn only if one is configured."""
-    history = [{"role": "system", "content": SYSTEM_PROMPT}] if SYSTEM_PROMPT.strip() else []
-    return {"history": history}
+    """Fresh session state.
+
+    L'historique est PAR MODÈLE : en mode comparaison chaque modèle doit voir ses propres
+    réponses passées, pas celles de l'autre — sinon on ne compare plus deux modèles mais un
+    modèle et un modèle conditionné par son voisin. Les tours utilisateur sont donc dupliqués
+    dans chaque historique.
+    """
+    return {"history": {name: _fresh_history() for name, _ in _parse_model_specs()}}
+
+
+def _fresh_history():
+    return [{"role": "system", "content": SYSTEM_PROMPT}] if SYSTEM_PROMPT.strip() else []
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("WebRTC-App")
@@ -70,13 +106,56 @@ async def stream_generator_in_thread(generator_func, *args, **kwargs):
             break
         yield item
 
-# Initialize Model
-# We initialize it globally for now. In production, might want lazy loading or a separate worker.
-try:
-    salm_model = SALMModel(MODEL_PATH, default_instruction=DEFAULT_INSTRUCTION)
-except Exception as e:
-    logger.error(f"Could not load model: {e}")
-    salm_model = None
+# Chargement des modèles, séquentiel et au démarrage : un 8B met ~4,5 min à charger, on ne
+# veut pas payer ça sur la première requête. Un modèle qui échoue ne condamne pas les autres
+# — la démo reste utilisable avec ceux qui ont chargé.
+MODELS = {}
+for _name, _path in _parse_model_specs():
+    try:
+        MODELS[_name] = SALMModel(_path, default_instruction=DEFAULT_INSTRUCTION)
+        logger.info(f"Modèle '{_name}' chargé depuis {_path}")
+    except Exception as e:
+        logger.error(f"Could not load model '{_name}' from {_path}: {e}")
+
+# Modèle par défaut : le premier déclaré. C'est celui qui répond quand le client ne précise
+# rien — donc aussi tout client antérieur au sélecteur.
+DEFAULT_MODEL = next(iter(MODELS), None)
+# Compat : le code (et les intégrations) qui parlaient d'un modèle unique.
+salm_model = MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
+
+
+def get_model(name=None):
+    """Le SALMModel demandé, ou celui par défaut. None si rien n'a chargé."""
+    if name and name in MODELS:
+        return MODELS[name]
+    return MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
+
+
+def selected_models(data):
+    """Rend [(nom, SALMModel)] pour une requête : un seul modèle, ou tous si comparaison.
+
+    `compare: true` l'emporte sur `model`. Les générations se feront en séquence dans cet
+    ordre (le GPU est unique), et chaque message émis porte son nom de modèle pour que le
+    client sache dans quelle colonne l'écrire.
+    """
+    if data.get("compare") and len(MODELS) > 1:
+        return list(MODELS.items())
+    name = data.get("model")
+    model = get_model(name)
+    if model is None:
+        return []
+    return [(name if name in MODELS else DEFAULT_MODEL, model)]
+
+
+def session_history(session_id: str, model_name: str):
+    """Historique d'UN modèle dans une session, créé à la volée.
+
+    À la volée parce que les sessions relues de sessions.json peuvent dater d'une
+    configuration où ce modèle n'existait pas — ou de l'époque où l'historique était une
+    simple liste (voir _load_sessions_from_disk).
+    """
+    hist = SESSIONS[session_id].setdefault("history", {})
+    return hist.setdefault(model_name, _fresh_history())
 
 class AudioTrackHandler:
     def __init__(self, track):
@@ -152,6 +231,12 @@ def _load_sessions_from_disk():
             data = json.load(f)
         if not isinstance(data, dict):
             return {}
+        # Migration : `history` était une liste (un seul modèle), c'est maintenant un dict
+        # {nom_de_modèle: liste}. Une session écrite par l'ancienne version est rattachée au
+        # modèle par défaut plutôt que jetée.
+        for sess in data.values():
+            if isinstance(sess, dict) and isinstance(sess.get("history"), list):
+                sess["history"] = {DEFAULT_MODEL: sess["history"]} if DEFAULT_MODEL else {}
         return data
     except Exception as e:
         logger.warning(f"Could not load sessions.json: {e}")
@@ -162,11 +247,12 @@ def _serializable_sessions():
     """Strip transient fields (audio paths point to /tmp files we delete)."""
     out = {}
     for sid, sess in SESSIONS.items():
-        history = []
-        for turn in sess.get("history", []):
-            t = {k: v for k, v in turn.items() if k != "audio"}
-            history.append(t)
-        out[sid] = {"history": history}
+        histories = {}
+        for model_name, turns in (sess.get("history") or {}).items():
+            histories[model_name] = [
+                {k: v for k, v in turn.items() if k != "audio"} for turn in turns
+            ]
+        out[sid] = {"history": histories}
     return out
 
 
@@ -420,7 +506,8 @@ async def _handle_audio_stop(channel, state, data):
 
     _mark_generation(session_id, generation_id)
 
-    if not salm_model:
+    targets = selected_models(data)
+    if not targets:
         _safe_send(channel, {"type": "response", "text": "Model not loaded."})
         if raw_audio_path and os.path.exists(raw_audio_path):
             os.remove(raw_audio_path)
@@ -445,7 +532,9 @@ async def _handle_audio_stop(channel, state, data):
                 uploads_dir = ROOT / "uploads"
                 uploads_dir.mkdir(exist_ok=True)
                 clean_audio_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
-                salm_model.process_audio(raw_audio_path, clean_audio_path)
+                # Le rééchantillonnage ne dépend pas du modèle : fait une fois, le fichier
+                # nettoyé sert ensuite aux deux générations en mode comparaison.
+                targets[0][1].process_audio(raw_audio_path, clean_audio_path)
 
                 try:
                     transcript = await _transcribe_path(clean_audio_path, already_in_slot=True)
@@ -458,43 +547,47 @@ async def _handle_audio_stop(channel, state, data):
                 except Exception as te:
                     logger.warning(f"Transcript pass failed: {te}")
 
-                t0 = time.perf_counter()
-                token_count = 0
-                full_response = ""
-                current_history = SESSIONS[session_id]["history"]
-                stop_check = lambda: _is_stale(session_id, generation_id)
-                async for token in stream_generator_in_thread(
-                    salm_model.generate_stream,
-                    audio_path=clean_audio_path,
-                    text_input=prompt or custom_instruction,
-                    history=current_history,
-                    stop_callback=stop_check,
-                    **_effort_overrides(effort_mode, max_tokens),
-                ):
-                    if _is_stale(session_id, generation_id):
-                        logger.info(f"Stale during stream; aborting audio gen {generation_id}")
-                        return
-                    if not _safe_send(channel, {"type": "token", "text": token, "generationId": generation_id}):
-                        logger.warning("DataChannel closed during streaming, stopping.")
-                        break
-                    full_response += token
-                    token_count += 1
+                for model_name, model in targets:
+                    t0 = time.perf_counter()
+                    token_count = 0
+                    full_response = ""
+                    current_history = session_history(session_id, model_name)
+                    stop_check = lambda: _is_stale(session_id, generation_id)
+                    async for token in stream_generator_in_thread(
+                        model.generate_stream,
+                        audio_path=clean_audio_path,
+                        text_input=prompt or custom_instruction,
+                        history=current_history,
+                        stop_callback=stop_check,
+                        **_effort_overrides(effort_mode, max_tokens),
+                    ):
+                        if _is_stale(session_id, generation_id):
+                            logger.info(f"Stale during stream; aborting audio gen {generation_id}")
+                            return
+                        if not _safe_send(channel, {"type": "token", "text": token,
+                                                    "generationId": generation_id,
+                                                    "model": model_name}):
+                            logger.warning("DataChannel closed during streaming, stopping.")
+                            break
+                        full_response += token
+                        token_count += 1
 
-                elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                _safe_send(channel, {
-                    "type": "done", "text": "", "generationId": generation_id,
-                    "tokenCount": token_count, "elapsedMs": elapsed_ms,
-                })
+                    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                    _safe_send(channel, {
+                        "type": "done", "text": "", "generationId": generation_id,
+                        "tokenCount": token_count, "elapsedMs": elapsed_ms,
+                        "model": model_name,
+                    })
 
-                clean_response = _strip_chatml_assistant(full_response)
-                if not clean_response.strip():
-                    logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
-                elif _looks_runaway(clean_response):
-                    logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
-                else:
-                    SESSIONS[session_id]["history"].append({"role": "user", "content": prompt or "Audio Message"})
-                    SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                    schedule_save()
+                    clean_response = _strip_chatml_assistant(full_response)
+                    if not clean_response.strip():
+                        logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
+                    elif _looks_runaway(clean_response):
+                        logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
+                    else:
+                        current_history.append({"role": "user", "content": prompt or "Audio Message"})
+                        current_history.append({"role": "assistant", "content": clean_response})
+                        schedule_save()
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
@@ -530,22 +623,25 @@ async def _handle_text_only(channel, state, data):
 
     _mark_generation(session_id, generation_id)
 
+    targets = selected_models(data)
+    if not targets:
+        _safe_send(channel, {"type": "response", "text": "Model not loaded."})
+        return
+
     if regenerate:
         # `dropPairs` tells us how many user+assistant pairs to roll back
         # from the end of history before re-running. Defaults to 1 so
         # legacy clients regenerate just the last turn.
+        # Chaque modèle a son propre historique : on déroule ceux qui sont concernés.
         drop_pairs = max(1, int(data.get("dropPairs", 1)))
-        hist = SESSIONS[session_id]["history"]
-        for _ in range(drop_pairs):
-            if hist and hist[-1].get("role") == "assistant":
-                hist.pop()
-            if hist and hist[-1].get("role") == "user":
-                hist.pop()
+        for model_name, _ in targets:
+            hist = session_history(session_id, model_name)
+            for _ in range(drop_pairs):
+                if hist and hist[-1].get("role") == "assistant":
+                    hist.pop()
+                if hist and hist[-1].get("role") == "user":
+                    hist.pop()
         schedule_save()
-
-    if not salm_model:
-        _safe_send(channel, {"type": "response", "text": "Model not loaded."})
-        return
 
     if not check_rate_limit(session_id):
         _safe_send(channel, {"type": "rejected", "reason": "rate_limit", "generationId": generation_id})
@@ -557,46 +653,53 @@ async def _handle_text_only(channel, state, data):
                 logger.info(f"Skipping stale text gen {generation_id} for session {session_id}")
                 return
 
-            try:
-                t0 = time.perf_counter()
-                token_count = 0
-                full_response = ""
-                current_history = SESSIONS[session_id]["history"]
-                stop_check = lambda: _is_stale(session_id, generation_id)
-                async for token in stream_generator_in_thread(
-                    salm_model.generate_stream,
-                    text_input=prompt,
-                    history=current_history,
-                    stop_callback=stop_check,
-                    **_effort_overrides(effort_mode, max_tokens),
-                ):
-                    if _is_stale(session_id, generation_id):
-                        logger.info(f"Stale during stream; aborting text gen {generation_id}")
-                        return
-                    if not _safe_send(channel, {"type": "token", "text": token, "generationId": generation_id}):
-                        logger.warning("DataChannel closed during streaming, stopping.")
-                        break
-                    full_response += token
-                    token_count += 1
+            # En comparaison, les modèles passent l'un après l'autre : le GPU est unique,
+            # les paralléliser ne ferait que les ralentir mutuellement.
+            for model_name, model in targets:
+                try:
+                    t0 = time.perf_counter()
+                    token_count = 0
+                    full_response = ""
+                    current_history = session_history(session_id, model_name)
+                    stop_check = lambda: _is_stale(session_id, generation_id)
+                    async for token in stream_generator_in_thread(
+                        model.generate_stream,
+                        text_input=prompt,
+                        history=current_history,
+                        stop_callback=stop_check,
+                        **_effort_overrides(effort_mode, max_tokens),
+                    ):
+                        if _is_stale(session_id, generation_id):
+                            logger.info(f"Stale during stream; aborting text gen {generation_id}")
+                            return
+                        if not _safe_send(channel, {"type": "token", "text": token,
+                                                    "generationId": generation_id,
+                                                    "model": model_name}):
+                            logger.warning("DataChannel closed during streaming, stopping.")
+                            break
+                        full_response += token
+                        token_count += 1
 
-                elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                _safe_send(channel, {
-                    "type": "done", "text": "", "generationId": generation_id,
-                    "tokenCount": token_count, "elapsedMs": elapsed_ms,
-                })
+                    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                    _safe_send(channel, {
+                        "type": "done", "text": "", "generationId": generation_id,
+                        "tokenCount": token_count, "elapsedMs": elapsed_ms,
+                        "model": model_name,
+                    })
 
-                clean_response = _strip_chatml_assistant(full_response)
-                if not clean_response.strip():
-                    logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
-                elif _looks_runaway(clean_response):
-                    logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
-                else:
-                    SESSIONS[session_id]["history"].append({"role": "user", "content": prompt})
-                    SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                    schedule_save()
-            except Exception as e:
-                logger.error(f"Streaming error: {e}")
-                _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}"})
+                    clean_response = _strip_chatml_assistant(full_response)
+                    if not clean_response.strip():
+                        logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
+                    elif _looks_runaway(clean_response):
+                        logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
+                    else:
+                        current_history.append({"role": "user", "content": prompt})
+                        current_history.append({"role": "assistant", "content": clean_response})
+                        schedule_save()
+                except Exception as e:
+                    logger.error(f"Streaming error ({model_name}): {e}")
+                    _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}",
+                                         "model": model_name})
     except QueueFullError:
         _safe_send(channel, {"type": "rejected", "reason": "queue_full", "generationId": generation_id})
 
@@ -695,6 +798,10 @@ async def upload_audio(request):
     max_tokens = MAX_NEW_TOKENS
     custom_instruction = None
     effort_mode = "normal"
+    model_choice = None
+    compare = False
+    regenerate = False
+    drop_pairs = 1
 
     while True:
         field = await reader.next()
@@ -723,6 +830,17 @@ async def upload_audio(request):
             custom_instruction = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'effortMode':
             effort_mode = (await field.read(decode=True)).decode('utf-8')
+        elif field.name == 'model':
+            model_choice = (await field.read(decode=True)).decode('utf-8')
+        elif field.name == 'compare':
+            compare = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
+        elif field.name == 'regenerate':
+            regenerate = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
+        elif field.name == 'dropPairs':
+            try:
+                drop_pairs = int((await field.read(decode=True)).decode('utf-8'))
+            except (ValueError, TypeError):
+                pass
 
     if not file_written:
         return web.Response(status=400, text="No audio file received")
@@ -731,12 +849,30 @@ async def upload_audio(request):
 
     if session_id not in SESSIONS:
         SESSIONS[session_id] = new_session()
-    current_history = SESSIONS[session_id]["history"]
 
     if not check_rate_limit(session_id):
         return web.Response(status=429, text="Rate limit exceeded")
 
-    if salm_model:
+    targets = selected_models({"model": model_choice, "compare": compare})
+
+    # Renvoi d'un tour audio déjà joué (bouton Retry du client) : on déroule l'historique
+    # d'autant de paires user+assistant que le client vient d'en jeter, sinon le modèle
+    # reverrait l'ancien tour EN PLUS du nouveau. Même logique que _handle_text_only, appliquée
+    # à chaque modèle visé puisque les historiques sont séparés.
+    if regenerate:
+        for model_name, _ in targets:
+            hist = session_history(session_id, model_name)
+            for _ in range(max(1, drop_pairs)):
+                if hist and hist[-1].get("role") == "assistant":
+                    hist.pop()
+                if hist and hist[-1].get("role") == "user":
+                    hist.pop()
+        schedule_save()
+
+    # Réponses par modèle. L'upload n'est pas streamé : on rend les deux d'un coup, ce qui
+    # rend la comparaison plus simple à afficher que deux flux entrelacés.
+    responses = {}
+    if targets:
         clean_audio_path = None
         try:
             async with acquire_model_slot(session_id, 0, channel=None):
@@ -745,34 +881,38 @@ async def upload_audio(request):
 
                     processed_filename = f"processed_{uuid.uuid4().hex}.wav"
                     clean_audio_path = str(uploads_dir / processed_filename)
-                    salm_model.process_audio(filename, clean_audio_path)
+                    targets[0][1].process_audio(filename, clean_audio_path)
 
-                    full_response = ""
-                    async for token in stream_generator_in_thread(salm_model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, **_effort_overrides(effort_mode, max_tokens)):
-                        full_response += token
+                    for model_name, model in targets:
+                        current_history = session_history(session_id, model_name)
+                        full_response = ""
+                        async for token in stream_generator_in_thread(model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, **_effort_overrides(effort_mode, max_tokens)):
+                            full_response += token
 
-                    clean_response = _strip_chatml_assistant(full_response)
-                    logger.info(f"Generation complete for session {session_id}")
+                        clean_response = _strip_chatml_assistant(full_response)
+                        logger.info(f"Generation complete for session {session_id} ({model_name})")
 
-                    instruction = text_prompt or custom_instruction or salm_model.default_instruction
-                    prompt_content = f"{instruction}\n{salm_model.model.audio_locator_tag}\n"
+                        instruction = text_prompt or custom_instruction or model.default_instruction
+                        prompt_content = f"{instruction}\n{model.model.audio_locator_tag}\n"
 
-                    user_turn = {
-                        "role": "user",
-                        "content": prompt_content,
-                        "audio": [clean_audio_path]
-                    }
+                        user_turn = {
+                            "role": "user",
+                            "content": prompt_content,
+                            "audio": [clean_audio_path]
+                        }
 
-                    if not clean_response.strip():
-                        logger.warning(f"Empty response for upload session {session_id}; skipping history append.")
-                    elif _looks_runaway(clean_response):
-                        logger.warning(f"Detected runaway response for upload session {session_id}; skipping history append.")
-                    else:
-                        SESSIONS[session_id]["history"].append(user_turn)
-                        SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                        schedule_save()
+                        if not clean_response.strip():
+                            logger.warning(f"Empty response for upload session {session_id}; skipping history append.")
+                        elif _looks_runaway(clean_response):
+                            logger.warning(f"Detected runaway response for upload session {session_id}; skipping history append.")
+                        else:
+                            current_history.append(user_turn)
+                            current_history.append({"role": "assistant", "content": clean_response})
+                            schedule_save()
 
-                    response = clean_response
+                        responses[model_name] = clean_response
+
+                    response = responses.get(targets[0][0], "")
 
                 except Exception as e:
                     logger.error(f"Error during generation: {e}")
@@ -792,7 +932,9 @@ async def upload_audio(request):
     if os.path.exists(filename):
         os.remove(filename)
 
-    return web.json_response({"text": response})
+    # `text` reste la réponse du premier modèle : les clients d'avant le sélecteur
+    # continuent de marcher sans rien savoir de `responses`.
+    return web.json_response({"text": response, "responses": responses})
 
 TRANSCRIBE_INSTRUCTION = (
     "Transcribe the audio verbatim. Output only the transcription, "
@@ -805,13 +947,18 @@ async def _transcribe_path(clean_audio_path: str, *, session_id: str = "transcri
 
     Touches the model. If `already_in_slot=True` the caller is already inside
     `acquire_model_slot()`; otherwise this function acquires its own slot.
+
+    Toujours le modèle par défaut, même en comparaison : c'est la transcription de CE QUE
+    L'UTILISATEUR A DIT, affichée une fois au-dessus des réponses. La faire varier selon le
+    modèle comparé n'aurait pas de sens, et la faire deux fois doublerait l'attente.
     """
-    if not salm_model:
+    model = get_model()
+    if model is None:
         return ""
 
     def _run():
         try:
-            return salm_model.generate(
+            return model.generate(
                 audio_path=clean_audio_path,
                 text_input=TRANSCRIBE_INSTRUCTION,
                 history=None,
@@ -830,7 +977,7 @@ async def _transcribe_path(clean_audio_path: str, *, session_id: str = "transcri
 
 async def transcribe_audio(request):
     """Standalone transcription endpoint for client-uploaded audio files."""
-    if not salm_model:
+    if get_model() is None:
         return web.json_response({"text": "", "error": "Model not loaded."}, status=503)
 
     reader = await request.multipart()
@@ -858,7 +1005,7 @@ async def transcribe_audio(request):
         if not file_written:
             return web.json_response({"text": "", "error": "No audio provided"}, status=400)
 
-        salm_model.process_audio(raw_path, clean_path)
+        get_model().process_audio(raw_path, clean_path)
         transcript = await _transcribe_path(clean_path)
         return web.json_response({"text": transcript.strip()})
     except Exception as e:
@@ -875,7 +1022,13 @@ async def transcribe_audio(request):
 
 def _model_display_name() -> str:
     """Best-effort human label for the loaded model. Prefers the MODEL_PATH
-    basename (e.g. 'Canary-Qwen3.5B-Thinking'), falls back to BASE_MODEL."""
+    basename (e.g. 'Canary-Qwen3.5B-Thinking'), falls back to BASE_MODEL.
+
+    Avec plusieurs modèles, les noms du registre l'emportent : le basename de MODEL_PATH
+    vaudrait "model" (le point de montage figé du Dockerfile) pour tout le monde.
+    """
+    if MODELS:
+        return " + ".join(MODELS)
     path = (os.getenv("MODEL_PATH") or "").rstrip("/")
     if path:
         name = os.path.basename(path)
@@ -921,8 +1074,10 @@ async def model_config(request):
 async def metrics(request):
     """Lightweight metrics for monitoring queue health + session count."""
     return web.json_response({
-        "model_loaded": salm_model is not None,
+        "model_loaded": bool(MODELS),
         "model_name": _model_display_name(),
+        "models": list(MODELS),
+        "default_model": DEFAULT_MODEL,
         "queue": _GENERATION_QUEUE.metrics(),
         "sessions": len(SESSIONS),
         "active_pcs": len(pcs),
@@ -939,7 +1094,9 @@ async def reset_session(request):
         params = {}
     session_id = params.get("sessionId", "default")
     if session_id in SESSIONS:
-        SESSIONS[session_id]["history"] = []
+        # Repart d'un dict vide plutôt que d'une liste : l'historique est par modèle depuis
+        # l'ajout du sélecteur, et session_history() recréera ce qu'il faut à la volée.
+        SESSIONS[session_id]["history"] = {}
         schedule_save()
         logger.info(f"Reset session history for {session_id}")
     return web.json_response({"ok": True, "sessionId": session_id})
@@ -961,10 +1118,15 @@ if __name__ == "__main__":
     app.router.add_post("/transcribe", transcribe_audio)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/model-config", model_config)
+    # model_loaded : vrai dès qu'AU MOINS un modèle a chargé. C'est ce que sonde le DAG
+    # (DemoReadySensor) ; une démo qui a perdu un modèle sur deux reste utilisable, et
+    # `models` dit lesquels ont réellement chargé.
     app.router.add_get("/healthz", lambda r: web.json_response({
         "ok": True,
-        "model_loaded": salm_model is not None,
+        "model_loaded": bool(MODELS),
         "model_name": _model_display_name(),
+        "models": list(MODELS),
+        "default_model": DEFAULT_MODEL,
     }))
     app.router.add_static("/static/", path=ROOT / "static", name="static")
     
