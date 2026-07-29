@@ -153,6 +153,7 @@ packages = [
     "luciole_audio.training",
     "luciole_audio.data",
     "luciole_audio.data.convert",
+    "luciole_audio.data.datasets2nemo",
     "luciole_audio.data.generation",
     "luciole_audio.data.processing",
     "luciole_audio.data.templating",
@@ -167,6 +168,7 @@ packages = [
 "luciole_audio.training" = "training"
 "luciole_audio.data" = "data"
 "luciole_audio.data.convert" = "data/convert"
+"luciole_audio.data.datasets2nemo" = "data/datasets2nemo"
 "luciole_audio.data.generation" = "data/generation"
 "luciole_audio.data.processing" = "data/processing"
 "luciole_audio.data.templating" = "data/templating"
@@ -176,10 +178,11 @@ packages = [
 "luciole_audio.utils" = "utils"
 "luciole_audio.utils.infer_models" = "utils/infer_models"
 
-# Hydra configs (training/conf, eval/conf, export/conf), prompt templates (data/assets) and the
-# slurm templates resolved by slurm_launcher.py must ship with the wheel.
+# Hydra configs (training/conf, eval/conf, export/conf), prompt templates (data/assets), the
+# prompt banks (data/contexts/*.json, resolved relative to set_context.py) and
+# the slurm templates resolved by slurm_launcher.py must ship with the wheel.
 [tool.setuptools.package-data]
-"*" = ["**/*.yaml", "**/*.yml", "**/*.txt", "**/*.slurm", "**/*.sh"]
+"*" = ["**/*.yaml", "**/*.yml", "**/*.txt", "**/*.json", "**/*.slurm", "**/*.sh"]
 
 [tool.ruff]
 line-length = 120 # Allow lines to be as long as 120.
