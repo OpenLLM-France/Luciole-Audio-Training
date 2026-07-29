@@ -38,7 +38,7 @@ MODEL_ENDPOINTS = os.getenv("MODEL_ENDPOINTS", "")
 # afficher le config.json dans l'interface. Plus rien ne charge de poids depuis ici.
 MODEL_PATH = os.getenv("MODEL_PATH", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
-MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
+MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 1024))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 # Optional system prompt seeded into every new session. Empty (the default) = no system
 # turn at all, i.e. the plain demo behaviour. SALM's formatter only knows user/assistant,
@@ -249,8 +249,35 @@ def _load_sessions_from_disk():
         return {}
 
 
+# Durée de vie des audios de conversation. Ils sont conservés au-delà de la requête
+# qui les a produits pour que les tours de suivi puissent les rejouer (voir
+# remote_model._build_messages), donc quelque chose doit finir par les effacer.
+# Au-delà de ce délai, un tour repasse en texte seul : dégradé, jamais une erreur.
+UPLOAD_TTL_S = float(os.getenv("UPLOAD_TTL_SECONDS", 6 * 3600))
+
+
+def _prune_uploads():
+    """Efface les audios de conversation périmés.
+
+    Purge par ÂGE et non par référence : les historiques vivent en mémoire, sont
+    rechargés amputés de leurs chemins au redémarrage, et une session n'est jamais
+    explicitement close — un balayage des références laisserait donc fuir les
+    fichiers des sessions abandonnées, c'est-à-dire la majorité.
+    """
+    uploads_dir = ROOT / "uploads"
+    if not uploads_dir.is_dir():
+        return
+    cutoff = time.time() - UPLOAD_TTL_S
+    for path in uploads_dir.glob("processed_*.wav"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+        except OSError:
+            pass
+
+
 def _serializable_sessions():
-    """Strip transient fields (audio paths point to /tmp files we delete)."""
+    """Strip transient fields (audio paths point to files we prune by age)."""
     out = {}
     for sid, sess in SESSIONS.items():
         histories = {}
@@ -577,9 +604,11 @@ async def _handle_audio_stop(channel, state, data):
                 return
 
             clean_audio_path = None
+            audio_referenced = False
             try:
                 uploads_dir = ROOT / "uploads"
                 uploads_dir.mkdir(exist_ok=True)
+                _prune_uploads()
                 clean_audio_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
                 # Le rééchantillonnage ne dépend pas du modèle : fait une fois, le fichier
                 # nettoyé sert ensuite aux deux générations en mode comparaison.
@@ -634,15 +663,27 @@ async def _handle_audio_stop(channel, state, data):
                     elif _looks_runaway(clean_response):
                         logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
                     else:
-                        current_history.append({"role": "user", "content": prompt or "Audio Message"})
+                        # `audio` fait tenir le tour de suivi : sans lui, une question
+                        # posée au tour d'après (« et de quoi ça parle ? ») n'a plus
+                        # aucun audio dans le contexte. Même convention que le chemin
+                        # upload. Le fichier doit donc SURVIVRE à cette requête.
+                        current_history.append({
+                            "role": "user",
+                            "content": prompt or "Audio Message",
+                            "audio": [clean_audio_path],
+                        })
                         current_history.append({"role": "assistant", "content": clean_response})
+                        audio_referenced = True
                         schedule_save()
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}"})
             finally:
-                if clean_audio_path and os.path.exists(clean_audio_path):
+                # Conservé seulement s'il est référencé par un historique ; sinon il ne
+                # servira jamais et part tout de suite. La purge par âge (_prune_uploads)
+                # se charge des fichiers référencés, une fois périmés.
+                if not audio_referenced and clean_audio_path and os.path.exists(clean_audio_path):
                     try:
                         os.remove(clean_audio_path)
                     except Exception:
@@ -980,6 +1021,7 @@ async def upload_audio(request):
                 try:
                     logger.info(f"Starting generation for session {session_id}...")
 
+                    _prune_uploads()
                     processed_filename = f"processed_{uuid.uuid4().hex}.wav"
                     clean_audio_path = str(uploads_dir / processed_filename)
                     targets[0][1].process_audio(filename, clean_audio_path)

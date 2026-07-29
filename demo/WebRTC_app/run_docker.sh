@@ -33,6 +33,11 @@ IMAGE="${IMAGE:-salm-demo:vllm}"
 HOST_PORT="${HOST_PORT:-9009}"
 KV_GIB="${KV_GIB:-6}"
 GPU_FRAC="${GPU_FRAC:-0.35}"
+# Audios par requête. Les tours de suivi rejouent l'audio des tours précédents, donc
+# ce plafond borne la profondeur du multi-turn audio. Le plugin SALM ne limite pas
+# (`get_supported_mm_limits` → {"audio": None}) ; c'est un réglage de déploiement.
+# L'app doit rester sous ce plafond, via MODEL_MAX_AUDIOS_PER_PROMPT.
+MAX_AUDIOS="${MAX_AUDIOS:-4}"
 APP_NAME="salm-webrtc-app"
 SRV_PREFIX="salm-webrtc-vllm"
 
@@ -74,7 +79,7 @@ for SPEC in "$@"; do
         --entrypoint python "${IMAGE}" /app/serve_salm.py serve /app/model \
         --served-model-name "${NAME}" --port "${PORT}" \
         --enforce-eager --dtype bfloat16 --max-model-len 16384 \
-        --limit-mm-per-prompt '{"audio":1}' \
+        --limit-mm-per-prompt "{\"audio\":${MAX_AUDIOS}}" \
         --gpu-memory-utilization "${GPU_FRAC}" \
         --kv-cache-memory-bytes $((KV_GIB * 1073741824)) >/dev/null
 
@@ -110,6 +115,7 @@ docker run --init -d --name "${APP_NAME}" \
     --network host \
     -v "$(pwd)":/app \
     -e MODEL_ENDPOINTS="${ENDPOINTS}" \
+    -e MODEL_MAX_AUDIOS_PER_PROMPT="${MAX_AUDIOS}" \
     -e PORT="${HOST_PORT}" \
     "${IMAGE}" >/dev/null
 

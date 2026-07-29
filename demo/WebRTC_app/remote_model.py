@@ -22,10 +22,19 @@ DEUX DIFFÉRENCES DE COMPORTEMENT, assumées :
    peu plus qu'en local. Il faudrait un logits processor côté serveur pour
    retrouver le comportement exact.
 
-2. L'audio des tours PASSÉS n'est pas rejoué. Le serveur est lancé avec
-   `--limit-mm-per-prompt {"audio":1}` : un seul audio par requête, donc
-   seulement celui du tour courant. Les tours précédents sont renvoyés en texte,
-   balise audio retirée. En local le modèle réentend tout l'historique.
+2. Le nombre d'audios rejoués est plafonné (`MODEL_MAX_AUDIOS_PER_PROMPT`, 4 par
+   défaut) et doit rester ≤ au `--limit-mm-per-prompt` du serveur. Au-delà, les
+   tours les plus anciens repassent en texte seul. En local le modèle réentend
+   tout l'historique, sans plafond.
+
+L'AUDIO DES TOURS PASSÉS EST RENVOYÉ (voir `_build_messages`). C'est ce qui
+permet à un tour de suivi (« et de quoi ça parle ? », sans nouvel audio) de
+porter réellement sur l'audio du tour précédent. Renvoyer le base64 ne fait pas
+recalculer : vLLM retrouve l'audio dans son cache processeur multimodal (haché
+sur le contenu) et le span de tokens correspondant dans son cache de préfixe, du
+moment que la conversation ne fait que s'allonger par la fin. Mesuré sur la démo
+Luciole-1B : un tour de suivi ne préremplit que ~26 tokens sur 330, l'encodeur
+n'est pas rejoué. Ne « simplifiez » donc pas ceci en retirant l'audio.
 """
 
 import base64
@@ -48,6 +57,12 @@ AUDIO_LOCATOR_TAG = "<|audio|>"
 # Réglage anti-boucle de la démo, dans ce que l'API OpenAI de vLLM accepte.
 # Voir la note 1 de l'en-tête pour ce qui manque.
 _REPETITION_PENALTY = 1.15
+
+# Plafond d'audios par requête. DOIT rester ≤ au `--limit-mm-per-prompt` du serveur
+# (voir run_docker.sh) : au-delà, vLLM rejette la requête entière. Le plugin, lui,
+# ne limite pas (`get_supported_mm_limits` renvoie {"audio": None}), c'est donc un
+# réglage de déploiement des deux côtés, pas une contrainte du modèle.
+_MAX_AUDIOS_PER_PROMPT = int(os.getenv("MODEL_MAX_AUDIOS_PER_PROMPT", 4))
 
 
 class RemoteSALMModel:
@@ -119,10 +134,31 @@ class RemoteSALMModel:
         """Retire la balise audio d'un contenu d'historique.
 
         Les tours passés ont été enregistrés sous la forme `{instruction}\\n<|audio|>\\n`.
-        Renvoyée telle quelle, la balise serait interprétée comme un emplacement à
-        remplir et vLLM refuserait la requête, faute d'audio correspondant.
+        La balise est réinsérée par le template de chat à l'emplacement du bloc audio :
+        la garder ici en donnerait DEUX pour un seul audio, et le plugin lève alors
+        « Prompt has N placeholders but M audios ». On la retire donc toujours, que le
+        tour soit rejoué avec son audio ou non.
         """
         return (content or "").replace(self.audio_locator_tag, "").strip()
+
+    @staticmethod
+    def _history_audio_paths(turn):
+        """Chemins audio encore lisibles d'un tour d'historique.
+
+        `app.py` enregistre `{"audio": [chemin, ...]}` sur les tours utilisateur. Les
+        fichiers sont éphémères (purge de `uploads/`, redémarrage du conteneur, et
+        `_serializable_sessions` retire la clé avant d'écrire sessions.json), donc un
+        chemin absent est normal : le tour repasse simplement en texte seul.
+        """
+        raw = turn.get("audio") or []
+        if isinstance(raw, str):
+            raw = [raw]
+        return [p for p in raw if p and os.path.exists(p)]
+
+    def _audio_block(self, path):
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        return {"type": "input_audio", "input_audio": {"data": encoded, "format": "wav"}}
 
     def _build_messages(self, audio_path, text_input, history):
         raw_history = history if history else []
@@ -131,11 +167,18 @@ class RemoteSALMModel:
         # message utilisateur, pour que les deux modes voient exactement le même prompt.
         messages = []
         system_prefix = ""
+        # Tours d'historique rejouables, du plus ancien au plus récent :
+        # (indice dans `messages`, chemins audio).
+        replayable = []
         for turn in raw_history:
             if turn.get("role") == "system":
                 system_prefix += turn.get("content", "") + "\n\n"
                 continue
             messages.append({"role": turn["role"], "content": self._strip_locator(turn.get("content"))})
+            if turn.get("role") == "user":
+                paths = self._history_audio_paths(turn)
+                if paths:
+                    replayable.append((len(messages) - 1, paths))
 
         if audio_path:
             instruction = text_input if text_input else self.default_instruction
@@ -151,19 +194,32 @@ class RemoteSALMModel:
             messages[0]["content"] = system_prefix + messages[0]["content"]
 
         if audio_path:
-            with open(audio_path, "rb") as f:
-                encoded = base64.b64encode(f.read()).decode("ascii")
             # Texte d'abord, audio ensuite : le rendu du template place la balise à
             # l'endroit du bloc audio, ce qui reproduit le `{instruction}\n<|audio|>\n`
             # de SALMModel. L'ordre inverse fait boucler les deux modèles (mesuré).
             content = [
                 {"type": "text", "text": instruction},
-                {"type": "input_audio", "input_audio": {"data": encoded, "format": "wav"}},
+                self._audio_block(audio_path),
             ]
         else:
             content = instruction
 
         messages.append({"role": "user", "content": content})
+
+        # Rejeu de l'historique audio, sous le plafond du serveur. On garde les tours
+        # les PLUS RÉCENTS : le budget doit d'abord servir l'audio du tour courant,
+        # puis remonter le fil. Les tours évincés restent en texte seul — dégradé,
+        # jamais une erreur.
+        budget = _MAX_AUDIOS_PER_PROMPT - (1 if audio_path else 0)
+        for idx, paths in reversed(replayable):
+            if budget <= 0:
+                break
+            kept = paths[-budget:]
+            budget -= len(kept)
+            text = messages[idx]["content"]
+            messages[idx]["content"] = [{"type": "text", "text": text}] + [
+                self._audio_block(p) for p in kept
+            ]
         return messages
 
     def _payload(self, messages, max_new_tokens, min_new_tokens, temperature, stream):

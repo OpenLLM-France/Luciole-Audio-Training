@@ -102,7 +102,7 @@ const DEFAULT_SETTINGS = {
     micMode: 'vad',          // 'vad' | 'ptt'
     silenceMs: 1500,
     speechThreshold: 0.025,
-    maxTokens: 256,
+    maxTokens: 1024,
     instruction: 'Listen to the audio and answer the question:',
     effortMode: 'normal',    // 'normal' | 'max' — server pins decoding params when 'max'
     model: '',               // '' = modèle par défaut du serveur
