@@ -7,10 +7,9 @@ defaults:
 
 model:
   automodel_parallel:
-    # Full FSDP2 shard, no replication — the v3 setting. dp_replicate_size=2 (v1/v2)
-    # keeps the full model on every GPU and only pays off for short-sequence recipes;
-    # this one is long-context, so activations are the wall. See run/xp/automodel_8b.yaml
-    # for the context-parallel escape hatch if the 16k buckets ever OOM.
+    # Full FSDP2 shard. dp_replicate_size=2 (v1/v2) is HSDP — half the model per GPU —
+    # and buys nothing here: 2.942 vs 2.929 s/step (n=300) for +3.85 GiB.
+    # See run/xp/automodel_8b.yaml for the context-parallel escape hatch.
     dp_replicate_size: 1
     activation_checkpointing_llm: true
 

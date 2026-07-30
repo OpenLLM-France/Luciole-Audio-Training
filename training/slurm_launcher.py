@@ -28,6 +28,11 @@ QOS_MAP = {
 
 CPUS_PER_GPU = 24
 
+# On --qos dev, pin the training shard order so two short runs are comparable.
+# See the shard_seed comment in conf/base.yaml for why production uses "trng".
+DEV_SHARD_SEED_KEY = "data.train_ds.shard_seed"
+DEV_SHARD_SEED = 42
+
 # exp_manager.max_time_per_run = SLURM --time minus this many minutes, clamped to >= MIN
 MAX_TIME_MARGIN_MIN = 15
 MAX_TIME_FLOOR_MIN = 30
@@ -290,11 +295,24 @@ def main():
                          f"default.")
             env_overrides[name] = value
 
-    if args.overrides:
-        for o in args.overrides:
-            if "=" not in o:
-                sys.exit(f"--set expects KEY=VAL, got: {o!r}")
-        env_overrides["EXTRA_OVERRIDES"] = " ".join(args.overrides)
+    overrides = list(args.overrides)
+    for o in overrides:
+        if "=" not in o:
+            sys.exit(f"--set expects KEY=VAL, got: {o!r}")
+
+    # base.yaml ships shard_seed="trng" so production runs, which resume many times over
+    # 250k steps, draw a fresh shard order on each restart instead of replaying the same
+    # prefix. Dev runs want the opposite: they exist to compare two configurations, and a
+    # shard order that moves between them turns the comparison into noise. Pin it back.
+    # An explicit --set on the same key wins, so this stays overridable.
+    if args.qos == "dev" and not any(o.split("=", 1)[0].lstrip("+").startswith(DEV_SHARD_SEED_KEY)
+                                     for o in overrides):
+        overrides.append(f"++{DEV_SHARD_SEED_KEY}={DEV_SHARD_SEED}")
+        print(f"[dev] pinning {DEV_SHARD_SEED_KEY}={DEV_SHARD_SEED} for a reproducible "
+              f"shard order (base.yaml uses 'trng' otherwise)")
+
+    if overrides:
+        env_overrides["EXTRA_OVERRIDES"] = " ".join(overrides)
 
     sbatch_overrides = {}
     if args.gpus is not None:

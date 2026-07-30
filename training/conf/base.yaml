@@ -9,7 +9,9 @@ defaults:
   - _self_
 
 ############ Model ############
-model:  
+model:
+  # Dump the peak-allocated-per-bucket table every N steps.
+  bucket_memory_every: 2500
   pretrained_llm: ${oc.env:LLM_MODEL}
   pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
   pretrained_weights: true  # If false → load architecture only
@@ -100,15 +102,27 @@ data:
     token_equivalent_duration: ${model.token_equivalent_duration}
     audio_locator_tag: ${model.audio_locator_tag}
 
+    num_workers: 4
     seed: 42
     shuffle: true
-    shard_seed: "randomized"
+    # "trng" = fresh shard order from OS entropy on every restart. Required because
+    # nothing restores dataloader position on resume, so a constant seed would replay
+    # the same prefix forever. Beware "randomized": despite the name it varies only
+    # across workers/ranks, not across runs. slurm_launcher.py pins a fixed seed on
+    # --qos dev so short comparison runs stay reproducible.
+    shard_seed: "trng"
     text_field: "answer"
     lang_field: target_lang
     use_lhotse: true
     use_multimodal_sampling: true
     measure_total_length: true
+
     min_duration: 0.1
+    min_tokens: 2
+    max_tokens: 16384
+    max_duration: 1200
+    use_bucketing: true
+    bucket_buffer_size: 20000
 
     input_cfg: null   # overridden by slurm_launcher.py / runtime
 
@@ -121,7 +135,10 @@ data:
     batch_size: 8
     num_workers: 2
     seed: 42
-    shard_seed: "randomized"
+    # NOT "trng", unlike train_ds: validation must score the same data every time.
+    # A literal int rather than "randomized", which derives from `seed` and varies with
+    # the GPU count. Note neither protects against a num_workers change.
+    shard_seed: 42
     text_field: "answer"
     lang_field: target_lang
     use_lhotse: true

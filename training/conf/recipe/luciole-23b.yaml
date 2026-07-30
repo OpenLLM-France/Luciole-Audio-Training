@@ -15,20 +15,9 @@ trainer:
 
 data:
   train_ds:
-    num_workers: 4
-    max_tokens: 8832
-    min_duration: 0.1
-    max_duration: 700
-    min_tokens: 5
-    use_bucketing: true
-    bucket_buffer_size: 20000
     num_buckets: 27
     bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,418,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
-    bucket_batch_size: [119,100,86,73,60,52,46,42,38,35,32,29,25,24,23,21,20,19,18,16,15,14,10,6,3,1,1]
-    
-
-  validation_ds:
-    num_workers: 4
+    bucket_batch_size: [238,200,173,146,120,104,92,84,76,70,64,59,50,48,46,42,40,38,36,33,30,28,21,13,6,2,1]
 
 exp_manager:
   checkpoint_callback_params:

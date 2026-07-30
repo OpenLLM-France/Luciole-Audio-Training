@@ -1,43 +1,25 @@
 # @package _global_
 # Automodel "mixin": the additive config shared by every SALMAutomodel run.
-# Compose it AFTER /base, e.g.:
-#     defaults:
-#       - /base
-#       - /base_automodel
-#       - /recipe: luciole
-#       - _self_
+# Compose AFTER /base, before the recipe.
 #
-# Only backend-ADDITIVE fields live here. The two blocks that *conflict* with
-# base.yaml's SALM/DDP shape are deliberately NOT here:
-#   - trainer.strategy : base.yaml sets DDPStrategy (+ DDP-only kwargs)
-#   - model.lora       : base.yaml + recipes set HF-PEFT keys (r, lora_alpha, ...)
-# Hydra deep-merges dicts and cannot delete keys, so an overlay can't convert
-# either into its Automodel shape. salm_train._normalize_for_automodel() rewrites
-# both in code (after config resolution) whenever model.use_nemo_automodel is set.
+# trainer.strategy and model.lora are deliberately NOT here: base.yaml sets them
+# in SALM/DDP shape and Hydra can't delete keys, so an overlay cannot convert
+# them. salm_train._normalize_for_automodel() rewrites both in code.
 model:
   use_nemo_automodel: true
-  # Use transformers' BUILT-IN nemotron_h, NOT the bundled remote code. Both can now
-  # load Luciole-8B: install_automodel.sh pins transformers 5.6.0, whose built-in
-  # configuration_nemotron_h.py parses the dense hybrid_override_pattern natively
-  # ('-'=MLP; the KeyError: '-' that forced remote code on 5.3-5.5 is gone). Built-in
-  # is the reproducible choice — no transformers-4.x-era modeling file frozen into the
-  # checkpoint, and generation works under transformers>=5 (the bundled
-  # prepare_inputs_for_generation slices input_ids, which is None on SALM's
-  # inputs_embeds-only audio path, and crashes). So keep trust_remote_code OFF.
-  # NOTE: the built-in trunk is `.model`, the bundled one is `.backbone`; nemo_automodel's
-  # parallelizer and the fork's find_embedding_layer must accept BOTH names — see patch #3
-  # in install_automodel.sh and pretrained.py::find_embedding_layer.
+  # Fuse the lm_head matmul into the CE loss so the (B*T, vocab) logits are never
+  # materialized. Falls back to the plain path with a warning if unavailable.
+  fused_linear_cross_entropy: true
+  # Keep OFF: the bundled remote code's prepare_inputs_for_generation slices
+  # input_ids, which is None on SALM's inputs_embeds-only audio path, and crashes.
+  # NOTE: built-in trunk is `.model`, bundled is `.backbone` — the parallelizer and
+  # find_embedding_layer must accept both.
   trust_remote_code: false
-  # Still required even with built-in code. force_hf makes automodel build the HF model
-  # instead of its own native impl. Dense Nemotron-H (Luciole) trips automodel's native-v3
-  # selection: its compat gate only checks `n_routed_experts is not None`, but the dense
-  # config carries a stray default n_routed_experts=8, so the v3 (MoE) model is wrongly
-  # built and its parallelizer crashes on the missing `.backbone`. force_hf routes to the
-  # HF (built-in, given trust_remote_code=false) dense model instead. (Requires the fork's
-  # force_hf plumbing in SALMAutomodel.configure_model.)
+  # Required even with built-in code: the dense Nemotron-H config carries a stray
+  # n_routed_experts=8, so automodel wrongly builds its native MoE model and the
+  # parallelizer crashes. force_hf routes to the HF dense model instead.
   force_hf: true
-  # TransformerEngine 2.6.0 is installed, so TE kernels are used by default.
-  # Uncomment to bypass TE (e.g. if te.pytorch fails to load on the GPU node):
+  # Uncomment to bypass TransformerEngine (e.g. if te.pytorch fails to load):
   # automodel_backend:
   #   attn: sdpa
   #   linear: torch
