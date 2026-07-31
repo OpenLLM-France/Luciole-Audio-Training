@@ -9,6 +9,14 @@ Examples:
   python slurm_launcher.py --config foo.yaml --qos t3 --nodes 2
   python slurm_launcher.py --llm-model /path/to/model --prompt-format llama3 --dry-run
   python slurm_launcher.py --config run/xp/automodel_8b --conda-env $SCRATCH/speechlm/envs/salm_automodel
+  python slurm_launcher.py --subdir xp_from_lora --job-name stage2   # -> .../Luciole-1B/xp_from_lora/stage2
+
+Output layout (both roots, results and logs):
+  <root>/<model-family>/[<subdir>/]<job_name>
+The model family is derived from the LLM being trained (Luciole-1B / Luciole-8B /
+Luciole-23B), so a run always lands next to the other runs of the same model without
+each launch script having to spell the path out. Pass --experiment-folder / --save-dir
+to bypass the derivation entirely.
 """
 import argparse
 import os
@@ -27,6 +35,11 @@ QOS_MAP = {
 }
 
 CPUS_PER_GPU = 24
+
+# Roots under which the per-model-family tree is built. Kept here rather than in the
+# launch scripts so every run shares one layout.
+DEFAULT_EXPERIMENT_ROOT = "$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
+DEFAULT_LOGS_ROOT = "$ALL_CCFRSCRATCH/audio/training/logs"
 
 # On --qos dev, pin the training shard order so two short runs are comparable.
 # See the shard_seed comment in conf/base.yaml for why production uses "trng".
@@ -66,6 +79,39 @@ def minutes_to_lightning_time(mins):
 def parse_slurm_time_from_template(script_path):
     m = re.search(r"^#SBATCH\s+--time=(\S+)", script_path.read_text(), re.MULTILINE)
     return m.group(1) if m else None
+
+
+def parse_default_llm_model(script_path):
+    """Read run_train.slurm's own LLM_MODEL default, so the two never drift.
+
+    Without --llm-model the job trains whatever that default points at, and the
+    output folder must follow it.
+    """
+    m = re.search(r'^LLM_MODEL="\$\{LLM_MODEL:-(.+?)\}"', script_path.read_text(), re.MULTILINE)
+    if not m:
+        sys.exit(f"Could not find the LLM_MODEL default in {script_path}")
+    return m.group(1)
+
+
+def model_family(llm_model):
+    """Folder grouping runs by the LLM they train.
+
+    .../Luciole-8B-Instruct-1.1 -> Luciole-8B, .../Luciole-1B-SFT-1.1 -> Luciole-1B.
+    Anything else (a non-Luciole LLM) falls back to the model directory name, which
+    still groups its runs together instead of dumping them at the root.
+    """
+    name = Path(llm_model.rstrip("/")).name
+    m = re.search(r"luciole[-_]?(\d+)b", name, re.IGNORECASE)
+    return f"Luciole-{m.group(1)}B" if m else name
+
+
+def expand_or_die(raw, flag):
+    """Expand $VARS in a path, refusing to build a path out of an unset variable."""
+    expanded = os.path.expandvars(raw)
+    if "$" in expanded:
+        sys.exit(f"{flag} still contains unexpanded vars: {expanded!r} "
+                 f"(source your env or pass {flag} explicitly)")
+    return expanded
 
 
 def parse_job_name(script_path):
@@ -191,8 +237,14 @@ def main():
                               "Use 'run/<name>' to pick a composed run file.")
     g_train.add_argument("--data-version", default="v2",
                          help="Subfolder under conf/data/ (default: %(default)s)")
+    g_train.add_argument("--subdir", default=None,
+                         help="Group this run under an extra folder inside its model "
+                              "family, e.g. --subdir xp_from_lora gives "
+                              "<root>/Luciole-1B/xp_from_lora/<job_name>. Applies to "
+                              "both the experiment folder and the log folder.")
     g_train.add_argument("--experiment-folder", default=None,
-                         help="Override EXPERIMENT_FOLDER (NeMo exp_manager output root)")
+                         help="Override EXPERIMENT_FOLDER verbatim (NeMo exp_manager "
+                              "output root), bypassing the model-family derivation")
     g_train.add_argument("--llm-model", default=None, help="Override LLM_MODEL path")
     g_train.add_argument("--prompt-format", default=None, help="Override PROMPT_FORMAT")
     g_train.add_argument("--speech-encoder-model", default=None,
@@ -219,8 +271,10 @@ def main():
                          help="Clear the log/save directory before launch "
                               "(removes previous .slurm/.out/.err snapshots)")
     g_train.add_argument("--save-dir", default=None,
-                         help="Log + snapshot directory "
-                              "(default: $ALL_CCFRSCRATCH/audio/training/logs/<job_name>)")
+                         help="Override the log + snapshot directory verbatim, "
+                              "bypassing the model-family derivation "
+                              f"(default: {DEFAULT_LOGS_ROOT}/<model-family>/"
+                              "[<subdir>/]<job_name>)")
 
     g_slurm = parser.add_argument_group("SLURM directives")
     g_slurm.add_argument("--gpus", type=int, default=None,
@@ -249,11 +303,20 @@ def main():
 
     job_name = args.job_name or parse_job_name(SLURM_SCRIPT)
 
-    save_dir_raw = args.save_dir or f"$ALL_CCFRSCRATCH/audio/training/logs/{job_name}"
-    save_dir = os.path.expandvars(save_dir_raw)
-    if "$" in save_dir:
-        raise Exception(f"save-dir still contains unexpanded vars: {save_dir!r} "
-                 f"(source your env or pass --save-dir explicitly)")
+    # Route the run into <root>/<model-family>/[<subdir>/]... so the 1B runs land in
+    # Luciole-1B, the 8B ones in Luciole-8B, etc. --llm-model wins; without it the job
+    # trains run_train.slurm's default LLM, so that's what the folder must follow.
+    family = model_family(args.llm_model or parse_default_llm_model(SLURM_SCRIPT))
+    group = "/".join([family] + ([args.subdir] if args.subdir else []))
+
+    exp_folder = expand_or_die(
+        args.experiment_folder or f"{DEFAULT_EXPERIMENT_ROOT}/{group}",
+        "--experiment-folder",
+    )
+    save_dir = expand_or_die(
+        args.save_dir or f"{DEFAULT_LOGS_ROOT}/{group}/{job_name}",
+        "--save-dir",
+    )
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(parents=True, exist_ok=True)
     if args.overwrite_log:
@@ -272,10 +335,10 @@ def main():
         "OVERWRITE":    "true" if args.overwrite else "false",
         "RESUME":       "true" if args.resume else "false",
         "SAVE_DIR":     save_dir,
+        "EXPERIMENT_FOLDER": exp_folder,
         "LOCAL_FOLDER": str(SLURM_SCRIPT.parent),
     }
     for name, value in [
-        ("EXPERIMENT_FOLDER",     args.experiment_folder),
         ("LLM_MODEL",             args.llm_model),
         ("PROMPT_FORMAT",         args.prompt_format),
         ("SPEECH_ENCODER_MODEL",  args.speech_encoder_model),
@@ -346,6 +409,9 @@ def main():
     if check.returncode != 0:
         sys.exit(f"Materialized slurm file has syntax errors:\n{check.stderr}\nPath: {submitted}")
 
+    print(f"Model family: {family}")
+    print(f"Experiment:   {exp_folder}/{job_name}")
+    print(f"Logs:         {save_dir}")
     print(f"Materialized: {submitted}")
     print("Env overrides:")
     for k, v in env_overrides.items():

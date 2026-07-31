@@ -35,18 +35,33 @@ set -euo pipefail
 # USER CONFIG (edit only this section)
 # =====================================================
 
-# --- Logging / saving scripts
-SAVE_DIR="${SAVE_DIR:-$ALL_CCFRSCRATCH/audio/training/logs/${SLURM_JOB_NAME}}"
-
-# --- Cache / experiment base folder
-TMP_CACHE="$SCRATCH/.cache"
-EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}"
-
 # --- Models / data
+# (defined before the output folders: those are grouped per LLM, see llm_family below)
 LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/finetune/luciole_final/Luciole-1B-SFT-1.1}"
 SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo}"
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
+
+# --- Output folders, grouped per LLM: <root>/<model-family>/<job_name>
+# Runs of the same model stay together (Luciole-1B, Luciole-8B, Luciole-23B, ...)
+# instead of piling up at the root. slurm_launcher.py computes the same paths (and
+# can insert an extra --subdir level); this block only matters for a bare
+# `sbatch run_train.slurm`, and both must keep agreeing.
+llm_family() {
+  local name; name="$(basename "${1%/}")"
+  if [[ "$name" =~ [Ll]uciole[-_]?([0-9]+)[Bb] ]]; then
+    echo "Luciole-${BASH_REMATCH[1]}B"
+  else
+    echo "$name"   # non-Luciole LLM: group by model dir name rather than at the root
+  fi
+}
+MODEL_FAMILY="$(llm_family "$LLM_MODEL")"
+
+SAVE_DIR="${SAVE_DIR:-$ALL_CCFRSCRATCH/audio/training/logs/${MODEL_FAMILY}/${SLURM_JOB_NAME}}"
+EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments/${MODEL_FAMILY}}"
+
+# --- Cache
+TMP_CACHE="$SCRATCH/.cache"
 
 # --- Data version (override with: DATA_VERSION=v3 sbatch run_train.slurm)
 DATA_VERSION=${DATA_VERSION:-v2}
@@ -193,6 +208,7 @@ echo " Master Port    : $MASTER_PORT"
 echo " Config         : $CONFIG_NAME"
 echo " Train script   : $TRAIN_SCRIPT"
 echo " Data version   : $DATA_VERSION"
+echo " Model family   : $MODEL_FAMILY"
 echo " Experiment fd  : $EXPERIMENT_FOLDER"
 echo " Save dir       : $SAVE_DIR"
 echo " LLM model      : $LLM_MODEL"
