@@ -831,3 +831,25 @@
   input_cfg:
     - type: multimodal_conversation
       manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train.jsonl
+#    # Generes par data/templating/template_{commonvoice,mls,slue,qa}_multiturn.py.
+#    # Chaque jeu existe en trois modes : sequential (une question par tour),
+#    # compound (plusieurs questions groupees dans un seul tour) et mixed (40%
+#    # sequential, 40% hybride, 20% compound). Les volumes sont par mode.
+#    #
+#    # CommonVoice, 8 langues, transcription + traduction fr<->* : 1 000 000
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/CVMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_asr_ast, lang: mixed}
+#    # MLS francais, fenetres temporelles + parcours de chapitre : 73 308
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MLSMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_temporal, lang: fr}
+#    # SLUE-SQA5 anglais, localisation + chaines liees + question orale : 13 325
+#    # Attention : memes audios que temporal/en/slue-phase-2-sqa5.
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/SLUEMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_temporal, lang: en}
+#    # Clotho-AQA, questions sur des sons : 1 967
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_multiturn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_aqa, lang: en}

@@ -18,7 +18,8 @@
 # snapshot requires re-exporting CHECKPOINT in the submitting shell.
 #
 # Launch (from training/; --data-version overrides input_cfg):
-#   EXP=${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}
+#   # runs of the 1B are filed under <root>/Luciole-1B by the launcher
+#   EXP=${EXPERIMENT_ROOT:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}/Luciole-1B
 #   export CHECKPOINT=$(ls -t "$EXP"/luciole_v3_stage1/checkpoints/*-last.ckpt | head -1)
 #   python slurm_launcher.py \
 #     --config run/curriculum/stage2_encoder \
