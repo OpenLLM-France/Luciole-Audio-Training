@@ -38,7 +38,10 @@ export DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 # =====================================================
 # Configuration
 # =====================================================
-export XP="${XP:-<model_name>}"
+# Experiment to evaluate, as a path RELATIVE TO the experiments root. Training groups
+# runs per LLM (Luciole-1B/, Luciole-8B/, ...) and optionally per xp subfolder, e.g.
+#   XP=Luciole-1B/xp_from_lora/stage2_from_lora_v2 sbatch run_eval_checkpoints.slurm
+export XP="${XP:-<model_family>/<run_name>}"
 CONFIG_NAME="${CONFIG_NAME:-eval_combined}"
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-4}
 

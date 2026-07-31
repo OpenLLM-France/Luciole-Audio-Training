@@ -34,9 +34,11 @@ export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE=$TMP_CACHE
 
 
-# Experiment to export: pass the name as the first argument, e.g.
-#   sbatch run_export_experiment.slurm my_experiment_name
-XP="${1:?Usage: sbatch run_export_experiment.slurm <experiment_name> [every] [steps...]}"
+# Experiment to export: pass its path RELATIVE TO $EXPERIMENT_FOLDER as the first
+# argument. Training groups runs per LLM (Luciole-1B/, Luciole-8B/, ...) and optionally
+# per xp subfolder, so that path usually has 2-3 components:
+#   sbatch run_export_experiment.slurm Luciole-1B/xp_from_lora/stage2_from_lora_v2
+XP="${1:?Usage: sbatch run_export_experiment.slurm <model-family>/[<subdir>/]<run> [every] [steps...]}"
 EVERY="${2:-50000}"
 
 # Conda env to export in. Pass an env NAME (under $SCRATCH/speechlm/envs) to force it:
