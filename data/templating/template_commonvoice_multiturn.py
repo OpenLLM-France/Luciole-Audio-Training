@@ -19,6 +19,12 @@ elliptically ("Et celui-ci ?", --elliptic-rate), the latter carrying the previou
 task over to the new clip. 50% of switches change source language too
 (--cross-lang-rate), which is what puts non-French audio in these conversations.
 
+A bare "Et celui-ci ?" is ambiguous whenever the carried task is a translation --
+nothing in it says the answer should be German rather than the transcript -- so 70%
+of those switches name the language instead ("Et celui-ci, en allemand ?",
+--elliptic-lang-rate); same when a carried transcript lands on a clip in another
+language. The remaining 30% keep the bare form, which is what trains the carry-over.
+
 Proportions
 -----------
 * content turns: 2 turns 35%, 3 turns 30%, 4 turns 25%, 5 turns 10% (TURN_DIST)
@@ -42,6 +48,24 @@ the clip stem (``common_voice_fr_19344297``); joining on it is 100% on fr->en,
 against ~17% when joining AST manifests to each other. So a French clip carries
 the transcript plus 7 translations, and an ar/de/en/es/it/nl/pt clip the
 transcript plus the French one -- three distinct asks minimum either way.
+
+Where the instructions come from
+--------------------------------
+Turn 1 is drawn from ``data/contexts`` (--contexts-root), never rewritten:
+
+* transcription -- ``{src}_asr_contexts.json``. Its ``0.95`` bucket is written in the
+  audio's OWN language, so it only applies on the diagonal (French instructions over
+  French audio: 31 prompts, English over English: 38). Off the diagonal the ``0.05``
+  bucket gives 4 per instruction language, all of which either name the audio language
+  or point at "its original language".
+* translation -- ``translation/{src}-{tgt}_ast_contexts.json``, 10 per instruction
+  language on every one of the 56 pairs (20 counting fr and en together): 5 naming
+  source and target, 5 naming the target alone. The 3 bare stubs ("Traduis") are
+  skipped -- turn 1 has to say what language to answer in.
+
+Every later turn is templated in this file, in fr/en only, which is why the
+instruction language is drawn from {fr, en}.
+``data/assets/instruction_transcription_and_translation_fr-en.txt`` is no longer used.
 
 Usage
 -----
@@ -93,14 +117,44 @@ def fmt(template, tgt, ilang, **extra):
 
 # Templates. Every list is sampled uniformly and independently, for surface variety.
 
-# Turn-1 instructions come from the repo bank: 10 phrasings per task per language,
-# all of which NAME the audio and output languages -- without that, "Transcribe this
-# clip." over French audio never says which language to answer in. The bank is
-# written for fr -> en; `substitute_languages` retargets it.
-PROMPT_BANK_RELPATH = ("assets", "instruction_transcription_and_translation_fr-en.txt")
-BANK_SOURCE_LANG = "fr"   # language the bank's prompts describe as the audio's
-BANK_TARGET_LANG = "en"   # language the bank's prompts translate into
-BANK_TASKS = ("transcription", "translation", "transcription_and_translation")
+# Turn-1 instructions come from data/contexts: per audio language for ASR, per pair for
+# AST. Both banks are already multilingual, so a prompt is TAKEN in the instruction
+# language rather than written fr->en and string-substituted.
+#
+# They replace data/assets/instruction_transcription_and_translation_fr-en.txt, whose
+# transcription section asked for things CommonVoice never contains ("include all pauses
+# and hesitations", "including any background noises or interjections"): the reference is
+# the written sentence being read aloud, so there are no disfluencies and no noise tags
+# to produce, and the instruction trains the model to ignore what it is told. The
+# combined transcribe-then-translate ask has no counterpart in data/contexts and is now
+# assembled from the fragments in `compound_turns`, which covered every wider shape
+# already.
+CONTEXTS_RELPATH = ("contexts",)
+ASR_BANK_NAME = "{lang}_asr_contexts.json"
+AST_BANK_RELNAME = "translation/{src}-{tgt}_ast_contexts.json"
+# ASR files split prompts into a bucket written in the audio's own language and a
+# smaller cross-lingual one. The keys are the sampling weights they were generated
+# with; we index them by role, not by weight.
+ASR_SAME_LANG_BUCKET = "0.95"
+ASR_CROSS_LANG_BUCKET = "0.05"
+ASR_VARIANT = "default_contexts"   # `nocasepunc` asks for lowercase-no-punct output
+AST_VARIANT = "default_contexts"
+
+# The cross-lingual ASR bucket mixes every instruction language in one list, with no
+# tag. These are the four templates it was generated from, per language: formatting
+# them with the audio language's name reconstructs exactly the entries that belong to
+# `ilang`. Two name the language, two point at it as "its original language" -- all
+# four are answerable, which is why the thin pool is acceptable.
+ASR_CROSS_LANG_TEMPLATES = {
+    "fr": ["Transcrivez l'audio dans sa langue originelle.",
+           "Écrivez exactement en {lang} ce qui est dit dans cet enregistrement audio.",
+           "Transcris en {lang}",
+           "Peux-tu rédiger le texte de ce fichier audio dans sa langue source?"],
+    "en": ["Transcribe the audio in its original language.",
+           "Write exactly in {lang} what is said in this audio recording.",
+           "Transcribe in {lang}",
+           "Can you write the text of this audio file in its source language?"],
+}
 
 # Elliptical follow-ups, the point of `sequential`: meaningless without the previous
 # turns, so they force the model to keep attending to the audio.
@@ -149,6 +203,31 @@ FOLLOWUP_TRANSCRIBE_NAMED = {
         "And the {lang} transcription?",
     ],
 }
+# Same job -- saying which language to answer in when the conversation has not
+# established it -- but by POINTING at the audio instead of naming its language. The
+# ask stays determinate while the language itself has to be recognised from the audio,
+# which naming it hands over for free. Same phrasing the contexts ASR bank uses for its
+# cross-lingual prompts ("Transcrivez l'audio dans sa langue originelle.").
+FOLLOWUP_TRANSCRIBE_SOURCE = {
+    "fr": [
+        "Et la transcription, dans la langue de l'audio ?",
+        "Redonne-moi ce qui est dit, dans la langue d'origine.",
+        "Et le texte d'origine, dans la langue parlée dans l'extrait ?",
+        "Qu'est-ce qui était dit, dans la langue de l'enregistrement ?",
+        "Et la transcription dans sa langue source ?",
+    ],
+    "en": [
+        "And the transcription, in the audio language?",
+        "Remind me what the audio says, in the source audio language.",
+        "And the original text, in the language spoken in the clip?",
+        "What exactly was said, in the language of the recording?",
+        "And the transcription in its source language?",
+    ],
+}
+# Split between the two when the language is not established. Kept at half so neither
+# shape becomes the rule: naming is the easier ask, pointing is the one that trains
+# language identification.
+FOLLOWUP_TRANSCRIBE_NAMED_SHARE = 0.5
 
 # Accent, gender and age are NOT in the assistant's own previous answers, so they are
 # the questions that force a return to the audio rather than to its last transcript.
@@ -287,6 +366,29 @@ CONTINUATION_ELLIPTIC = {
            "Same for this recording.", "And with this audio?",
            "Likewise on that one."],
 }
+# Same switch, but the carried task is NAMED by its output language. A bare "Et
+# celui-ci ?" after "Et la version française ?" is answerable two ways -- transcribe
+# or translate -- and the target is only recoverable by assuming the very last ask
+# carries over rather than the task the conversation opened on. Used for a share of
+# translation carry-overs (--elliptic-lang-rate) so the bare form still trains the
+# carry-over itself.
+CONTINUATION_ELLIPTIC_TARGET = {
+    "fr": ["Et celui-ci, en {lang} ?", "Même chose en {lang} sur cet audio.",
+           "Et cet extrait, en {lang} ?", "Pareil en {lang} pour cet enregistrement.",
+           "Et sa version {adj}, sur ce nouvel audio ?"],
+    "en": ["And this one, in {lang}?", "Same thing in {lang} on this audio.",
+           "What about this clip, in {lang}?", "Same in {lang} for this recording.",
+           "And its {lang} version, on this new audio?"],
+}
+# Transcript carried over onto a clip in ANOTHER language: the output language is
+# fixed by the audio, but naming it removes the doubt about which language is
+# actually being heard.
+CONTINUATION_ELLIPTIC_SOURCE = {
+    "fr": ["Et celui-ci, qui est en {lang} ?", "Même chose sur cet audio en {lang}.",
+           "Et cet extrait en {lang} ?", "Pareil pour cet enregistrement en {lang}."],
+    "en": ["And this one, which is in {lang}?", "Same thing on this {lang} audio.",
+           "What about this {lang} clip?", "Same for this recording in {lang}."],
+}
 
 # With several clips in play "quel accent ?" has no referent, so the question is
 # qualified to point at the latest audio.
@@ -294,6 +396,42 @@ VOICE_QUALIFIER = {
     "fr": ["Sur ce dernier audio : {q}", "Pour l'extrait qu'on vient d'entendre : {q}"],
     "en": ["On this last audio: {q}", "About the clip we just heard: {q}"],
 }
+
+# Closing turn asking for everything already answered, regrouped into one structured
+# reply. The material is entirely in the conversation: nothing new is transcribed or
+# translated, the task is purely to reorganise. Only offered from RECAP_MIN_TURNS
+# content turns on -- recapping a single turn is just repeating it.
+RECAP_MIN_TURNS = 2
+RECAP_QUESTION = {
+    "fr": ["Récapitule tout ce que tu m'as donné.",
+           "Regroupe-moi tout ça proprement.",
+           "Peux-tu réorganiser toutes ces informations en une seule réponse ?",
+           "Rassemble tout ça dans un seul message.",
+           "Fais-moi une synthèse structurée de ce qu'on a vu.",
+           "Reprends l'ensemble et présente-le de façon ordonnée.",
+           "Remets tout ça au propre, en un seul bloc."],
+    "en": ["Sum up everything you have given me.",
+           "Group all of that together properly.",
+           "Can you reorganise all this information into a single answer?",
+           "Put it all together in one message.",
+           "Give me a structured recap of what we covered.",
+           "Take everything above and lay it out in order.",
+           "Tidy all of that up into a single block."],
+}
+# An empty lead is one of the options: a recap that always opens on the same sentence
+# would make the phrase, not the regrouping, the thing being learned.
+RECAP_LEAD = {
+    "fr": ["", "", "Voici le récapitulatif :", "Récapitulatif :", "Voici tout, regroupé :"],
+    "en": ["", "", "Here is the recap:", "Recap:", "Here is everything, grouped:"],
+}
+# Which clip a block belongs to, when the conversation carried more than one.
+RECAP_CLIP_LABEL = {
+    "fr": "Extrait {n} ({lang})",
+    "en": "Clip {n} ({lang})",
+}
+# `prose` is deliberately absent: the ask is to STRUCTURE what was said, and prose
+# output would make the recap indistinguishable from the answers it regroups.
+RECAP_STYLES = ("labelled", "numbered")
 
 _OXFORD_AND = {"fr": "et", "en": "and"}
 
@@ -426,62 +564,74 @@ _MISSING = object()
 
 
 # Set in main(); the builders read it rather than taking a ninth parameter.
-BANK = None
+CONTEXTS_ROOT = None
+# (kind, key, ilang) -> list of prompts. Filled on first draw; a conversation only ever
+# touches the pairs its clips can answer, so loading all 56 AST files up front is waste.
+_CONTEXT_CACHE = {}
 
 
-def load_prompt_bank(path):
-    """Load the repo's instruction bank and check it has what we draw from."""
+def _load_json(path):
     with open(path, encoding="utf-8") as f:
-        bank = json.load(f)
-    for task in BANK_TASKS:
-        if task not in bank:
-            raise ValueError(f"prompt bank {path} has no '{task}' section")
-        for lang in INSTRUCTION_LANGS:
-            if not bank[task].get(lang):
-                raise ValueError(f"prompt bank {path}: '{task}' has no '{lang}' prompts")
-    return bank
+        return json.load(f)
 
 
-def fix_english_articles(text, names):
-    """Repair a/an after a language substitution.
+def asr_prompts(src, ilang):
+    """Turn-1 transcription prompts for `src` audio, written in `ilang`.
 
-    The bank says "Provide an English translation"; swapping in German without
-    touching the article yields "an German translation". Only English needs
-    this -- the French prompts all use "en {langue}", which is article-free.
+    Two regimes, and they differ by an order of magnitude. On the diagonal
+    (`ilang == src`, so French instructions over French audio) the whole same-language
+    bucket applies: 31 prompts for fr, 38 for en. Off it, only the four cross-lingual
+    templates match -- the rest of the file is written in the audio's own language and
+    would silently switch the conversation's instruction language mid-way.
     """
-    if not names:
-        return text
-    pattern = re.compile(r"\b([Aa]n?)(\s+)(" + "|".join(re.escape(n) for n in names) + r")\b")
+    key = ("asr", src, ilang)
+    if key not in _CONTEXT_CACHE:
+        bank = _load_json(CONTEXTS_ROOT / ASR_BANK_NAME.format(lang=src))[ASR_VARIANT]
+        if ilang == src:
+            pool = list(bank[ASR_SAME_LANG_BUCKET])
+        else:
+            want = {t.format(lang=LANG_NAMES[ilang][src])
+                    for t in ASR_CROSS_LANG_TEMPLATES[ilang]}
+            pool = [p for p in bank[ASR_CROSS_LANG_BUCKET] if p in want]
+        if not pool:
+            raise ValueError(f"no {ilang} transcription prompt for {src} audio "
+                             f"in {CONTEXTS_ROOT / ASR_BANK_NAME.format(lang=src)}")
+        _CONTEXT_CACHE[key] = pool
+    return _CONTEXT_CACHE[key]
 
-    def repl(m):
-        article, space, word = m.groups()
-        correct = "an" if word[0].upper() in "AEIOU" else "a"
-        return (correct.capitalize() if article[0].isupper() else correct) + space + word
 
-    return pattern.sub(repl, text)
+def ast_prompts(src, tgt, ilang):
+    """Turn-1 translation prompts for src->tgt, written in `ilang`.
 
-
-def substitute_languages(text, ilang, src, tgt):
-    """Retarget a bank prompt from fr->en to src->tgt.
-
-    Both names are swapped in ONE pass: doing them in sequence would rewrite
-    French to English and then that same English back to French when the pair is
-    reversed.
+    The pair file pools every instruction language into weight buckets with no tag, but
+    every prompt names its TARGET language -- in its own language, so "en néerlandais"
+    marks a French prompt and "naar het Nederlands" a Dutch one. Matching on the target
+    name as spelled in `ilang` selects exactly the ten that belong to it: five naming
+    both languages, five naming only the target. The three bare stubs ("Traduis") are
+    dropped by the same rule, which is what we want here -- turn 1 has to say what
+    language to answer in.
     """
-    mapping = {LANG_NAMES[ilang][BANK_SOURCE_LANG]: LANG_NAMES[ilang][src]}
-    if tgt is not None:
-        mapping[LANG_NAMES[ilang][BANK_TARGET_LANG]] = LANG_NAMES[ilang][tgt]
-    mapping = {k: v for k, v in mapping.items() if k != v}
-    if not mapping:
-        return text
-    pattern = re.compile("|".join(re.escape(k) for k in sorted(mapping, key=len, reverse=True)))
-    out = pattern.sub(lambda m: mapping[m.group(0)], text)
-    return fix_english_articles(out, set(mapping.values())) if ilang == "en" else out
+    key = ("ast", (src, tgt), ilang)
+    if key not in _CONTEXT_CACHE:
+        path = CONTEXTS_ROOT / AST_BANK_RELNAME.format(src=src, tgt=tgt)
+        bank = _load_json(path)[AST_VARIANT]
+        name = LANG_NAMES[ilang][tgt]
+        pool = [p for bucket in bank.values() for p in bucket if name in p]
+        if not pool:
+            raise ValueError(f"no {ilang} translation prompt for {src}->{tgt} in {path}")
+        _CONTEXT_CACHE[key] = pool
+    return _CONTEXT_CACHE[key]
 
 
 def bank_prompt(task, ilang, src, tgt=None):
-    """Draw one turn-1 instruction from the repo bank, retargeted to src/tgt."""
-    return substitute_languages(random.choice(BANK[task][ilang]), ilang, src, tgt)
+    """Draw one turn-1 instruction for `task` from data/contexts.
+
+    No retargeting: the banks are stored per audio language and per pair, so the prompt
+    already names the right languages in the right instruction language.
+    """
+    if task == "transcription":
+        return random.choice(asr_prompts(src, ilang))
+    return random.choice(ast_prompts(src, tgt, ilang))
 
 
 def draw_turns(max_turns, dist=TURN_DIST):
@@ -676,6 +826,82 @@ def append_voice_followups(turns, ilang, meta, probs, qualify=False):
     return added
 
 
+def followup_transcribe(ilang, src, asked):
+    """The elliptical "and the transcription?" turn, naming the audio language or not.
+
+    A bare "What exactly was said?" only works once the conversation has established
+    what language the clip is in. It often has not: the translation bank's `target_only`
+    phrasings ("Translate this file into German.") name the target and nothing else, so
+    after two German and Italian answers there is nothing saying the audio was French,
+    and the ask has no determinate answer -- the model has to guess between transcribing
+    and translating into the instruction language.
+
+    `asked` is the user turns already emitted in this segment. The language counts as
+    established when one of them spells its name in `ilang`, which is exactly what
+    separates the bank's `full` phrasings from its `target_only` ones. Otherwise the ask
+    either names the language or points at the audio's own ("in the source audio
+    language"), half and half.
+    """
+    name = LANG_NAMES[ilang][src]
+    if any(name in text for text in asked):
+        return random.choice(FOLLOWUP_TRANSCRIBE[ilang])
+    if random.random() < FOLLOWUP_TRANSCRIBE_NAMED_SHARE:
+        return fmt(random.choice(FOLLOWUP_TRANSCRIBE_NAMED[ilang]), src, ilang)
+    return random.choice(FOLLOWUP_TRANSCRIBE_SOURCE[ilang])
+
+
+def collect_delivered(rec, trace):
+    """The (key, text) pairs a segment actually answered, in the order it answered them.
+
+    `trace` holds one entry per content turn, each listing the item keys that turn
+    covered (None for the transcript). Read back from the trace rather than recomposed,
+    so a recap can never list something the conversation did not say.
+    """
+    texts = dict(rec["targets"])
+    return [(key, rec["transcript"] if key is None else texts[key])
+            for group in trace for key in group]
+
+
+def append_recap(turns, ilang, delivered, n_content_turns, rate):
+    """Append a closing "group all of that together" turn, or nothing.
+
+    `delivered` is one (record, items) pair per clip, in conversation order. The answer
+    re-renders those items and nothing else: no new transcription, no new translation,
+    which is what makes the turn answerable from context alone. With several clips the
+    blocks are labelled by clip, because otherwise two transcripts in the same reply
+    have nothing telling them apart.
+
+    Gated on CONTENT TURNS, not on items: a lone compound turn already answered three
+    things in one structured block, so recapping it produces a near-copy of the turn
+    right above it.
+
+    Returns whether a recap was appended.
+    """
+    if n_content_turns < RECAP_MIN_TURNS or random.random() >= rate:
+        return False
+
+    # A bare numbered list is fine under one clip, where position carries the meaning.
+    # Across clips it is not: "1." under "Clip 2" says nothing about whether the line is
+    # the transcript or one of the translations, so the labels have to be there.
+    style = "labelled" if len(delivered) > 1 else random.choice(RECAP_STYLES)
+    blocks = []
+    for index, (rec, items) in enumerate(delivered, 1):
+        transcript = next((text for key, text in items if key is None), None)
+        translations = [(key, text) for key, text in items if key is not None]
+        block = render_compound_answer(ilang, transcript, translations, style)
+        if len(delivered) > 1:
+            label = RECAP_CLIP_LABEL[ilang].format(
+                n=index, lang=LANG_NAMES[ilang][rec["meta"]["lang"]])
+            block = f"{label}\n{block}"
+        blocks.append(block)
+
+    lead = random.choice(RECAP_LEAD[ilang])
+    body = "\n\n".join(blocks)
+    turns.append(user_text(random.choice(RECAP_QUESTION[ilang])))
+    turns.append(assistant(f"{lead}\n{body}" if lead else body))
+    return True
+
+
 def pick_compound_selection(targets, max_asks):
     """Choose what a single compound turn asks for.
 
@@ -696,20 +922,12 @@ def pick_compound_selection(targets, max_asks):
 def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None):
     """Render one compound user turn plus its composed answer, or None.
 
-    Transcription + exactly one translation is the case the repo bank already
-    covers, so it is drawn from there. Anything wider (several translations, or
-    translations without the transcript) is assembled from fragments below --
-    the bank has no phrasing for those.
+    Every shape is assembled from fragments. data/contexts has no combined
+    transcribe-then-translate section, and the fr->en bank that used to cover the
+    narrow "transcript plus exactly one translation" case is gone; the fragments
+    already handled everything wider and name the audio language when it differs
+    from the instruction language, so there is nothing the bank was adding.
     """
-    if include_transcript and len(chosen) == 1 and src is not None:
-        tgt, text = chosen[0]
-        instruction = bank_prompt("transcription_and_translation", ilang, src, tgt)
-        answer = render_compound_answer(ilang, transcript, chosen,
-                                        random.choice(ANSWER_STYLES))
-        return [user_text(instruction),
-                user_audio(clip["audio"], clip["duration"]),
-                assistant(answer)]
-
     fragments = []
     if include_transcript:
         # The frame already names the audio language; the fragment repeats it only when
@@ -734,8 +952,7 @@ def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None
     pool = list(COMPOUND_FRAMES_ANY[ilang])
     if len(fragments) == 2:
         pool += COMPOUND_FRAMES_TWO[ilang]
-    instruction = random.choice(pool).format(tasks=tasks,
-                                             src=LANG_NAMES[ilang][src or BANK_SOURCE_LANG])
+    instruction = random.choice(pool).format(tasks=tasks, src=LANG_NAMES[ilang][src])
 
     answer = render_compound_answer(
         ilang, transcript if include_transcript else None, chosen,
@@ -750,7 +967,7 @@ def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None
 
 def build_compound(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
                    *, first_key=_MISSING, last_key=_MISSING, turn_dist=None, min_turns=1,
-                   voice=True, trace=None):
+                   voice=True, trace=None, continuation=False):
     """A single compound turn and nothing else.
 
     The keyword arguments exist so every builder shares one call signature; a
@@ -766,7 +983,7 @@ def build_compound(stem, clip, transcript, targets, ilang, meta, probs, max_asks
 
 def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
                  *, first_key=_MISSING, last_key=_MISSING, turn_dist=TURN_DIST,
-                 min_turns=2, voice=True, trace=None):
+                 min_turns=2, voice=True, trace=None, continuation=False):
     """Several user turns, exactly one of which bundles 2-3 instructions.
 
     The bundled turn is positioned over ALL turns, so "several instructions" is never
@@ -801,6 +1018,10 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
         cursor += take
 
     turns = []
+    # User turns already emitted, read back by `followup_transcribe` to decide whether the
+    # audio language is established. In a continuation the FIRST one is left out: it is
+    # about to be overwritten by the elliptic lead, so it cannot be relied on.
+    asked = []
     if trace is not None:
         trace.extend([tgt for tgt, _ in group] for group in groups)
     for i, group in enumerate(groups):
@@ -812,7 +1033,7 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
             tgt, text = group[0]
             if tgt is None:
                 question = (bank_prompt("transcription", ilang, src) if first
-                            else random.choice(FOLLOWUP_TRANSCRIBE[ilang]))
+                            else followup_transcribe(ilang, src, asked))
             else:
                 question = (bank_prompt("translation", ilang, src, tgt) if first
                             else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
@@ -823,6 +1044,9 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
             if block is None:
                 return None
             turns.extend(block)
+            if not continuation:
+                asked.extend(t["value"] for t in block
+                             if t["from"] == "User" and t["type"] == "text")
             continue
         else:
             langs = oxford_join([LANG_NAMES[ilang][t] for t, _ in translations], ilang)
@@ -834,6 +1058,8 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
                                             random.choice(ANSWER_STYLES))
 
         turns.append(user_text(question))
+        if not (first and continuation):
+            asked.append(question)
         if first:
             turns.append(user_audio(clip["audio"], clip["duration"]))
         turns.append(assistant(answer))
@@ -879,7 +1105,7 @@ def build_mixed(stem, clip, transcript, targets, ilang, meta, probs, max_asks, *
 
 def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_asks=None,
                      *, first_key=_MISSING, last_key=_MISSING, turn_dist=TURN_DIST,
-                     min_turns=2, voice=True, trace=None):
+                     min_turns=2, voice=True, trace=None, continuation=False):
     """Audio in turn 1 only; every later user turn is text-only and elliptical.
 
     The turn count is drawn from TURN_DIST and then that many items are taken,
@@ -895,17 +1121,20 @@ def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_as
         place_key(items, n_turns - 1, last_key)
 
     turns = []
+    asked = []
     if trace is not None:
         trace.extend([tgt] for tgt, _ in items[:n_turns])
     for i, (tgt, text) in enumerate(items[:n_turns]):
         first = i == 0
         if tgt is None:
             question = (bank_prompt("transcription", ilang, src) if first
-                        else random.choice(FOLLOWUP_TRANSCRIBE[ilang]))
+                        else followup_transcribe(ilang, src, asked))
         else:
             question = (bank_prompt("translation", ilang, src, tgt) if first
                         else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
         turns.append(user_text(question))
+        if not (first and continuation):
+            asked.append(question)
         if first:
             turns.append(user_audio(clip["audio"], clip["duration"]))
         turns.append(assistant(text))
@@ -935,6 +1164,23 @@ def count_audios(turns):
     return sum(1 for t in turns if t["type"] == "audio")
 
 
+def elliptic_lead(carried, ilang, src, prev_src, rate):
+    """The user turn opening an elliptic audio switch.
+
+    `carried` is the task inherited from the previous segment: a target code for a
+    translation, None for the transcript. It is spelled out in `rate` of the cases
+    where a bare "and this one?" would leave the answer's language to be guessed --
+    always for a translation, and for the transcript only when the clip changes
+    source language.
+    """
+    if random.random() < rate:
+        if carried is not None:
+            return fmt(random.choice(CONTINUATION_ELLIPTIC_TARGET[ilang]), carried, ilang)
+        if src != prev_src:
+            return fmt(random.choice(CONTINUATION_ELLIPTIC_SOURCE[ilang]), src, ilang)
+    return random.choice(CONTINUATION_ELLIPTIC[ilang])
+
+
 def build_conversation(records, mode, probs, args):
     """Chain one segment per clip into a single conversation.
 
@@ -946,7 +1192,9 @@ def build_conversation(records, mode, probs, args):
     """
     ilang = random.choice(INSTRUCTION_LANGS)
     builder = BUILDERS[mode]
-    turns, used, prev_trace = [], 0, None
+    turns, used, prev_trace, prev_src = [], 0, None, None
+    # What each clip actually answered, for the optional closing recap.
+    delivered, n_content_turns = [], 0
 
     # Decided up front: an elliptic switch constrains the segment BEFORE it, which has to
     # end on a task the next clip can answer.
@@ -956,7 +1204,7 @@ def build_conversation(records, mode, probs, args):
     for index, rec in enumerate(records):
         continuation = index > 0
         trace = []
-        kwargs = {"voice": False, "trace": trace}
+        kwargs = {"voice": False, "trace": trace, "continuation": continuation}
         carried = _MISSING
         if continuation:
             kwargs["turn_dist"] = CONT_TURN_DIST
@@ -985,18 +1233,27 @@ def build_conversation(records, mode, probs, args):
         if continuation:
             # An elliptic lead in front of a bundled answer would be an instruction never given.
             if carried is not _MISSING and len(trace[0]) == 1:
-                apply_lead(segment, text=random.choice(CONTINUATION_ELLIPTIC[ilang]))
+                apply_lead(segment, text=elliptic_lead(
+                    carried, ilang, rec["meta"]["lang"], prev_src,
+                    args.elliptic_lang_rate))
             else:
                 apply_lead(segment, prefix=random.choice(CONTINUATION_EXPLICIT[ilang]))
 
         turns.extend(segment)
+        delivered.append((rec, collect_delivered(rec, trace)))
+        n_content_turns += len(trace)
         prev_trace = trace
+        prev_src = rec["meta"]["lang"]
         used = index + 1
 
     # Appended here, not by the builders: they must come last and describe the LAST clip.
     # A lone compound turn is left alone, that shape being 20% of `mixed` by design.
     content_texts = sum(1 for t in turns if t["from"] == "User" and t["type"] == "text")
     n_audios = count_audios(turns)
+    # Before the voice questions, so what it regroups is exactly the transcription and
+    # translation material -- accent, gender and age are not in `delivered` and a recap
+    # that skipped them while sitting under them would read as an omission.
+    append_recap(turns, ilang, delivered, n_content_turns, args.recap_rate)
     if not (content_texts == 1 and n_audios == 1):
         append_voice_followups(turns, ilang, records[used - 1]["meta"], probs,
                                qualify=n_audios > 1)
@@ -1163,22 +1420,39 @@ def build_reference_sets(source_langs):
                     voice_kind[variant] = kind
                     voice_questions.add(variant)
 
+    # The language-qualified switches are templates: expanded over every language they
+    # can name, so membership stays an exact match like everything else here.
+    qualified = {ilang: {fmt(tpl, lang, ilang)
+                         for table in (CONTINUATION_ELLIPTIC_TARGET,
+                                       CONTINUATION_ELLIPTIC_SOURCE)
+                         for tpl in table[ilang]
+                         for lang in LANG_NAMES[ilang]}
+                 for ilang in INSTRUCTION_LANGS}
+
     for ilang in INSTRUCTION_LANGS:
         single_ask |= set(FOLLOWUP_TRANSCRIBE[ilang])
+        single_ask |= {fmt(t, lang, ilang) for t in FOLLOWUP_TRANSCRIBE_NAMED[ilang]
+                       for lang in LANG_NAMES[ilang]}
+        single_ask |= set(FOLLOWUP_TRANSCRIBE_SOURCE[ilang])
         single_ask |= set(CONTINUATION_ELLIPTIC[ilang])
+        single_ask |= qualified[ilang]
         single_ask |= voice_questions
         for src in source_langs:
-            single_ask |= {substitute_languages(t, ilang, src, None)
-                           for t in BANK["transcription"][ilang]}
+            single_ask |= set(asr_prompts(src, ilang))
         for tgt in LANG_NAMES[ilang]:
             for tpl in FOLLOWUP_TRANSLATE[ilang]:
                 single_ask.add(fmt(tpl, tgt, ilang))
             for src in source_langs:
-                single_ask |= {substitute_languages(t, ilang, src, tgt)
-                               for t in BANK["translation"][ilang]}
+                if src != tgt:
+                    single_ask |= set(ast_prompts(src, tgt, ilang))
     prefixes = tuple(p for ilang in INSTRUCTION_LANGS for p in CONTINUATION_EXPLICIT[ilang])
-    elliptic = {p for ilang in INSTRUCTION_LANGS for p in CONTINUATION_ELLIPTIC[ilang]}
-    return single_ask, voice_questions, voice_kind, prefixes, elliptic
+    elliptic = {p for ilang in INSTRUCTION_LANGS
+                for p in list(CONTINUATION_ELLIPTIC[ilang]) + list(qualified[ilang])}
+    # Recaps ask for no new task, so they are pulled out of `content` before the shape
+    # is read: left in, every recap would look like a bundled turn and relabel the
+    # conversation a hybrid.
+    recap = {p for ilang in INSTRUCTION_LANGS for p in RECAP_QUESTION[ilang]}
+    return single_ask, voice_questions, voice_kind, prefixes, elliptic, recap
 
 
 def generate(args):
@@ -1187,7 +1461,7 @@ def generate(args):
     out_root = Path(args.output_dir)
     shares = parse_lang_shares(args.lang_share)
     modes = ALL_MODES if args.mode == "all" else [args.mode]
-    single_ask, voice_questions, voice_kind, cont_prefixes, elliptic_leads = \
+    single_ask, voice_questions, voice_kind, cont_prefixes, elliptic_leads, recap_questions = \
         build_reference_sets(args.source_langs)
 
     for split in args.splits:
@@ -1277,6 +1551,7 @@ def generate(args):
         position_counts = defaultdict(Counter)
         audio_counts = defaultdict(Counter)
         cont_style = defaultdict(Counter)
+        recap_counts = Counter()
         lang_counts = defaultdict(Counter)
         open_lang = defaultdict(Counter)
         groups = 0
@@ -1331,6 +1606,9 @@ def generate(args):
                     if kind:
                         voice_counts[mode][kind] += 1
                         continue
+                    if value in recap_questions:
+                        recap_counts[mode] += 1
+                        continue
                     if value in elliptic_leads:
                         cont_style[mode]["elliptic"] += 1
                         leads.append(len(content))
@@ -1382,6 +1660,10 @@ def generate(args):
                     f"{kind} {voice_counts[mode][kind] / total * 100:.1f}%"
                     for kind in ("accent", "gender", "age") if voice_counts[mode][kind]),
                     file=sys.stderr)
+            if recap_counts[mode]:
+                print(f"[{split}]     recap turns: "
+                      f"{recap_counts[mode] / total * 100:.1f}% "
+                      f"({recap_counts[mode]})", file=sys.stderr)
             if len(shape_counts[mode]) > 1:
                 print(f"[{split}]     shapes: " + "  ".join(
                     f"{k} {v / total * 100:.0f}%"
@@ -1443,6 +1725,12 @@ def parse_args():
                    help="Share of audio switches introduced with no instruction at all "
                         "(\"Et celui-ci ?\"), carrying the previous task over; the rest get an "
                         "explicit lead. Only applies when the new clip can answer that task.")
+    p.add_argument("--elliptic-lang-rate", type=float, default=0.7,
+                   help="Share of those elliptic switches that NAME the carried task's "
+                        "language (\"Et celui-ci, en allemand ?\") instead of leaving it "
+                        "implicit. Only applies where the bare form is ambiguous: a carried "
+                        "translation, or a carried transcript on a clip in another language. "
+                        "0 restores the fully bare form everywhere.")
     p.add_argument("--targets", nargs="*", default=None,
                    help="Restrict to these target languages (default: every one discovered)")
     p.add_argument("--splits", nargs="+", default=["train"])
@@ -1468,9 +1756,15 @@ def parse_args():
                         "as impressions.")
     p.add_argument("--age-rate", type=float, default=0.05,
                    help="Same, for age.")
-    p.add_argument("--prompt-bank", default=None,
-                   help="Override the repo instruction bank "
-                        "(data/assets/instruction_transcription_and_translation_fr-en.txt)")
+    p.add_argument("--recap-rate", type=float, default=0.10,
+                   help="Share of eligible conversations closing on a 'group all of that "
+                        "together' turn, answered by restructuring what was already said "
+                        f"and nothing else. Eligible = at least {RECAP_MIN_TURNS} content "
+                        "turns. 0 disables.")
+    p.add_argument("--contexts-root", default=None,
+                   help="Override data/contexts, source of the turn-1 transcription "
+                        "({lang}_asr_contexts.json) and translation "
+                        "(translation/{src}-{tgt}_ast_contexts.json) instructions.")
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args()
 
@@ -1478,8 +1772,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     random.seed(args.seed)
-    bank_path = Path(args.prompt_bank) if args.prompt_bank else \
-        Path(__file__).resolve().parent.parent.joinpath(*PROMPT_BANK_RELPATH)
-    BANK = load_prompt_bank(bank_path)
-    print(f"prompt bank: {bank_path}", file=sys.stderr)
+    CONTEXTS_ROOT = Path(args.contexts_root) if args.contexts_root else \
+        Path(__file__).resolve().parent.parent.joinpath(*CONTEXTS_RELPATH)
+    print(f"instruction banks: {CONTEXTS_ROOT}", file=sys.stderr)
     generate(args)
