@@ -345,6 +345,37 @@ def disp_task(domain: str, task: str) -> str:
     return t.replace("/", ".")
 
 
+# OpenLLM-France curation marks, shown per (task, language) line in the Content column:
+#   🎙️ = audio synthesized by OpenLLM-France; ✍️ = text (Q&A / translations / captions)
+#   generated or modified by OpenLLM-France.
+CURATED_MARKS = {"audio": "🎙️", "text": "✍️"}
+
+
+def normalize_curated(spec):
+    """Normalize a registry `curated` value into a list of rules ``{task, kind, lang?}``.
+
+    Accepts: None -> []; a scalar ``"text"``/``"audio"`` -> one wildcard rule covering
+    the whole dataset; a ``{task: kind}`` mapping; or an explicit list of rule dicts.
+    In a rule, ``task == "*"`` matches any task and a missing/None ``lang`` matches any
+    language, so curation can be pinned to a single task line (e.g. only ``temporal``) or
+    even a single language of a task (e.g. MusicCaps ``music.captioning`` in French only)."""
+    if not spec:
+        return []
+    if isinstance(spec, str):
+        return [{"task": "*", "kind": spec}]
+    if isinstance(spec, dict):
+        return [{"task": k, "kind": v} for k, v in spec.items()]
+    return list(spec)
+
+
+def curated_kind(rules, task_label, lang):
+    """Return 'audio'/'text' if a curation rule matches this (task, language) line, else None."""
+    for r in rules or []:
+        if r.get("task") in ("*", task_label) and r.get("lang") in (None, lang):
+            return r.get("kind")
+    return None
+
+
 def load_stats_csv(path: str, data_root: str) -> dict:
     """Precomputed per-manifest stats: abspath -> (num_samples, duration_sec).
 
@@ -668,9 +699,11 @@ def write_dataset_card(output_root, configs, stats_rows, datasets_used, collecti
         # One "Content" column: total samples · duration, then a per-(task, language)
         # breakdown. Single group collapses to one line; groups with unknown counts
         # (e.g. excluded datasets exported without --stats-csv) show the label only.
+        # OpenLLM-France curation marks (🎙️/✍️) hug the specific task line(s) concerned.
         groups = d.get("groups") or {}
         if not groups:
             return "—"
+        rules = d.get("curated_rules")
         items = sorted(groups.items(), key=lambda kv: (-kv[1]["samples"], kv[0]))
         known = [g for _, g in items if g["known"]]
         total_s = sum(g["samples"] for g in known)
@@ -680,14 +713,20 @@ def write_dataset_card(output_root, configs, stats_rows, datasets_used, collecti
             n = f"{g['samples']:,} samples" if word else f"{g['samples']:,}"
             return f"{n} · {fmt_duration(g['duration'])}" if g["duration"] else n
 
+        def mark(task, lang):
+            k = curated_kind(rules, task, lang)
+            return f"{CURATED_MARKS[k]} " if k else ""
+
         if len(items) == 1:
             (task, lang), g = items[0]
-            return f"{qty(g, word=True)} — {task}, {lang}" if g["known"] else f"{task}, {lang}"
+            m = mark(task, lang)
+            return f"{qty(g, word=True)} — {m}{task}, {lang}" if g["known"] else f"{m}{task}, {lang}"
 
         head = f"**{total_s:,} samples · {fmt_duration(total_d)}**" if total_d else f"**{total_s:,} samples**"
         lines = [head]
         for (task, lang), g in items:
-            lines.append(f"• {task}, {lang} — {qty(g)}" if g["known"] else f"• {task}, {lang}")
+            m = mark(task, lang)
+            lines.append(f"• {m}{task}, {lang} — {qty(g)}" if g["known"] else f"• {m}{task}, {lang}")
         return "<br>".join(lines)
 
     def hosted_url(d):
@@ -704,28 +743,32 @@ def write_dataset_card(output_root, configs, stats_rows, datasets_used, collecti
         return f"[source]({d['url']})" if d["url"] else "—"
 
     def dataset_label(name, d, always_bold=False):
-        # Flag datasets curated by OpenLLM-France: 🎙️ = audio we synthesized,
-        # ✍️ = text (Q&A / translations / captions) we generated or modified.
-        mark = {"audio": "🎙️ ", "text": "✍️ "}.get(d.get("curated"), "")
-        body = f"**{name}**" if (d.get("curated") or always_bold) else name
-        return mark + body
+        # Curation is flagged per task line in the Content column (see content_cell),
+        # not on the whole dataset — so the dataset name carries no mark here.
+        return f"**{name}**" if always_bold else name
 
     rows = sorted(datasets_used.items(), key=lambda kv: kv[0].lower())
     table_rows = [
         [dataset_label(name, d), license_str(d, short=True), status(d), audio_cell(d), content_cell(d)]
         for name, d in rows
     ]
-    legend = ("**🎙️ = audio synthesized by OpenLLM-France** · **✍️ = text (questions/answers, "
-              "translations, or captions) generated or modified by OpenLLM-France** — see each "
-              "dataset's note below for details.\n\n") if any(d.get("curated") for _, d in rows) else ""
+    instr_note = ("The **instruction prompts** (the user-turn wording that states each task) were written "
+                  "by OpenLLM-France for every task **except question answering** (`qa`).\n\n")
+    marks_legend = ("Marks in the **Content** column flag data produced by OpenLLM-France, on the specific "
+                    "task line(s) concerned: **🎙️ = audio synthesized by OpenLLM-France** · **✍️ = text "
+                    "(questions/answers, translations, or captions) generated or modified by OpenLLM-France** "
+                    "— see each dataset's note below for details.\n\n") if any(d.get("curated_rules") for _, d in rows) else ""
+    legend = instr_note + marks_legend
     dataset_table = legend + _md_table(
         ["Dataset", "License", "In this release", "Audio", "Content"], table_rows
     )
 
     def render_source(s):
         # Typed sources: "[audio] Clotho (Freesound) — CC-BY-NC-4.0 — <url>".
+        # The "both" type (text + audio) is the default, so it is left implicit;
+        # only "audio"/"text" are shown as a "[type]" tag.
         bits = []
-        if s.get("type"):
+        if s.get("type") and s["type"] != "both":
             bits.append(f"[{s['type']}]")
         label = " — ".join(p for p in (s.get("name") or s.get("desc"), s.get("license")) if p)
         if label:
@@ -908,7 +951,7 @@ def export(args):
             "url": policy.get("audio_source_url", ""),
             "notes": policy.get("notes", ""),
             "sources": policy.get("sources", []),
-            "curated": policy.get("curated") or None,  # "audio" | "text" | None
+            "curated_rules": normalize_curated(policy.get("curated")),  # [{task, kind, lang?}]
             "splits": [], "tasks": set(), "langs": set(), "audio_dirs": set(), "groups": {},
         })
         du["splits"].append(f"{domain}/{task}/{name}")

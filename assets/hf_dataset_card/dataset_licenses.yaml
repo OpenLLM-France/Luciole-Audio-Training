@@ -2,8 +2,9 @@
 # License & redistribution registry for the Luciole Audio Training Dataset.
 # Schema per entry: name, match, license_text, license_audio, redistribute_text,
 #   redistribute_audio, audio_source_url, sources[] (type, name, license, url),
-#   curated ("audio"/"text"), audited (bool), license_discrepancy (optional: discussion
-#   of inconsistent license mentions across sources), notes.
+#   curated (list of {task, kind: audio|text, lang?} rules marking OpenLLM-France-
+#   produced task lines; task "*" = whole dataset), audited (bool),
+#   license_discrepancy (optional), notes.
 # All public strings: concise, no internal paths.
 # ============================================================================
 
@@ -30,24 +31,18 @@ datasets:
     license: CC0-1.0 (stated as 'Public Domain, CC-0')
     url: https://huggingface.co/datasets/fsicoli/common_voice_22_0
   - type: both
-    name: fsicoli/common_voice_22_0 README.md (raw) (secondary)
-    license: cc0-1.0
-    url: https://huggingface.co/datasets/fsicoli/common_voice_22_0/raw/main/README.md
-  - type: both
     name: mozilla-foundation/common_voice_17_0 (HuggingFace — now empty) (legacy tag)
     license: Not visible — repository emptied
     url: https://huggingface.co/datasets/mozilla-foundation/common_voice_17_0
-  - type: both
-    name: HuggingFace API — mozilla-foundation/common_voice_17_0 (legacy tag)
-    license: Not declared in API response; no cardData.license field
-    url: https://huggingface.co/api/datasets/mozilla-foundation/common_voice_17_0
-  - type: both
-    name: HuggingFace API — mozilla-foundation/common_voice_11_0 (legacy tag)
-    license: Unknown — HTTP 401 Unauthorized
-    url: https://huggingface.co/api/datasets/mozilla-foundation/common_voice_11_0
   audited: true
-  notes: Audio and text both come from Mozilla Common Voice (cv-corpus 22.0). Only public-domain or CC0-dedicated sentences are accepted, and contributors dedicate their recordings to the public domain, so both layers are CC0-1.0. OpenLLM-France additionally generated automatic speech translation (AST) pairs from these recordings using Qwen3-14B.
-  curated: text
+  notes: Audio and text both come from Mozilla Common Voice (cv-corpus 22.0). Only public-domain or CC0-dedicated sentences are accepted, and contributors dedicate their recordings to the public domain, so both layers are CC0-1.0. OpenLLM-France additionally generated automatic speech translation (AST) pairs from these recordings using Qwen3-14B. OpenLLM-France also built the age- and gender-recognition conversations, wrapping Common Voice's own age/gender metadata in instruction prompts and answer phrasings authored by OpenLLM-France.
+  curated:
+  - task: ast
+    kind: text
+  - task: age_reco
+    kind: text
+  - task: gender_reco
+    kind: text
   license_discrepancy: 'There is one substantive tension: the CC0-1.0 copyright waiver (irrevocable by the contributors) versus the Mozilla Data Collective Data Consumer Terms of Use (last updated May 6, 2026), which contractually prohibit re-hosting of data downloaded through their platform. These two instruments operate on different legal bases. The CC0 waiver permanently and irrevocably relinquishes copyright — this is explicit in CC0 Section 2 and confirmed by the Creative Commons legal code. The Mozilla Data Collective ToS is a contractual access control that governs how users may use data accessed specifically '
 - name: CoVoST / CoVoST2
   match: covost
@@ -77,10 +72,6 @@ datasets:
     name: HuggingFace dataset card (facebook/covost2)
     license: CC-BY-NC-4.0
     url: https://huggingface.co/datasets/facebook/covost2
-  - type: both
-    name: HuggingFace API (facebook/covost2)
-    license: cc-by-nc-4.0
-    url: https://huggingface.co/api/datasets/facebook/covost2
   audited: true
   notes: A speech-translation dataset whose audio comes entirely from Mozilla Common Voice (CC0-1.0). The translation text, created by Facebook Research, is stated as CC0 in the paper and source repository but declared CC-BY-NC-4.0 on the HuggingFace dataset card; we apply the more restrictive terms to the text.
   license_discrepancy: 'There is a clear discrepancy between two tiers of official sources. The primary authoritative tier — the paper (arXiv 2007.10310) and the GitHub README license table (both by the original Facebook Research authors) — explicitly states CC0 for the CoVoST data. The README even includes a CC0 badge at the top and a license table that explicitly carves out CC BY-NC 4.0 only for ''Anything else'' (i.e., code and non-data materials). The secondary tier — the GitHub LICENSE file (which applies to the repo as a whole) and the HuggingFace dataset card (maintained by the ''facebook'' organization) — states '
@@ -96,14 +87,6 @@ datasets:
     name: google/fleurs HuggingFace dataset card (browser page)
     license: CC-BY-4.0
     url: https://huggingface.co/datasets/google/fleurs
-  - type: both
-    name: google/fleurs HuggingFace API (cardData.license)
-    license: cc-by-4.0
-    url: https://huggingface.co/api/datasets/google/fleurs
-  - type: both
-    name: google/fleurs README.md YAML frontmatter (HuggingFace raw)
-    license: CC-BY-4.0
-    url: https://huggingface.co/datasets/google/fleurs/raw/main/README.md
   - type: both
     name: FLEURS paper (arXiv:2205.12446)
     license: CC-BY-4.0
@@ -136,10 +119,6 @@ datasets:
     license: CC-BY-4.0
     url: https://www.openslr.org/94/
   - type: both
-    name: HuggingFace API — facebook/multilingual_librispeech
-    license: CC-BY-4.0
-    url: https://huggingface.co/api/datasets/facebook/multilingual_librispeech
-  - type: both
     name: LibriVox (upstream audio source)
     license: Public Domain
     url: https://librivox.org/
@@ -148,7 +127,10 @@ datasets:
     license: No dataset license explicitly stated in abstract; dataset described as
     url: https://arxiv.org/abs/2012.03411
   audited: true
-  notes: A multilingual speech corpus from Facebook AI Research, derived from public-domain LibriVox audiobooks and distributed via OpenSLR. Both audio and transcripts are released under CC-BY-4.0.
+  notes: A multilingual speech corpus from Facebook AI Research, derived from public-domain LibriVox audiobooks and distributed via OpenSLR. Both audio and transcripts are released under CC-BY-4.0. OpenLLM-France generated the temporal-localization conversations (word↔time and time↔sentence, with ~5% unanswerable cases) from the corpus's forced-aligned transcripts.
+  curated:
+  - task: temporal
+    kind: text
 - name: Multilingual TEDx
   match: multilingual_tedx
   license_text: CC-BY-NC-ND-4.0
@@ -174,10 +156,6 @@ datasets:
     license: Unknown (page not accessible)
     url: https://huggingface.co/datasets/IWSLT/multilingual_tedx
   - type: both
-    name: HuggingFace API — sanchit-gandhi/multilingual-tedx
-    license: Unknown (page not accessible)
-    url: https://huggingface.co/api/datasets/sanchit-gandhi/multilingual-tedx
-  - type: both
     name: MuAViC (Facebook Research) — secondary corpus using mTEDx audio (secondary)
     license: CC-BY-NC-4.0
     url: https://github.com/facebookresearch/muavic
@@ -200,10 +178,6 @@ datasets:
     name: espnet/yodas HuggingFace dataset card
     license: CC-BY-3.0
     url: https://huggingface.co/datasets/espnet/yodas
-  - type: both
-    name: espnet/yodas HuggingFace API (cardData)
-    license: cc-by-3.0
-    url: https://huggingface.co/api/datasets/espnet/yodas
   - type: both
     name: espnet/espnet GitHub — egs2/yodas/ recipe
     license: not retrieved
@@ -236,10 +210,6 @@ datasets:
     license: gpl (unversioned in card metadata)
     url: https://huggingface.co/datasets/voxforge/en
   - type: both
-    name: HuggingFace API — voxforge/voxforge
-    license: Unknown — page not accessible
-    url: https://huggingface.co/api/datasets/voxforge/voxforge
-  - type: both
     name: HuggingFace dataset — voxforge/fr
     license: Unknown — page not accessible
     url: https://huggingface.co/datasets/voxforge/fr
@@ -256,12 +226,8 @@ datasets:
   license_audio: CC-BY-SA-4.0
   redistribute_text: true
   redistribute_audio: true
-  audio_source_url: https://huggingface.co/api/datasets/datasets-CNRS/acsynt
+  audio_source_url: https://huggingface.co/datasets/datasets-CNRS/acsynt
   sources:
-  - type: both
-    name: HuggingFace API — datasets-CNRS/acsynt (cardData.license field)
-    license: cc-by-sa-4.0
-    url: https://huggingface.co/api/datasets/datasets-CNRS/acsynt
   - type: both
     name: HuggingFace dataset page — datasets-CNRS/acsynt
     license: CC-BY-SA-4.0
@@ -336,10 +302,6 @@ datasets:
     license: MIT
     url: https://huggingface.co/datasets/medkit/simsamu
   - type: both
-    name: medkit/simsamu HuggingFace API (cardData.license)
-    license: MIT
-    url: https://huggingface.co/api/datasets/medkit/simsamu
-  - type: both
     name: ORTOLANG corpora catalog
     license: N/A — not listed
     url: https://www.ortolang.fr/market/corpora
@@ -362,10 +324,6 @@ datasets:
     license: cc0-1.0 + other
     url: https://huggingface.co/datasets/facebook/voxpopuli
   - type: both
-    name: facebook/voxpopuli HuggingFace API (cardData)
-    license: cc0-1.0 + other
-    url: https://huggingface.co/api/datasets/facebook/voxpopuli
-  - type: both
     name: facebookresearch/voxpopuli GitHub — README.md (data license section)
     license: CC0
     url: https://github.com/facebookresearch/voxpopuli
@@ -387,7 +345,9 @@ datasets:
     url: https://aclanthology.org/2021.acl-long.80
   audited: true
   notes: European Parliament recordings (2009-2020) with transcripts, released under CC0; covers the ASR and QA subsets. For the QA subset, questions and answers were generated from the transcripts with Qwen3-8B, including ~3% deliberately unanswerable questions to train handling of impossible queries.
-  curated: text
+  curated:
+  - task: qa
+    kind: text
   license_discrepancy: 'The HuggingFace dataset card and API list two license tags: ''cc0-1.0'' and ''other''. This dual tag is not a contradiction — it reflects that (1) Facebook Research releases the derived VoxPopuli dataset under CC0, and (2) the underlying raw European Parliament recordings are governed by the EP''s own legal notice, which is categorised as ''other'' since it is not a standardised SPDX identifier. The EP''s notice permits reuse with attribution for both commercial and non-commercial purposes; VoxPopuli''s README satisfies this by acknowledging the EP. The GitHub repository''s LICENSE file (CC BY-NC 4.0) a'
 - name: African Accented French
   match: africanaccentedfrench
@@ -409,10 +369,6 @@ datasets:
     name: gigant/african_accented_french (HuggingFace dataset card) (secondary)
     license: cc (unspecified Creative Commons variant)
     url: https://huggingface.co/datasets/gigant/african_accented_french
-  - type: both
-    name: HuggingFace API — gigant/african_accented_french cardData (secondary)
-    license: cc
-    url: https://huggingface.co/api/datasets/gigant/african_accented_french
   audited: true
   notes: The African Accented French Corpus (~22 hours of French speech from Cameroon, Gabon, and Niger), distributed via OpenSLR (SLR57). Both audio and transcripts are released together under Apache-2.0, per the corpus's canonical info file.
   license_discrepancy: The HuggingFace mirror (gigant/african_accented_french) declares "cc" (unspecified Creative Commons variant) while the authoritative canonical source — OpenSLR SLR57 — clearly states Apache 2.0 in both the main page and the machine-readable info.txt. The HuggingFace dataset is a secondary re-upload contributed in 2022 by user @gigant, not the original publisher; the re-uploader's README explicitly acknowledges OpenSLR SLR57 as the source but chose an incorrect or placeholder license tag. Since the info.txt distributed by OpenSLR is the official license declaration for this corpus, Apache 2.0 i
@@ -484,8 +440,11 @@ datasets:
     license: CC BY-SA (no NC component listed in table)
     url: https://arxiv.org/html/2311.16840
   audited: true
-  notes: 'The Corpus de Français Parlé Parisien des années 2000: ~40 hours of sociolinguistic interviews produced by researchers at Université Sorbonne Nouvelle and distributed via ORTOLANG. Audio and transcripts are released together under CC-BY-NC-SA-3.0.'
+  notes: 'The Corpus de Français Parlé Parisien des années 2000: ~40 hours of sociolinguistic interviews produced by researchers at Université Sorbonne Nouvelle and distributed via ORTOLANG. Audio and transcripts are released together under CC-BY-NC-SA-3.0. OpenLLM-France generated the speaker-diarization conversations from the corpus''s speaker-turn annotations: the audio is re-used unchanged (segmented into short ~10-90s windows) and the assistant targets are speaker-labelled transcripts and/or ''who spoke when'' timelines (speaker + start/end times), with speakers anonymized as ''Speaker N'' by order of appearance.'
   license_discrepancy: 'One discrepancy: the arXiv HTML rendering of the CLAIRE paper (2311.16840) lists CFPP as ''CC BY-SA'' (without the NC component). This is a secondary source (a downstream paper, not the original depositor) and is almost certainly a typographical abbreviation error — every authoritative source agrees on CC-BY-NC-SA-3.0: the COCOON/Huma-Num institutional archive (which independently holds a CC-BY-NC-SA-3.0 Unported declaration in machine-readable Dublin Core metadata), all 42 embedded per-record OAI-PMH metadata files, and the Claire project''s own HuggingFace dataset card. The project website is u'
+  curated:
+  - task: diarization
+    kind: text
 - name: CLAPI
   match: clapi
   license_text: CC-BY-NC-SA-4.0
@@ -562,8 +521,11 @@ datasets:
     license: CC-BY-NC-SA-4.0 (inherited)
     url: https://speech-data-hub.levoicelab.org/
   audited: true
-  notes: The Enquête Sociolinguistique à Orléans, an oral French corpus from the Laboratoire Ligérien de Linguistique (Université d'Orléans), distributed via ORTOLANG and the COCOON/Huma-Num archive. Audio and transcriptions are released under CC-BY-NC-SA-4.0.
+  notes: 'The Enquête Sociolinguistique à Orléans, an oral French corpus from the Laboratoire Ligérien de Linguistique (Université d''Orléans), distributed via ORTOLANG and the COCOON/Huma-Num archive. Audio and transcriptions are released under CC-BY-NC-SA-4.0. OpenLLM-France generated the speaker-diarization conversations from the corpus''s speaker-turn annotations: the audio is re-used unchanged (segmented into short ~10-90s windows) and the assistant targets are speaker-labelled transcripts and/or ''who spoke when'' timelines (speaker + start/end times), with speakers anonymized as ''Speaker N'' by order of appearance.'
   license_discrepancy: Two discrepancies found. (1) BrunoHays/ESLO has a mislabeled YAML frontmatter (cc-by-nc-4.0, no ShareAlike) that contradicts its own body text ('Partage dans les Mêmes Conditions' = ShareAlike = CC-BY-NC-SA). This is a secondary non-authoritative re-upload; the body text and all authoritative CNRS/ORTOLANG sources agree on CC-BY-NC-SA-4.0. The more restrictive interpretation (CC-BY-NC-SA-4.0) is used. (2) The HTML rendering of arXiv:2311.16840 Table 1 shows 'CC BY-SA' for ESLO, likely due to table truncation dropping the NC element; the same paper's dataset card explicitly states CC-BY-NC-SA-4
+  curated:
+  - task: diarization
+    kind: text
 - name: LesVocaux
   match: lesvocaux
   license_text: CC-BY-NC-SA-4.0
@@ -576,10 +538,6 @@ datasets:
     name: datasets-CNRS/lesvocaux HuggingFace dataset card (YAML frontmatter)
     license: cc-by-nc-sa-4.0
     url: https://huggingface.co/datasets/datasets-CNRS/lesvocaux
-  - type: both
-    name: datasets-CNRS/lesvocaux HuggingFace API (cardData.license)
-    license: CC BY-NC-SA 4.0
-    url: https://huggingface.co/api/datasets/datasets-CNRS/lesvocaux
   - type: both
     name: LeVoiceLab Speech Data Hub — lesvocaux.meta.json (embedded local file) (embedded metadata)
     license: Creative Commons Attribution-Noncommercial-ShareAlike 4.0
@@ -623,8 +581,11 @@ datasets:
     license: CC BY-NC-SA 2.0 FR
     url: https://creativecommons.org/licenses/by-nc-sa/2.0/fr/
   audited: true
-  notes: Distributed under a non-commercial license (covers the ASR and diarization subsets).
+  notes: 'Distributed under a non-commercial license (covers the ASR and diarization subsets). OpenLLM-France generated the speaker-diarization conversations from the corpus''s speaker-turn annotations: the audio is re-used unchanged (segmented into short ~10-90s windows) and the assistant targets are speaker-labelled transcripts and/or ''who spoke when'' timelines (speaker + start/end times), with speakers anonymized as ''Speaker N'' by order of appearance.'
   license_discrepancy: 'Two minor discrepancies exist but neither changes the outcome. First, the CNRTL primary source explicitly specifies the French jurisdictional adaptation (CC-BY-NC-SA-2.0-FR, linking to creativecommons.org/licenses/by-nc-sa/2.0/fr/), while the HuggingFace dataset card (datasets-CNRS/TCOF) uses the generic ''cc-by-nc-sa-2.0'' tag — this is because HuggingFace does not have a distinct license tag for jurisdictional adaptations. The practical terms of both are identical; the registry''s ''CC-BY-NC-SA-2.0-FR'' correctly reflects the authoritative source. Second, the latest ORTOLANG deposit is v2.2 (626 '
+  curated:
+  - task: diarization
+    kind: text
 - name: PFC
   match: /pfc/
   license_text: CC-BY-NC-4.0
@@ -698,10 +659,6 @@ datasets:
     name: LeVoiceLab Speech Data Hub main page
     license: Not stated
     url: https://speech-data-hub.levoicelab.org/
-  - type: both
-    name: HuggingFace API — levoicelab/ctf-ar
-    license: Unknown (HTTP 401 Unauthorized)
-    url: https://huggingface.co/api/datasets/levoicelab/ctf-ar
   audited: true
   notes: Simulated French telephone-conversation corpora with no public license; not included here.
 - name: YouTubeFr
@@ -710,20 +667,16 @@ datasets:
   license_audio: Copyrighted (YouTube)
   redistribute_text: false
   redistribute_audio: false
-  audio_source_url: https://huggingface.co/linagora/linto_stt_fr_fastconformer/blob/main/README.md
+  audio_source_url: https://huggingface.co/linagora/linto_stt_fr_fastconformer
   sources:
   - type: both
-    name: linagora/linto_stt_fr_fastconformer README (HuggingFace model card)
+    name: linagora/linto_stt_fr_fastconformer (HuggingFace dataset card)
     license: CC0
-    url: https://huggingface.co/linagora/linto_stt_fr_fastconformer/blob/main/README.md
+    url: https://huggingface.co/linagora/linto_stt_fr_fastconformer
   - type: both
-    name: linagora/linto_stt_fr_fastconformer_pc README (HuggingFace model card, punc
+    name: linagora/linto_stt_fr_fastconformer_pc (HuggingFace dataset card)
     license: CC0
-    url: https://huggingface.co/linagora/linto_stt_fr_fastconformer_pc/raw/main/README.md
-  - type: both
-    name: HuggingFace dataset API (linagora/YouTubeFr)
-    license: Unknown — dataset is private or does not exist publicly
-    url: https://huggingface.co/api/datasets/linagora/YouTubeFr
+    url: https://huggingface.co/linagora/linto_stt_fr_fastconformer_pc
   - type: both
     name: YouTube Creative Commons licensing documentation (Google Support)
     license: CC BY (Attribution) only — no CC0 option
@@ -737,16 +690,12 @@ datasets:
   license_audio: Apache-2.0 / CC-BY-SA-4.0
   redistribute_text: true
   redistribute_audio: true
-  audio_source_url: https://huggingface.co/datasets/asapp/slue-phase-2/resolve/main/README.md
+  audio_source_url: https://huggingface.co/datasets/asapp/slue-phase-2
   sources:
   - type: both
-    name: SLUE phase-2 HuggingFace dataset card README (asapp/slue-phase-2) — SQA-5 s
+    name: asapp/slue-phase-2 (HuggingFace dataset card)
     license: Apache-2.0
-    url: https://huggingface.co/datasets/asapp/slue-phase-2/resolve/main/README.md
-  - type: both
-    name: SLUE phase-2 HuggingFace API (card-level YAML frontmatter license field)
-    license: CC-BY-4.0
-    url: https://huggingface.co/api/datasets/asapp/slue-phase-2
+    url: https://huggingface.co/datasets/asapp/slue-phase-2
   - type: both
     name: TriviaQA GitHub (mandarjoshi90/triviaqa) — LICENSE file
     license: Apache-2.0 (code and data)
@@ -768,28 +717,23 @@ datasets:
     license: Not stated in abstract
     url: https://arxiv.org/abs/2212.10525
   audited: true
-  notes: Covers the SQA5 question-answering and temporal-localization subsets.
+  notes: Covers the SQA5 question-answering and temporal-localization subsets. OpenLLM-France generated the temporal-localization conversations (word↔time and time↔sentence, with ~5% unanswerable cases) from forced-aligned transcripts; the question-answering subset is the original SLUE-SQA-5 data.
   license_discrepancy: Two minor discrepancies were found. First, the HuggingFace API card-level YAML frontmatter declares `cc-by-4.0`, which is the license for the SLUE-HVB subset; this is not the license for SLUE-SQA-5. The detailed per-subset README section overrides this and is the authoritative source for SQA-5. Second, the SLUE README states CC-BY-SA-4.0 for Natural Questions content, but NQ's own HuggingFace card states CC-BY-SA-3.0. This discrepancy (4.0 vs 3.0) does not change redistribution status, as both versions carry the same redistribution-with-attribution-and-ShareAlike terms. Neither discrepancy int
+  curated:
+  - task: temporal
+    kind: text
 - name: SLUE-TED (SLUE phase-2)
   match: slue-phase-2-ted
   license_text: CC-BY-NC-ND-4.0
   license_audio: CC-BY-NC-ND-4.0
   redistribute_text: false
   redistribute_audio: false
-  audio_source_url: https://huggingface.co/datasets/asapp/slue-phase-2/blob/main/README.md
+  audio_source_url: https://huggingface.co/datasets/asapp/slue-phase-2
   sources:
   - type: both
-    name: asapp/slue-phase-2 HuggingFace dataset card README (blob/main)
+    name: asapp/slue-phase-2 (HuggingFace dataset card)
     license: CC BY-NC-ND 4.0 International
-    url: https://huggingface.co/datasets/asapp/slue-phase-2/blob/main/README.md
-  - type: both
-    name: asapp/slue-phase-2 HuggingFace dataset page (main card)
-    license: No single unified license tag in YAML frontmatter; per-subset licensin
     url: https://huggingface.co/datasets/asapp/slue-phase-2
-  - type: both
-    name: HuggingFace API — asapp/slue-phase-2
-    license: No cardData.license field returned; per-subset licensing only
-    url: https://huggingface.co/api/datasets/asapp/slue-phase-2
   - type: both
     name: TED official talks usage policy
     license: Creative Commons CC BY-NC-ND 4.0 International
@@ -814,12 +758,8 @@ datasets:
   license_audio: CC-BY-4.0
   redistribute_text: true
   redistribute_audio: true
-  audio_source_url: https://huggingface.co/api/datasets/yijingwu/HeySQuAD_human
+  audio_source_url: https://huggingface.co/datasets/yijingwu/HeySQuAD_human
   sources:
-  - type: both
-    name: HeySQuAD_human HuggingFace API (cardData.license)
-    license: cc-by-4.0
-    url: https://huggingface.co/api/datasets/yijingwu/HeySQuAD_human
   - type: both
     name: HeySQuAD_human HuggingFace dataset card page
     license: CC-BY-4.0
@@ -832,10 +772,6 @@ datasets:
     name: SQuAD 1.1 official explorer page (Stanford NLP — upstream text source)
     license: CC-BY-SA-4.0
     url: https://rajpurkar.github.io/SQuAD-explorer/
-  - type: both
-    name: SQuAD 1.1 HuggingFace API (rajpurkar/squad)
-    license: cc-by-sa-4.0
-    url: https://huggingface.co/api/datasets/rajpurkar/squad
   - type: both
     name: SQuAD 1.1 HuggingFace dataset card (rajpurkar/squad)
     license: CC-BY-SA-4.0
@@ -855,10 +791,6 @@ datasets:
     name: amuvarma/10k-filtered-tune-audio (HuggingFace dataset page)
     license: Unknown — private dataset, HTTP 401 on page load
     url: https://huggingface.co/datasets/amuvarma/10k-filtered-tune-audio
-  - type: both
-    name: HuggingFace API endpoint for amuvarma/10k-filtered-tune-audio
-    license: Unknown — HTTP 401
-    url: https://huggingface.co/api/datasets/amuvarma/10k-filtered-tune-audio
   - type: both
     name: amuvarma HuggingFace user profile (public datasets listing)
     license: Not applicable — 10k-filtered-tune-audio not listed in public datasets
@@ -887,28 +819,16 @@ datasets:
   license_audio: CC-BY-NC-4.0
   redistribute_text: true
   redistribute_audio: true
-  audio_source_url: https://huggingface.co/api/datasets/tatsu-lab/alpaca
+  audio_source_url: https://huggingface.co/datasets/gruhit-patel/alpaca_speech_instruct
   sources:
-  - type: both
-    name: tatsu-lab/alpaca — Stanford Alpaca (upstream text source, HuggingFace API)
-    license: cc-by-nc-4.0
-    url: https://huggingface.co/api/datasets/tatsu-lab/alpaca
   - type: both
     name: gruhit-patel/alpaca_speech_instruct (HuggingFace dataset page)
     license: cc
     url: https://huggingface.co/datasets/gruhit-patel/alpaca_speech_instruct
   - type: both
-    name: gruhit-patel/alpaca_speech_instruct (HuggingFace API)
-    license: cc
-    url: https://huggingface.co/api/datasets/gruhit-patel/alpaca_speech_instruct
-  - type: both
     name: tatsu-lab/stanford_alpaca (GitHub repository)
     license: 'Dataset: CC-BY-NC-4.0; Code: Apache-2.0; Model weights diff: CC-BY-NC-'
     url: https://github.com/tatsu-lab/stanford_alpaca
-  - type: both
-    name: yahma/alpaca-cleaned (HuggingFace API — YAML frontmatter)
-    license: cc-by-4.0 (YAML frontmatter field value)
-    url: https://huggingface.co/api/datasets/yahma/alpaca-cleaned
   - type: both
     name: yahma/alpaca-cleaned (HuggingFace rendered dataset card — prose description
     license: CC-BY-NC-4.0
@@ -932,10 +852,6 @@ datasets:
     name: liangtianle/science-question HuggingFace dataset page
     license: None
     url: https://huggingface.co/datasets/liangtianle/science-question
-  - type: both
-    name: liangtianle/science-question HuggingFace API endpoint
-    license: None (HTTP 401)
-    url: https://huggingface.co/api/datasets/liangtianle/science-question
   - type: both
     name: liangtianle HuggingFace user profile (public dataset listing)
     license: Not listed
@@ -968,14 +884,6 @@ datasets:
     license: None (no dataset card, no license field)
     url: https://huggingface.co/datasets/liangtianle/unsafety-question
   - type: both
-    name: liangtianle/unsafety-question — HuggingFace API (full metadata)
-    license: None (no cardData.license field present)
-    url: https://huggingface.co/api/datasets/liangtianle/unsafety-question?full=true
-  - type: both
-    name: liangtianle/unsafety-question — HuggingFace README (dataset card file)
-    license: Not available (404)
-    url: https://huggingface.co/datasets/liangtianle/unsafety-question/resolve/main/README.md
-  - type: both
     name: WavReward paper (arXiv:2505.09558) — associated research context
     license: arXiv non-exclusive distribution only
     url: https://arxiv.org/abs/2505.09558
@@ -1006,18 +914,6 @@ datasets:
     license: MIT
     url: https://huggingface.co/datasets/Menlo/instruction-speech-encodec-v1.5
   - type: both
-    name: Menlo/instruction-speech-encodec-v1.5 — README.md raw file (full YAML)
-    license: MIT
-    url: https://huggingface.co/datasets/Menlo/instruction-speech-encodec-v1.5/raw/main/README.md
-  - type: both
-    name: Menlo/instruction-speech-encodec-v1.5 — HuggingFace API (cardData.license)
-    license: 'MIT (tag: license:mit)'
-    url: https://huggingface.co/api/datasets/Menlo/instruction-speech-encodec-v1.5
-  - type: both
-    name: jan-hq/prompt-voice-v1.5 — HuggingFace API (no explicit license in API resp
-    license: Not surfaced in API
-    url: https://huggingface.co/api/datasets/jan-hq/prompt-voice-v1.5
-  - type: both
     name: Intel/orca_dpo_pairs (one upstream text source inside jan-hq/prompt-voice-v (secondary)
     license: Apache-2.0
     url: https://huggingface.co/datasets/Intel/orca_dpo_pairs
@@ -1044,10 +940,6 @@ datasets:
     name: worstchan/UltraChat-300K-SLAM-Omni — HuggingFace dataset page
     license: MIT
     url: https://huggingface.co/datasets/worstchan/UltraChat-300K-SLAM-Omni
-  - type: both
-    name: worstchan/UltraChat-300K-SLAM-Omni — HuggingFace API (api/datasets endpoint
-    license: MIT
-    url: https://huggingface.co/api/datasets/worstchan/UltraChat-300K-SLAM-Omni
   - type: both
     name: CosyVoice GitHub repository (TTS used for audio synthesis)
     license: Apache-2.0
@@ -1080,10 +972,6 @@ datasets:
     license: Apache-2.0
     url: https://huggingface.co/datasets/CohereLabs/aya_collection
   - type: both
-    name: CohereLabs/aya_collection (HuggingFace API cardData)
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/CohereLabs/aya_collection
-  - type: both
     name: Aya Collection paper (arXiv:2402.06619) (secondary)
     license: CC-BY-4.0
     url: https://arxiv.org/abs/2402.06619
@@ -1105,7 +993,9 @@ datasets:
     url: https://commonvoice.mozilla.org
   audited: true
   notes: The text comes from the human-annotated French subset of CohereLabs/aya_collection (Apache-2.0). The audio is synthesized with the MIT-licensed ChatterboxMultilingual model, using voice prompts sampled from the 8,000+ speakers of CC0 Common Voice French (gender-rebalanced for voice diversity).
-  curated: audio
+  curated:
+  - task: qa
+    kind: audio
   license_discrepancy: The arXiv abstract page (arxiv.org/abs/2402.06619) displays a CC BY 4.0 license badge, which could be misread as the dataset license. However, this is arXiv's standard license for the preprint text itself (the paper), not for the dataset. All authoritative dataset sources — the HuggingFace card YAML frontmatter, the HuggingFace API cardData, and the README licensing section — consistently declare Apache-2.0. No conflict exists between the official dataset sources. The audio is TTS-synthesized (not scraped from YouTube or other copyrighted sources), confirmed by the French question-string filen
 - name: Vigogne (French Alpaca)
   match: vigogne
@@ -1145,7 +1035,9 @@ datasets:
     url: https://github.com/resemble-ai/chatterbox
   audited: true
   notes: The text comes from Vigogne (French Alpaca), a French instruction set derived from Stanford Alpaca (CC-BY-NC-4.0); the OpenAI API terms also apply to the generated text. The upstream data is text-only; the audio was synthesized for this project with the MIT-licensed Chatterbox Multilingual model using voice prompts sampled from the 8,000+ speakers of CC0 Common Voice French (gender-rebalanced for voice diversity).
-  curated: audio
+  curated:
+  - task: qa
+    kind: audio
   license_discrepancy: No contradictory license mentions found. All reachable sources agree on CC-BY-NC-4.0 for text data. The Apache 2.0 entry in the GitHub LICENSE file applies to code only and is clearly distinguished from the data license. HuggingFace dataset pages are inaccessible (HTTP 401), so no HuggingFace-stated license could be confirmed or denied there.
 - name: Compar:IA
   match: comparia
@@ -1159,10 +1051,6 @@ datasets:
     name: ministere-culture/comparia-conversations (HuggingFace dataset card)
     license: etalab-2.0
     url: https://huggingface.co/datasets/ministere-culture/comparia-conversations
-  - type: both
-    name: HuggingFace API (ministere-culture/comparia-conversations)
-    license: etalab-2.0
-    url: https://huggingface.co/api/datasets/ministere-culture/comparia-conversations
   - type: both
     name: Compar:IA terms/conditions page (comparia.beta.gouv.fr/modalites)
     license: etalab-2.0 (licence ouverte 2.0)
@@ -1185,7 +1073,9 @@ datasets:
     url: https://commonvoice.mozilla.org
   audited: true
   notes: The text (user prompts and model responses) comes from the Compar:IA platform, released by the French Ministry of Culture as ministere-culture/comparia-conversations under Etalab 2.0. The upstream dataset is text-only; the audio was synthesized for this project with the MIT-licensed Chatterbox Multilingual model using voice prompts sampled from the 8,000+ speakers of CC0 Common Voice French (gender-rebalanced for voice diversity).
-  curated: audio
+  curated:
+  - task: qa
+    kind: audio
   license_discrepancy: 'All current authoritative sources (HuggingFace card, HuggingFace API, Compar:IA platform, terms page) agree on Etalab 2.0 for the text. The GitHub repository shows Apache 2.0 but this covers the platform code only, not the dataset — no contradiction. The comparIA/comparia-fr-arena dataset (separate HuggingFace namespace, returned 401) is a different entity from the registry''s ministere-culture/comparia-conversations, which is publicly accessible under Etalab 2.0. Two caveats worth noting but not changing the license decision: (1) The dataset is auto-gated on HuggingFace (users must agree to sh'
 - name: SIFT-50M (Common Voice subset)
   match: content_level/common_voice
@@ -1193,20 +1083,12 @@ datasets:
   license_audio: CC0-1.0 (Common Voice)
   redistribute_text: true
   redistribute_audio: true
-  audio_source_url: https://huggingface.co/api/datasets/amazon-agi/SIFT-50M
+  audio_source_url: https://huggingface.co/datasets/amazon-agi/SIFT-50M
   sources:
-  - type: both
-    name: SIFT-50M HuggingFace API (cardData.license)
-    license: cdla-sharing-1.0
-    url: https://huggingface.co/api/datasets/amazon-agi/SIFT-50M
   - type: both
     name: SIFT-50M HuggingFace dataset card page
     license: CDLA-Sharing-1.0
     url: https://huggingface.co/datasets/amazon-agi/SIFT-50M
-  - type: both
-    name: SIFT-50M README.md (HuggingFace raw)
-    license: CDLA-Sharing-1.0
-    url: https://huggingface.co/datasets/amazon-agi/SIFT-50M/raw/main/README.md
   - type: both
     name: SIFT-50M paper (arXiv:2504.09081) (secondary)
     license: CC BY-NC-SA 4.0
@@ -1234,10 +1116,6 @@ datasets:
     name: SIFT-50M HuggingFace dataset card (amazon-agi/SIFT-50M)
     license: CDLA-Sharing-1.0
     url: https://huggingface.co/datasets/amazon-agi/SIFT-50M
-  - type: both
-    name: SIFT-50M HuggingFace API (amazon-agi/SIFT-50M)
-    license: CDLA-Sharing-1.0
-    url: https://huggingface.co/api/datasets/amazon-agi/SIFT-50M
   - type: both
     name: arXiv paper 2504.09081 (SIFT-50M paper) (secondary)
     license: CC-BY-NC-SA-4.0
@@ -1269,10 +1147,6 @@ datasets:
     name: HuggingFace dataset page (amazon-agi/SIFT-50M)
     license: CDLA-Sharing-1.0
     url: https://huggingface.co/datasets/amazon-agi/SIFT-50M
-  - type: both
-    name: HuggingFace API (amazon-agi/SIFT-50M)
-    license: cdla-sharing-1.0
-    url: https://huggingface.co/api/datasets/amazon-agi/SIFT-50M
   - type: both
     name: arXiv paper 2504.09081 (SIFT-50M paper, Pandey et al. 2025) (secondary)
     license: CC-BY-NC-SA-4.0
@@ -1321,8 +1195,11 @@ datasets:
     license: Unknown (site unreachable)
     url: https://corpus.amiproject.org/
   audited: true
-  notes: Audio and all annotations (transcripts, topic segments, summaries) are distributed by the University of Edinburgh's AMI project under CC-BY-4.0.
+  notes: 'Audio and all annotations (transcripts, topic segments, summaries) are distributed by the University of Edinburgh''s AMI project under CC-BY-4.0. OpenLLM-France generated the speaker-diarization conversations from the corpus''s speaker-turn annotations: the audio is re-used unchanged (segmented into short ~10-90s windows) and the assistant targets are speaker-labelled transcripts and/or ''who spoke when'' timelines (speaker + start/end times), with speakers anonymized as ''Speaker N'' by order of appearance.'
   license_discrepancy: 'One real discrepancy: OpenSLR SLR16 lists the AMI corpus under ''CC-BY-NC-SA v2.0 (modified)'', while every current official source (Edinburgh Groups corpus page, download page, dedicated license page, HuggingFace Edinburgh CSTR upload, and all embedded license files in the locally downloaded data) states CC-BY-4.0 with no NonCommercial or ShareAlike clause. The OpenSLR entry is stale: it was created when the corpus was originally distributed under an older, more restrictive license, and was never updated when Edinburgh relicensed the corpus under CC-BY-4.0. The OpenSLR page itself directs users'
+  curated:
+  - task: diarization
+    kind: text
 - name: ICSI Meeting Corpus
   match: /icsi/
   license_text: CC-BY-4.0
@@ -1348,10 +1225,6 @@ datasets:
     license: 'Proprietary — LDC User Agreement for Non-Members; requires payment or '
     url: https://catalog.ldc.upenn.edu/LDC2004S02
   - type: both
-    name: edinburghcstr/ami — HuggingFace API (AMI corpus, same distributor)
-    license: cc-by-4.0 (cardData.license field)
-    url: https://huggingface.co/api/datasets/edinburghcstr/ami
-  - type: both
     name: talkbank/ICSI — HuggingFace
     license: Unknown — HTTP 401 Unauthorized
     url: https://huggingface.co/datasets/talkbank/ICSI
@@ -1360,8 +1233,11 @@ datasets:
     license: Unknown — HTTP 401 Unauthorized
     url: https://huggingface.co/datasets/diarizers-community/ICSI
   audited: true
-  notes: Audio and annotations are distributed by the University of Edinburgh's AMI project as part of its ICSI Meeting Corpus release, granted under CC-BY-4.0 for all signals, transcriptions, and annotations.
+  notes: 'Audio and annotations are distributed by the University of Edinburgh''s AMI project as part of its ICSI Meeting Corpus release, granted under CC-BY-4.0 for all signals, transcriptions, and annotations. OpenLLM-France generated the speaker-diarization conversations from the corpus''s speaker-turn annotations: the audio is re-used unchanged (segmented into short ~10-90s windows) and the assistant targets are speaker-labelled transcripts and/or ''who spoke when'' timelines (speaker + start/end times), with speakers anonymized as ''Speaker N'' by order of appearance.'
   license_discrepancy: 'Two distribution channels exist and must be distinguished. (1) LDC2004S02: the original 2004 LDC release, proprietary, requires membership/payment. (2) The Edinburgh AMI free release: the ICSI original authors granted the AMI project at Edinburgh the right to redistribute the corpus under CC-BY-4.0. These are not contradictions — they are parallel channels reflecting a deliberate re-licensing by ICSI when granting redistribution rights to the AMI project. The Edinburgh free release is the current authoritative channel for open use; its CC-BY-4.0 terms are confirmed by the project page, the dow'
+  curated:
+  - task: diarization
+    kind: text
 - name: Nutshell
   match: nutshell
   license_text: CC-BY-4.0
@@ -1378,10 +1254,6 @@ datasets:
     name: NUTSHELL paper — ACL Anthology (IWSLT 2025)
     license: CC-BY-4.0
     url: https://aclanthology.org/2025.iwslt-1.2/
-  - type: both
-    name: HuggingFace API — maikezu/nutshell
-    license: CC-BY-4.0 (cardData.license)
-    url: https://huggingface.co/api/datasets/maikezu/nutshell
   - type: both
     name: arXiv preprint — NUTSHELL (arXiv:2502.16942)
     license: CC-BY-4.0
@@ -1421,10 +1293,6 @@ datasets:
     name: HuggingFace J3romee/CLEAR — dataset page
     license: Not declared
     url: https://huggingface.co/datasets/J3romee/CLEAR
-  - type: both
-    name: HuggingFace API — J3romee/CLEAR
-    license: Not declared
-    url: https://huggingface.co/api/datasets/J3romee/CLEAR
   - type: both
     name: GitHub — IGLU-CHISTERA/CLEAR-dataset-generation LICENSE
     license: BSD-3-Clause
@@ -1478,7 +1346,9 @@ datasets:
     url: https://huggingface.co/datasets/AudioLLMs/clotho_aqa_test
   audited: true
   notes: The question/answer annotations are MIT-licensed (Tampere University). The audio comes from the Clotho dataset (originally from Freesound) and carries per-file Creative Commons licenses (a mix of CC0, CC-BY-3.0, CC-BY-NC-3.0, and CC Sampling+ 1.0). OpenLLM-France reformulated the original single-word answers into fuller sentences using Qwen3-8B.
-  curated: text
+  curated:
+  - task: sound.qa
+    kind: text
   license_discrepancy: Two superficially contradictory signals exist. (1) The arXiv preprint page (arXiv:2204.09634) shows a CC-BY-NC-SA-4.0 badge — this applies to the paper, not the dataset; the Zenodo deposit and embedded LICENSE.txt both confirm MIT for the Q&A text. (2) The GitHub clotho-dataset repository (audio-captioning/clotho-dataset) carries a Tampere University custom non-commercial license — this governs the captioning code/method in that repo, not the Clotho-AQA Q&A annotations, which have a separate MIT LICENSE.txt in the Zenodo upload. The registry correctly identifies MIT for text. No ND (NoDerivati
 - name: Clotho (via AudioMCQ)
   match: audiomcq/mixed/clotho
@@ -1492,10 +1362,6 @@ datasets:
     name: inclusionAI/AudioMCQ HuggingFace dataset card
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
-  - type: both
-    name: inclusionAI/AudioMCQ HuggingFace API
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
   - type: both
     name: AudioMCQ GitHub repository
     license: Apache-2.0
@@ -1525,12 +1391,8 @@ datasets:
   license_audio: Copyrighted (YouTube / ACAV100M)
   redistribute_text: true
   redistribute_audio: false
-  audio_source_url: https://huggingface.co/api/datasets/mispeech/MECAT-QA
+  audio_source_url: https://huggingface.co/datasets/mispeech/MECAT-QA
   sources:
-  - type: both
-    name: mispeech/MECAT-QA HuggingFace API
-    license: cc-by-3.0
-    url: https://huggingface.co/api/datasets/mispeech/MECAT-QA
   - type: both
     name: mispeech/MECAT-QA HuggingFace dataset card (YAML frontmatter + body)
     license: CC-BY-3.0
@@ -1571,10 +1433,6 @@ datasets:
     license: CC-BY-3.0
     url: https://huggingface.co/datasets/mispeech/MECAT-Caption
   - type: both
-    name: HuggingFace API (mispeech/MECAT-Caption)
-    license: CC-BY-3.0
-    url: https://huggingface.co/api/datasets/mispeech/MECAT-Caption
-  - type: both
     name: xiaomi-research/mecat GitHub README
     license: CC-BY-3.0 (dataset); Apache-2.0 (code)
     url: https://github.com/xiaomi-research/mecat
@@ -1596,7 +1454,9 @@ datasets:
     url: https://github.com/sangho-vision/acav100m
   audited: true
   notes: The audio consists of ten-second clips drawn from the YouTube-sourced ACAV100M pool. The stated CC-BY-3.0 license cannot be independently verified per clip, and the same team's companion dataset withholds its audio for copyright reasons; the audio is not hosted here. The French captions were produced by OpenLLM-France, translating the English captions with TranslateGemma-27B.
-  curated: text
+  curated:
+  - task: sound.captioning
+    kind: text
   license_discrepancy: The current registry entry lists license_audio as 'Copyrighted (YouTube / ACAV100M)' with redistribute_audio false. However, the current authoritative sources (HuggingFace dataset card, GitHub README, and paper impact statement) all state CC-BY-3.0 explicitly for the audio, and the authors distribute 8.11 GB of actual FLAC audio files publicly. The GitHub README phrasing 'from the part of ACAV100M under CC-BY-3.0' implies the team specifically selected the CC-licensed subset of YouTube videos in ACAV100M, not arbitrary clips. The companion dataset ACAVCaps (same team, same ACAV100M pool) withh
 - name: CompA-R (via AudioMCQ)
   match: audiomcq/mixed/compa-r
@@ -1611,17 +1471,9 @@ datasets:
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
   - type: both
-    name: inclusionAI/AudioMCQ HuggingFace API
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
-  - type: both
     name: PinnHe/CompA-R-Backup (HuggingFace backup of GAMA Google Drive audio) (secondary)
     license: MIT
     url: https://huggingface.co/datasets/PinnHe/CompA-R-Backup
-  - type: both
-    name: PinnHe/CompA-R-Backup HuggingFace API (secondary)
-    license: MIT
-    url: https://huggingface.co/api/datasets/PinnHe/CompA-R-Backup
   - type: both
     name: GAMA Google Drive (original CompA-R audio distribution)
     license: No explicit data license
@@ -1649,10 +1501,6 @@ datasets:
     name: inclusionAI/AudioMCQ — HuggingFace dataset card (YAML frontmatter + API)
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
-  - type: both
-    name: inclusionAI/AudioMCQ — HuggingFace API endpoint
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
   - type: both
     name: TACOS Zenodo record (v1, 2025-05-10)
     license: CC-BY-4.0
@@ -1689,10 +1537,6 @@ datasets:
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
   - type: both
-    name: inclusionAI/AudioMCQ (HuggingFace API)
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
-  - type: both
     name: SpeechCraft GitHub repository (thuhcsi/SpeechCraft)
     license: EULA
     url: https://github.com/thuhcsi/SpeechCraft
@@ -1728,17 +1572,9 @@ datasets:
     license: MIT
     url: https://huggingface.co/datasets/seungheondoh/LP-MusicCaps-MTT
   - type: both
-    name: LP-MusicCaps-MTT HuggingFace API (seungheondoh/LP-MusicCaps-MTT)
-    license: MIT
-    url: https://huggingface.co/api/datasets/seungheondoh/LP-MusicCaps-MTT
-  - type: both
     name: inclusionAI/AudioMCQ HuggingFace dataset card
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
-  - type: both
-    name: inclusionAI/AudioMCQ HuggingFace API
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
   - type: both
     name: MagnaTagATune original release announcement (Music Machinery blog)
     license: CC-BY-NC-SA-3.0
@@ -1763,17 +1599,9 @@ datasets:
     license: CC-BY-SA-4.0
     url: https://huggingface.co/datasets/google/MusicCaps
   - type: both
-    name: google/MusicCaps — HuggingFace API (cardData + tags)
-    license: CC-BY-SA-4.0
-    url: https://huggingface.co/api/datasets/google/MusicCaps
-  - type: both
     name: inclusionAI/AudioMCQ — HuggingFace dataset page
     license: Apache-2.0
     url: https://huggingface.co/datasets/inclusionAI/AudioMCQ
-  - type: both
-    name: inclusionAI/AudioMCQ — HuggingFace API (cardData)
-    license: Apache-2.0
-    url: https://huggingface.co/api/datasets/inclusionAI/AudioMCQ
   - type: both
     name: AudioMCQ GitHub repository (inclusionAI/AudioMCQ)
     license: Apache-2.0
@@ -1815,7 +1643,12 @@ datasets:
     url: https://www.youtube.com/t/terms
   audited: true
   notes: A set of music-text pairs whose captions were written by musicians and released under CC-BY-SA-4.0. The dataset distributes only YouTube IDs and timestamps; the underlying audio is copyrighted YouTube content and is not hosted here. OpenLLM-France generated music question-answer pairs from these captions with Qwen3-14B (French and English). The French captions were produced by OpenLLM-France, translating the English captions with TranslateGemma-27B.
-  curated: text
+  curated:
+  - task: music.qa
+    kind: text
+  - task: music.captioning
+    lang: fr
+    kind: text
   license_discrepancy: 'No material discrepancies between sources. The HuggingFace API has `license: null` at the top level but `license:cc-by-sa-4.0` in the tags and cardData — both are consistent with the authoritative Kaggle page. The AudioSet CC-BY-4.0 label covers AudioSet''s own annotations, not MusicCaps text nor MusicCaps audio; it is not contradictory. All evidence converges on CC-BY-SA-4.0 for text and Copyrighted (YouTube) for audio.'
 - name: MusicQA
   match: /musicqa/
@@ -1829,10 +1662,6 @@ datasets:
     name: Jeronymous/MusicQA — HuggingFace dataset card (ACTUAL source used by extrac
     license: MIT
     url: https://huggingface.co/datasets/Jeronymous/MusicQA
-  - type: both
-    name: Jeronymous/MusicQA — HuggingFace API
-    license: MIT
-    url: https://huggingface.co/api/datasets/Jeronymous/MusicQA
   - type: both
     name: shansongliu/MU-LLaMA — GitHub repository (code license only) (secondary)
     license: GPL-3.0
@@ -1865,14 +1694,6 @@ datasets:
     license: CC-BY-SA-3.0
     url: https://huggingface.co/datasets/amaai-lab/JamendoMaxCaps
   - type: both
-    name: HuggingFace API — amaai-lab/JamendoMaxCaps
-    license: CC-BY-SA-3.0
-    url: https://huggingface.co/api/datasets/amaai-lab/JamendoMaxCaps
-  - type: both
-    name: Per-track Jamendo metadata (license_ccurl field embedded in dataset README  (embedded metadata)
-    license: CC-BY-NC-ND-3.0 (example track)
-    url: https://huggingface.co/datasets/amaai-lab/JamendoMaxCaps/resolve/main/README.md
-  - type: both
     name: AMAAI-Lab/JamendoMaxCaps GitHub — LICENSE file
     license: MIT
     url: https://github.com/AMAAI-Lab/JamendoMaxCaps
@@ -1886,7 +1707,9 @@ datasets:
     url: https://developer.jamendo.com/v3.0/tracks
   audited: true
   notes: Audio comes from the Jamendo music platform via amaai-lab/JamendoMaxCaps; captions are AI-generated and the collection is labeled CC-BY-SA-3.0, but individual tracks retain their original per-track Jamendo licenses, some of which are CC-BY-NC-ND. The audio is not hosted here. The French captions were produced by OpenLLM-France, translating the English captions with TranslateGemma-27B.
-  curated: text
+  curated:
+  - task: music.captioning
+    kind: text
   license_discrepancy: The arXiv abstract page (https://arxiv.org/abs/2502.07461) displays a CC-BY-4.0 badge; this is the standard arXiv paper publication license, not the dataset license. All authoritative dataset-level sources (HuggingFace card YAML, HuggingFace API cardData) consistently state CC-BY-SA-3.0 for the dataset/captions. No conflict exists between these when their scope is understood correctly.
 - name: FMA (FMA_GenreQA)
   match: fma_genreqa
@@ -1918,7 +1741,9 @@ datasets:
     url: https://huggingface.co/datasets/DynamicSuperb/MusicGenreClassification_FMA
   audited: true
   notes: Audio comes from the Free Music Archive (FMA), restricted at collection time to CC-BY, CC0, and public-domain tracks. The music question-answer pairs (French and English) were generated by OpenLLM-France with Qwen3-14B from the FMA genre metadata (CC-BY-4.0).
-  curated: text
+  curated:
+  - task: music.qa
+    kind: text
   license_discrepancy: 'The registry states license_audio as ''CC-BY / CC0 / Public Domain (per-track)'' and the FMA_GenreQA readme.md claims ''cc-by, cc0 and publicdomain only'', but actual cross-referencing of JSONL track IDs against the FMA tracks.csv reveals 8 tracks with CC-BY-NC-2.5 (''Attribution NonCommercial 2.5'') that slipped through the filter (track IDs: 7802, 7803, 27880, 43619, 43620, 43624, 45529 in train; 46133 in dev). CC-BY-NC-2.5 permits redistribution and derivatives but restricts commercial use. Since the umbrella Luciole dataset is CC-BY-NC-SA-4.0, these NC tracks are compatible and do not block redi'
 - name: MELD
   match: /meld/
@@ -1949,8 +1774,11 @@ datasets:
     license: CC-BY-SA-4.0 (arXiv paper deposit only)
     url: https://arxiv.org/abs/1810.02508
   audited: true
-  notes: Audio consists of utterance-level clips extracted from the "Friends" television series (Warner Bros.); the underlying audio is copyrighted, so it is not hosted here. Emotion-label annotations are published under GPL-3.0 (declare-lab/MELD). Acoustic-impression text (AcousticDS) comes from jmurzaku/meld-acoustic-dataset, which carries no declared license.
+  notes: Audio consists of utterance-level clips extracted from the "Friends" television series (Warner Bros.); the underlying audio is copyrighted, so it is not hosted here. Emotion-label annotations are published under GPL-3.0 (declare-lab/MELD). Acoustic-impression text (AcousticDS) comes from jmurzaku/meld-acoustic-dataset, which carries no declared license. OpenLLM-France built the emotion-recognition conversations from MELD's emotion labels, authoring the instruction prompts and answer wording.
   license_discrepancy: 'All three authoritative sources (two GitHub repos, HuggingFace) agree on GPL-3.0 for the annotations. The audio situation is unambiguous: the clips come from a copyrighted TV series and no rights have been granted. There is a minor secondary discrepancy in that the arXiv paper deposit carries CC-BY-SA-4.0, but this applies to the paper text, not the dataset. No contradictions were found that would affect the final determination. The existing registry decision is confirmed correct.'
+  curated:
+  - task: emotion_reco
+    kind: text
 - name: VoxCeleb
   match: voxceleb
   license_text: CC-BY-SA-4.0
@@ -2003,17 +1831,9 @@ datasets:
     license: CC-BY-NC-4.0
     url: https://huggingface.co/datasets/TalTechNLP/VoxLingua107
   - type: both
-    name: TalTechNLP/VoxLingua107 HuggingFace API
-    license: CC-BY-NC-4.0
-    url: https://huggingface.co/api/datasets/TalTechNLP/VoxLingua107
-  - type: both
     name: Local embedded README.md (downloaded from bark.phon.ioc.ee/voxlingua107/) (embedded metadata)
     license: CC-BY-4.0
     url: https://bark.phon.ioc.ee/voxlingua107/
-  - type: both
-    name: speechbrain/voxlingua107 (HuggingFace, returned HTTP 401)
-    license: Unknown
-    url: https://huggingface.co/api/datasets/speechbrain/voxlingua107
   - type: both
     name: speechbrain/lang-id-voxlingua107-ecapa (HuggingFace model page) (secondary)
     license: Apache-2.0
@@ -2027,8 +1847,11 @@ datasets:
     license: No explicit dataset license stated
     url: https://arxiv.org/abs/2011.12998
   audited: true
-  notes: YouTube-sourced audio; the underlying clips are copyrighted by the original video owners (the CC-BY label applies to the compilation only), so the audio is not hosted here.
+  notes: YouTube-sourced audio; the underlying clips are copyrighted by the original video owners (the CC-BY label applies to the compilation only), so the audio is not hosted here. OpenLLM-France built the spoken-language-identification conversations from the corpus's language labels, authoring the instruction prompts and answer wording.
   license_discrepancy: 'Two conflicting license statements from the creators exist: (1) the embedded local README (from the official bark.phon.ioc.ee download) says CC-BY-4.0; (2) the TalTechNLP HuggingFace dataset card (same institution, last updated 2024-09-10) says CC-BY-NC-4.0. Third-party mirrors add further noise (lilitket says Apache-2.0 — discarded; kazeric derivative says CC-BY-4.0 — disregarded as non-authoritative). Applying the principle of preferring the most recent authoritative statement, CC-BY-NC-4.0 from TalTechNLP (2024) is adopted. This is also the more conservative choice and is consistent with th'
+  curated:
+  - task: language_reco
+    kind: text
 - name: ssi-speech
   match: ssi-speech
   license_text: CC-BY-NC-SA-4.0
@@ -2046,10 +1869,6 @@ datasets:
     license: MIT
     url: https://huggingface.co/datasets/stapesai/ssi-speech-emotion-recognition
   - type: both
-    name: stapesai/ssi-speech-emotion-recognition — HuggingFace API
-    license: MIT
-    url: https://huggingface.co/api/datasets/stapesai/ssi-speech-emotion-recognition
-  - type: both
     name: CREMA-D — GitHub repository (CheyneyComputerScience/CREMA-D)
     license: ODbL-1.0 (database) + DbCL-1.0 (contents)
     url: https://github.com/CheyneyComputerScience/CREMA-D
@@ -2066,8 +1885,15 @@ datasets:
     license: Research-only
     url: http://kahlan.eps.surrey.ac.uk/savee/Download.html
   audited: true
-  notes: Aggregates CREMA-D, RAVDESS, TESS, and SAVEE. TESS is NoDerivatives and SAVEE is research-only, so the audio is not hosted here.
+  notes: Aggregates CREMA-D, RAVDESS, TESS, and SAVEE. TESS is NoDerivatives and SAVEE is research-only, so the audio is not hosted here. OpenLLM-France built the age-, gender- and emotion-recognition conversations from the corpus's own speaker labels, authoring the instruction prompts and answer wording.
   license_discrepancy: 'Three-layer discrepancy. (1) MIT vs component licenses: The HuggingFace aggregator (stapesai) declares MIT for the entire dataset, but this is not defensible. The underlying RAVDESS component is definitively CC-BY-NC-SA-4.0 (Zenodo), CREMA-D is ODbL+DbCL (GitHub), TESS is CC-BY-NC-4.0 (DOI-canonical), and SAVEE has no accessible open license. MIT governs only stapesai''s compilation scaffold; it does not override the component terms. (2) TESS ND discrepancy (PFC-type lesson): The prior audit note states ''TESS is NoDerivatives'' — this was derived from the utoronto.scholaris.ca (TSpace) mirror, w'
+  curated:
+  - task: age_reco
+    kind: text
+  - task: gender_reco
+    kind: text
+  - task: emotion_reco
+    kind: text
 - name: OreauFR_02
   match: oreaufr
   license_text: CC-BY-4.0
@@ -2089,7 +1915,10 @@ datasets:
     license: Unknown (HTTP 401 — private or gated dataset)
     url: https://huggingface.co/datasets/lgrobol/oreau2
   audited: true
-  notes: Both the audio (434 emotional French utterances) and the text annotations come from the French Emotional Speech Database – Oréau, published on Zenodo under CC-BY-4.0.
+  notes: Both the audio (434 emotional French utterances) and the text annotations come from the French Emotional Speech Database – Oréau, published on Zenodo under CC-BY-4.0. OpenLLM-France built the emotion-recognition conversations from the corpus's emotion labels, authoring the (French) instruction prompts and answer wording.
+  curated:
+  - task: emotion_reco
+    kind: text
 - name: emotional-speech-audio-dataset-4languages
   match: emotional-speech-audio-dataset
   license_text: CC-BY-NC-SA-4.0
@@ -2110,13 +1939,12 @@ datasets:
     name: yukat237/emotional-speech-audio-dataset-4languages (HuggingFace dataset pag
     license: Not declared
     url: https://huggingface.co/datasets/yukat237/emotional-speech-audio-dataset-4languages
-  - type: both
-    name: yukat237/emotional-speech-audio-dataset-4languages (HuggingFace API)
-    license: Not declared
-    url: https://huggingface.co/api/datasets/yukat237/emotional-speech-audio-dataset-4languages
   audited: true
-  notes: The French subset originates from the Canadian French Emotional Speech dataset (CaFE), published on Zenodo under CC-BY-NC-SA-4.0. The intermediary HuggingFace upload bundles several languages with no license of its own; only the French portion is included here.
+  notes: The French subset originates from the Canadian French Emotional Speech dataset (CaFE), published on Zenodo under CC-BY-NC-SA-4.0. The intermediary HuggingFace upload bundles several languages with no license of its own; only the French portion is included here. OpenLLM-France built the emotion-recognition conversations from the corpus's emotion labels, authoring the instruction prompts and answer wording.
   license_discrepancy: No discrepancies found. Both Zenodo versions of CaFE (v1.0 and v1.1) agree on CC BY-NC-SA 4.0. The HuggingFace intermediary has no declared license, which is not a contradiction — it simply means the upstream CaFE Zenodo license governs. The current registry decision (CC-BY-NC-SA-4.0 for both text and audio, redistribution allowed) is confirmed as correct.
+  curated:
+  - task: emotion_reco
+    kind: text
 - name: Stress-17K
   match: /stress/
   license_text: CC-BY-NC-4.0
@@ -2129,10 +1957,6 @@ datasets:
     name: slprl/Stress-17K-raw HuggingFace dataset page
     license: CC-BY-NC-4.0
     url: https://huggingface.co/datasets/slprl/Stress-17K-raw
-  - type: both
-    name: slprl/Stress-17K-raw HuggingFace API (api/datasets/slprl/Stress-17K-raw)
-    license: CC-BY-NC-4.0
-    url: https://huggingface.co/api/datasets/slprl/Stress-17K-raw
   - type: both
     name: 'ArXiv paper 2505.22765 (StressTest: Can YOUR Speech LM Handle the Stress?) (secondary)'
     license: arXiv nonexclusive-distrib/1.0
@@ -2158,12 +1982,8 @@ datasets:
   license_audio: CC-BY-NC-4.0 (EARS/Expresso) + Copyrighted (VoxCeleb)
   redistribute_text: true
   redistribute_audio: false
-  audio_source_url: https://huggingface.co/api/datasets/yfyeung/FCaps
+  audio_source_url: https://huggingface.co/datasets/yfyeung/FCaps
   sources:
-  - type: both
-    name: FCaps HuggingFace API (yfyeung/FCaps)
-    license: cc-by-nc-sa-4.0
-    url: https://huggingface.co/api/datasets/yfyeung/FCaps
   - type: both
     name: FCaps HuggingFace dataset card (yfyeung/FCaps)
     license: CC-BY-NC-SA-4.0
