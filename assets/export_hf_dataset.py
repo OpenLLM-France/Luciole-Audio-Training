@@ -35,7 +35,7 @@ are exported (no sub-sampling); the YAML ``weight`` fields are ignored.
 Usage
 -----
     python assets/export_hf_dataset.py \
-        adapter_training/training/conf/data/v3/input_cfg_train.yaml \
+        training/conf/data/v3/input_cfg_train.yaml \
         /data-server/public_future/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset \
         --data-root /data-server/datasets/audio
 

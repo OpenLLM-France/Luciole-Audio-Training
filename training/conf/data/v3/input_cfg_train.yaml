@@ -1,0 +1,842 @@
+# ============================================================
+# v3.2
+# ONE-STEP TRAINING profile — adapter + LoRA on LLM trained together.
+# Balanced mix: ASR 34% (strong multilingual foundation), QA 34%
+# (primary objective), OTHER 10% (multitask breadth), task_switching
+# kept at 1% (small but always present).
+# Sum: 34 + 11 + 34 + 10 + 10 + 1 = 100
+# ============================================================
+
+# ============================================================
+# ASR — 34%
+# ============================================================
+- type: group
+  weight: 0.34
+  tags: {task: asr}
+  input_cfg:
+
+    # FR — 29% of ASR   (was 30%; 1 pp reallocated to AR)
+    - type: group
+      weight: 0.29
+      tags: {lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/FLEURS/train.jsonl # max_dur=29.40
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_LibriSpeech/train.jsonl # max_dur=20.00
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/train.jsonl # max_dur=17.86
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Yodas/train.jsonl # max_dur=30.00
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PxSLU/train_recasepunc.jsonl # max_dur=29.95
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxForge/train_recasepunc.jsonl # max_dur=27.12
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ACSYNT/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LINAGORA_Meetings/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFAR/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFNN1/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PFC/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_TEDx/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/SimSamu/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxPopuli/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/AfricanAccentedFrench/train_recasepunc_max30.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPB/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPP2000/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CLAPI/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ESLO/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LesVocaux/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Adultes/train_recasepunc.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Enfants/train_recasepunc.jsonl
+        # YouTubeFr — wrap the 7 splits in a single collection so they
+        # compete with the other FR ASR datasets as one entity (not seven).
+        # weight: 0.18 means "this collection gets 18% of the FR ASR budget";
+        # the remaining 82% is split data-driven among the other FR datasets.
+        - type: group
+          weight: 0.18
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split0.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split1.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split2.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split3.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split4.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split5.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6.jsonl
+
+    # EN — 29% of ASR   (was 30%; 1 pp reallocated to AR)
+    - type: group
+      weight: 0.29
+      tags: {lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/train.jsonl # max_dur=49.93
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Yodas/train.jsonl # max_dur=39.98
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/FLEURS/train.jsonl # max_dur=42.36
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train.jsonl # max_dur=42.36
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/VoxPopuli/train.jsonl # max_dur=42.36
+
+    # DE — 8% of ASR
+    - type: group
+      weight: 0.08
+      tags: {lang: de}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_TEDx/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_LibriSpeech/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/VoxPopuli/train.jsonl
+
+    # ES — 8% of ASR
+    - type: group
+      weight: 0.08
+      tags: {lang: es}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_TEDx/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_LibriSpeech/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/VoxPopuli/train.jsonl
+
+    # IT — 6% of ASR
+    - type: group
+      weight: 0.06
+      tags: {lang: it}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_TEDx/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_LibriSpeech/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train.jsonl
+
+    # NL — 5% of ASR
+    - type: group
+      weight: 0.05
+      tags: {lang: nl}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/Multilingual_LibriSpeech/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/VoxPopuli/train.jsonl
+
+    # PT — 5% of ASR
+    - type: group
+      weight: 0.05
+      tags: {lang: pt}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_LibriSpeech/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train.jsonl
+
+  # AR — 10% of ASR   (was 8%; boosted after adding MASC/MGB2/... — 1447 h total)
+    - type: group
+      weight: 0.10
+      tags: {lang: ar}
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ARABIC-SPEECH/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ESCWA/all.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MASC/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB2/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB5/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TARIC/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TunSwitch/train.jsonl
+
+# ============================================================
+# AST — 11%
+# ============================================================
+- type: group
+  tags: {task: ast}
+  weight: 0.11
+  input_cfg:
+    # AST EN→X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-de/context/CoVoST/train.jsonl
+      tags: {source_lang: en, target_lang: de}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-fr/context/CommonVoiceEN2FR/train.jsonl
+      tags: {source_lang: en, target_lang: fr}
+    # AST FR→X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-de/context/CommonVoiceFR2DE/train.jsonl
+      tags: {source_lang: fr, target_lang: de}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/CommonVoiceFR2ES/train.jsonl
+      tags: {source_lang: fr, target_lang: es}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: fr, target_lang: es}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-it/context/CommonVoiceFR2IT/train.jsonl
+      tags: {source_lang: fr, target_lang: it}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-nl/context/CommonVoiceFR2NL/train.jsonl
+      tags: {source_lang: fr, target_lang: nl}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/CommonVoiceFR2PT/train.jsonl
+      tags: {source_lang: fr, target_lang: pt}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: fr, target_lang: pt}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CoVoST/train.jsonl
+      tags: {source_lang: fr, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CommonVoiceFR2EN/train.jsonl
+      tags: {source_lang: fr, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: fr, target_lang: en}
+    # AST DE→X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-fr/context/CommonVoiceDE2FR/train.jsonl
+      tags: {source_lang: de, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-en/context/CoVoST/train.jsonl
+      tags: {source_lang: de, target_lang: en}
+    # AST ES -> X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/CommonVoiceES2FR/train.jsonl
+      tags: {source_lang: es, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: es, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: es, target_lang: it}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: es, target_lang: pt}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/CoVoST/train.jsonl
+      tags: {source_lang: es, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: es, target_lang: en}
+    # AST IT→X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-fr/context/CommonVoiceIT2FR/train.jsonl
+      tags: {source_lang: it, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: it, target_lang: es}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/CoVoST/train.jsonl
+      tags: {source_lang: it, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: it, target_lang: en}
+    # AST NL -> X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/nl-fr/context/CommonVoiceNL2FR/train.jsonl
+      tags: {source_lang: nl, target_lang: fr}
+    # AST PT -> X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/context/CommonVoicePT2FR/train.jsonl
+      tags: {source_lang: pt, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: pt, target_lang: es}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/CoVoST/train.jsonl
+      tags: {source_lang: pt, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/Multilingual_TEDx/train.jsonl
+      tags: {source_lang: pt, target_lang: en}
+    # AST AR <-> X
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train.jsonl
+      tags: {source_lang: ar, target_lang: fr}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train.jsonl
+      tags: {source_lang: fr, target_lang: ar}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train.jsonl
+      tags: {source_lang: ar, target_lang: en}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train.jsonl
+      tags: {source_lang: en, target_lang: ar}
+
+
+# ============================================================
+# QA — 34%   (primary objective)
+# ============================================================
+- type: group
+  tags: {task: qa}
+  weight: 0.34
+  input_cfg:
+    # EN QA
+    - type: group
+      tags: {lang: en}
+      weight: 0.44
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slue-phase-2-sqa5/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-audio-context/en/slue-phase-2-sqa5/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/slue-phase-2-sqa5/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--science-question/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/ami/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/icsi/summary/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/nutshell/train.jsonl
+          tags: {sub_task: summarization}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/slue-phase-2-ted/train.jsonl
+          tags: {sub_task: summarization}
+        # # Nvidia - LongAudio QA datasets
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/daily_talk/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/iemocap/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/librispeech/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/meld/train.jsonl
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/LongAudio/multidialogue/train.jsonl
+        # # Nvidia - AF-Think QA datasets
+        # - type: multimodal_conversation
+        #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Nvidia/AF-Think/meld/train.jsonl
+        
+    # FR QA
+    - type: group
+      tags: {lang: fr}
+      weight: 0.44
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train.jsonl
+        - type: multimodal_conversation
+          # synthetic instruction-tuning data — explicitly capped at 3% of FR QA
+          weight: 0.03
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/SIFT-50M/content_level/common_voice_fr/train_other.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/SIFT-50M/content_level/multilingual_librispeech_fr/train_other.jsonl
+    - type: group
+      tags: {lang: de}
+      weight: 0.04
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_other.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_other.jsonl
+    - type: group
+      tags: {lang: es}
+      weight: 0.04
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_other.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_other.jsonl
+    - type: group
+      tags: {lang: it}
+      weight: 0.04
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_other.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_other.jsonl
+
+# ============================================================
+# AQA — 10%
+# ============================================================
+- type: group
+  tags: {task: aqa}
+  weight: 0.10
+  input_cfg:
+    - type: group
+      weight: 0.5
+      tags: {task: sound, sub_task: sound_qa}
+      input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/AudioCaps/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/WavCaps/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/Clotho/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/CompA-R/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/TACOS/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/CLEAR_v1.0.0_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/CLEAR_v2.0.0_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/clotho_aqa_improved/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/mispeech_MECAT-QA/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/AudioCaps/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/WavCaps/train.jsonl
+        tags: {sub_task: sound_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/Clotho/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/CompA-R/train.jsonl
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/TACOS/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/af_cot_train/train.jsonl
+      #   tags: {sub_task: aqa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AF-Think/not_af_cot_train/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/magnatagattune/train.jsonl
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/Nvidia/AudioSkills/youtube8m/train.jsonl
+    - type: group
+      weight: 0.5
+      tags: {task: music}
+      input_cfg:
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/JamendoMaxCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/FMA_GenreQA/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MusicCaps.Pretraining.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MTT.Finetuning.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MTG.Evaluation.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/JamendoMaxCaps/train.jsonl
+        tags: {sub_task: music_captioning}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/FMA_GenreQA/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/MusicCaps/train.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MusicCaps.Pretraining.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTT.Finetuning.jsonl
+        tags: {sub_task: music_qa}
+      - type: multimodal_conversation
+        manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTG.Evaluation.jsonl
+        tags: {sub_task: music_qa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/af_cot_train_fma/train.jsonl
+      #   tags: {sub_task: music_qa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AF-Think/musiccaps/train.jsonl
+      #   tags: {sub_task: music_qa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/combined_small_ds/train.jsonl
+      #   tags: {sub_task: music_qa}
+      # - type: multimodal_conversation
+      #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/Nvidia/AudioSkills/fma/train.jsonl
+      #   tags: {sub_task: music_qa}
+
+# ============================================================
+# OTHER — 10%   (organised by sub_task, equal split across languages)
+# ============================================================
+- type: group
+  tags: {task: other}
+  weight: 0.10
+  input_cfg:
+
+    # === gender_reco — target 1.5% of total ===
+    - type: group
+      tags: {sub_task: gender_reco}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train.jsonl
+        - type: group
+          tags: {lang: de}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_gender.jsonl
+        - type: group
+          tags: {lang: es}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_gender.jsonl
+        - type: group
+          tags: {lang: it}
+          weight: 0.10
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_gender.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_gender.jsonl
+
+    # === age_reco — target 1.5% of total ===
+    # en and fr pinned at 35% each; de/es/it share the remaining 30%
+    # data-driven (sample-proportional) so the small es set isn't oversampled.
+    - type: group
+      tags: {sub_task: age_reco}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.35
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train.jsonl
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_age.jsonl
+          tags: {lang: de}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_age.jsonl
+          tags: {lang: es}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_age.jsonl
+          tags: {lang: it}
+
+    # === temporal — target 1.5% of total ===
+    - type: group
+      tags: {sub_task: temporal}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_json_answer/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_timestamped_transcription/train.jsonl
+            #   tags: {sub_task: formatted_timestamped_transcription}
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence_chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time_chat/train.jsonl
+
+    # === diarization — target 1.5% of total ===
+    # en/fr split set to the natural sample proportion (18.7k / 67.5k samples)
+    - type: group
+      tags: {sub_task: diarization}
+      weight: 0.18
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          weight: 0.17
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          weight: 0.66
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl
+        - type: group
+          tags: {lang: mixed}
+          weight: 0.17
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/chat/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/yes_no/train.jsonl
+
+    # === voice_captioning — target 1% of total (en only available) ===
+    - type: group
+      tags: {sub_task: voice_captioning}
+      weight: 0.12
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/mixed/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/finegrained/train.jsonl
+            # - type: multimodal_conversation
+            #   manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/short_captions/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/SpeechCraft/train.jsonl
+
+    # === language_reco — target 0.5% of total ===
+    - type: group
+      tags: {sub_task: language_reco}
+      weight: 0.06
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train.jsonl
+
+    # === emotion_reco — target 0.5% of total ===
+    - type: group
+      tags: {sub_task: emotion_reco}
+      weight: 0.06
+      input_cfg:
+        - type: group
+          tags: {lang: en}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
+        - type: group
+          tags: {lang: fr}
+          input_cfg:
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train.jsonl
+            - type: multimodal_conversation
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train.jsonl
+
+    # === sentence-stress sub-tasks (small datasets, kept for breadth) ===
+    - type: group
+      weight: 0.04
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train.jsonl
+          tags: {sub_task: sentence_stress_detection, lang: en}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train.jsonl
+          tags: {sub_task: sentence_stress_detection, lang: fr}
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssr/train.jsonl
+          tags: {sub_task: sentence_stress_reasoning, lang: en}
+
+# ============================================================
+# MISC MULTITURN CONVERSATIONS — 1%
+# ============================================================
+- type: group
+  tags: {task: task_switching, lang: mixed}
+  weight: 0.01
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train.jsonl
+#    # CommonVoice, 8 langues, transcription + traduction fr<->* : 1 000 000
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/CVMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_asr_ast, lang: mixed}
+#    # MLS francais, fenetres temporelles + parcours de chapitre : 73 308
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MLSMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_temporal, lang: fr}
+#    # SLUE-SQA5 anglais, localisation + chaines liees + question orale : 13 325
+#    # Attention : memes audios que temporal/en/slue-phase-2-sqa5.
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/SLUEMultiTurn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_temporal, lang: en}
+#    # Clotho-AQA, questions sur des sons : 1 967
+#    - type: multimodal_conversation
+#      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_multiturn/mixed/train.jsonl
+#      tags: {sub_task: multiturn_aqa, lang: en}

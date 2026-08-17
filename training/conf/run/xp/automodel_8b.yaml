@@ -1,0 +1,27 @@
+# @package _global_
+# Luciole-8B on the NeMo Automodel backend (SALMAutomodel), LoRA r=128.
+#
+# Node requirements: NEMO_FORK on PYTHONPATH (run_train.slurm --nemo-fork), plus
+# nemo_automodel + transformer_engine importable in the conda env.
+#
+# Long-context recipe (max_tokens=16384), so ACTIVATIONS are the memory wall, not
+# params: FSDP2/ZeRO-3 shards the 16 GB of params to ~4 GB/GPU, and
+# activation_checkpointing_llm trades ~25% compute for the activation stack.
+# If the 16k buckets still OOM, escalate to context parallel: packed_sequences=true
+# + automodel_backend.attn=te + cp_size=2, NVTE_FUSED_ATTN=0 — see
+# xp_commands/xp_model_sizes.sh.
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-8b
+  - _self_
+
+model:
+  automodel_parallel:
+    # dp_replicate_size=2 is HSDP (half the model per GPU) and buys nothing:
+    # 2.942 vs 2.929 s/step (n=300) for +3.85 GiB. The step is compute-bound.
+    dp_replicate_size: 1
+    activation_checkpointing_llm: true
+
+trainer:
+  max_steps: 25_000

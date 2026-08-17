@@ -1,4 +1,0 @@
-- input_cfg:
-  - manifest_filepath: path/to/infer.jsonl
-    type: nemo
-  type: group

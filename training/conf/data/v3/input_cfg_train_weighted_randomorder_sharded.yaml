@@ -1,0 +1,1040 @@
+- input_cfg:
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0085
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..51_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0761
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1153
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Yodas/train_randomorder_shards/train_randomorder__OP_0..66_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0864
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PxSLU/train_recasepunc_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0066
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxForge/train_recasepunc_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0224
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ACSYNT/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0089
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LINAGORA_Meetings/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0118
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFAR/train_randomorder_shards/train_randomorder__OP_0..11_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0361
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LVL-Atril-CTFNN1/train_randomorder_shards/train_randomorder__OP_0..13_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0396
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/PFC/train_randomorder_shards/train_randomorder__OP_0..13_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0389
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..23_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.051
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/SimSamu/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0083
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/VoxPopuli/train_randomorder_shards/train_randomorder__OP_0..14_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0406
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/AfricanAccentedFrench/train_recasepunc_max30_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.016
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPB/train_recasepunc_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0203
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CFPP2000/train_recasepunc_randomorder_shards/train_recasepunc_randomorder__OP_0..6_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0261
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CLAPI/train_recasepunc_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.02
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/ESLO/train_recasepunc_randomorder_shards/train_recasepunc_randomorder__OP_0..90_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.101
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/LesVocaux/train_recasepunc_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0031
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Adultes/train_recasepunc_randomorder_shards/train_recasepunc_randomorder__OP_0..15_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0423
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/TCOF_Enfants/train_recasepunc_randomorder_shards/train_recasepunc_randomorder__OP_0..14_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0405
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split0_randomorder_shards/train_split0_randomorder__OP_0..46_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1478
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split1_randomorder_shards/train_split1_randomorder__OP_0..46_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1476
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split2_randomorder_shards/train_split2_randomorder__OP_0..46_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1477
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split3_randomorder_shards/train_split3_randomorder__OP_0..46_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1474
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split4_randomorder_shards/train_split4_randomorder__OP_0..44_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1449
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split5_randomorder_shards/train_split5_randomorder__OP_0..41_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.14
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/YouTubeFr/train_split6_randomorder_shards/train_split6_randomorder__OP_0..33_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1246
+      type: group
+      weight: 0.1802
+    tags:
+      lang: fr
+    type: group
+    weight: 0.2903
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..227_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1393
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Yodas/train_randomorder_shards/train_randomorder__OP_0..1596_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.369
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0067
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..2161_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.4293
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/VoxPopuli/train_randomorder_shards/train_randomorder__OP_0..36_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0558
+    tags:
+      lang: en
+    type: group
+    weight: 0.2906
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..121_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.4037
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0282
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_TEDx/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0426
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..93_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.355
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/context/VoxPopuli/train_randomorder_shards/train_randomorder__OP_0..21_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1705
+    tags:
+      lang: de
+    type: group
+    weight: 0.0802
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..70_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.3577
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0318
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..20_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1922
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..44_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2825
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/VoxPopuli/train_randomorder_shards/train_randomorder__OP_0..10_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1357
+    tags:
+      lang: es
+    type: group
+    weight: 0.0802
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..34_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.3819
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0505
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2053
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..11_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2243
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/context/VoxPopuli/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.138
+    tags:
+      lang: it
+    type: group
+    weight: 0.0601
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2046
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.053
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..74_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.6003
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/context/VoxPopuli/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.1421
+    tags:
+      lang: nl
+    type: group
+    weight: 0.0501
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/CommonVoice/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.2186
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.068
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_LibriSpeech/train_randomorder_shards/train_randomorder__OP_0..7_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2797
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..18_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.4337
+    tags:
+      lang: pt
+    type: group
+    weight: 0.0497
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/train_randomorder_shards/train_randomorder__OP_0..5_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0957
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/FLEURS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0258
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/Multilingual_TEDx/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0616
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ARABIC-SPEECH/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0222
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/ESCWA/all_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0104
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MASC/train_randomorder_shards/train_randomorder__OP_0..82_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.3644
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB2/train_randomorder_shards/train_randomorder__OP_0..54_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2966
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/MGB5/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0125
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TARIC/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0695
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/TunSwitch/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0413
+    tags:
+      lang: ar
+    type: group
+    weight: 0.0988
+  tags:
+    task: asr
+  type: group
+  weight: 0.3445
+- input_cfg:
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-de/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..85_CL_.jsonl
+    tags:
+      source_lang: en
+      target_lang: de
+    type: multimodal_conversation
+    weight: 0.0519
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-fr/context/CommonVoiceEN2FR/train_randomorder_shards/train_randomorder__OP_0..227_CL_.jsonl
+    tags:
+      source_lang: en
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0845
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-de/context/CommonVoiceFR2DE/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: de
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/CommonVoiceFR2ES/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: es
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: fr
+      target_lang: es
+    type: multimodal_conversation
+    weight: 0.0114
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-it/context/CommonVoiceFR2IT/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: it
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-nl/context/CommonVoiceFR2NL/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: nl
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/CommonVoiceFR2PT/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: pt
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: fr
+      target_lang: pt
+    type: multimodal_conversation
+    weight: 0.0091
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..49_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0394
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/CommonVoiceFR2EN/train_randomorder_shards/train_randomorder__OP_0..118_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.061
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..6_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0138
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-fr/context/CommonVoiceDE2FR/train_randomorder_shards/train_randomorder__OP_0..121_CL_.jsonl
+    tags:
+      source_lang: de
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0617
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-en/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..52_CL_.jsonl
+    tags:
+      source_lang: de
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0407
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/CommonVoiceES2FR/train_randomorder_shards/train_randomorder__OP_0..70_CL_.jsonl
+    tags:
+      source_lang: es
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0471
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: es
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0048
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: es
+      target_lang: it
+    type: multimodal_conversation
+    weight: 0.0059
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: es
+      target_lang: pt
+    type: multimodal_conversation
+    weight: 0.0115
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..18_CL_.jsonl
+    tags:
+      source_lang: es
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.024
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..7_CL_.jsonl
+    tags:
+      source_lang: es
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0151
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-fr/context/CommonVoiceIT2FR/train_randomorder_shards/train_randomorder__OP_0..21_CL_.jsonl
+    tags:
+      source_lang: it
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0262
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: it
+      target_lang: es
+    type: multimodal_conversation
+    weight: 0.0038
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+    tags:
+      source_lang: it
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0164
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: it
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0124
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/nl-fr/context/CommonVoiceNL2FR/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+    tags:
+      source_lang: nl
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0165
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/context/CommonVoicePT2FR/train_randomorder.jsonl
+    tags:
+      source_lang: pt
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.012
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/context/Multilingual_TEDx/train_randomorder.jsonl
+    tags:
+      source_lang: pt
+      target_lang: es
+    type: multimodal_conversation
+    weight: 0.0085
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/CoVoST/train_randomorder.jsonl
+    tags:
+      source_lang: pt
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0097
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/context/Multilingual_TEDx/train_randomorder_shards/train_randomorder__OP_0..6_CL_.jsonl
+    tags:
+      source_lang: pt
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0139
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/context/CommonVoiceAR2FR/train_randomorder_shards/train_randomorder__OP_0..5_CL_.jsonl
+    tags:
+      source_lang: ar
+      target_lang: fr
+    type: multimodal_conversation
+    weight: 0.0134
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/context/CommonVoiceFR2AR/train_randomorder_shards/train_randomorder__OP_0..23_CL_.jsonl
+    tags:
+      source_lang: fr
+      target_lang: ar
+    type: multimodal_conversation
+    weight: 0.027
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/context/CoVoST/train_randomorder.jsonl
+    tags:
+      source_lang: ar
+      target_lang: en
+    type: multimodal_conversation
+    weight: 0.0014
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/context/CoVoST/train_randomorder_shards/train_randomorder__OP_0..85_CL_.jsonl
+    tags:
+      source_lang: en
+      target_lang: ar
+    type: multimodal_conversation
+    weight: 0.0519
+  tags:
+    task: ast
+  type: group
+  weight: 0.1117
+- input_cfg:
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/VoxPopuli-QA/train_randomorder_shards/train_randomorder__OP_0..113_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.2592
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/en/slue-phase-2-sqa5/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0739
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-audio-context/en/slue-phase-2-sqa5/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0739
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/slue-phase-2-sqa5/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0739
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/amuvarma--10k-filtered-tune-audio-text_answer/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0263
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/gruhit-patel--alpaca_speech_instruct/train_randomorder_shards/train_randomorder__OP_0..10_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0783
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--science-question/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0102
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/liangtianle--unsafety-question/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0099
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/Menlo--instruction-speech-encodec-v1.5/train_randomorder_shards/train_randomorder__OP_0..66_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1983
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/en/worstchan--UltraChat-300K-SLAM-Omni/train_randomorder_shards/train_randomorder__OP_0..32_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.1395
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-text-context/en/yijingwu--HeySQuAD_human/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0315
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/ami/train_randomorder.jsonl
+      tags:
+        sub_task: summarization
+      type: multimodal_conversation
+      weight: 0.0023
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/icsi/summary/train_randomorder.jsonl
+      tags:
+        sub_task: summarization
+      type: multimodal_conversation
+      weight: 0.0012
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/nutshell/train_randomorder.jsonl
+      tags:
+        sub_task: summarization
+      type: multimodal_conversation
+      weight: 0.0116
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/summary/en/slue-phase-2-ted/train_randomorder.jsonl
+      tags:
+        sub_task: summarization
+      type: multimodal_conversation
+      weight: 0.0099
+    tags:
+      lang: en
+    type: group
+    weight: 0.4292
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/CohereLabs--aya_collection/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.002
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0307
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/ComparIA/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0363
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/VoxPopuli-QA/train_randomorder_shards/train_randomorder__OP_0..113_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.3321
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/SIFT-50M/content_level/common_voice_fr/train_other_randomorder_shards/train_other_randomorder__OP_0..104_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.3179
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/fr/SIFT-50M/content_level/multilingual_librispeech_fr/train_other_randomorder_shards/train_other_randomorder__OP_0..81_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.281
+    tags:
+      lang: fr
+    type: group
+    weight: 0.4462
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_other_randomorder_shards/train_other_randomorder__OP_0..142_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.5167
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_other_randomorder_shards/train_other_randomorder__OP_0..124_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.4833
+    tags:
+      lang: de
+    type: group
+    weight: 0.0415
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_other_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.2062
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_other_randomorder_shards/train_other_randomorder__OP_0..59_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.7938
+    tags:
+      lang: es
+    type: group
+    weight: 0.0415
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_other_randomorder_shards/train_other_randomorder__OP_0..34_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.5981
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_other_randomorder_shards/train_other_randomorder__OP_0..15_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.4019
+    tags:
+      lang: it
+    type: group
+    weight: 0.0415
+  tags:
+    task: qa
+  type: group
+  weight: 0.3326
+- input_cfg:
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v1.0.0_improved/train_randomorder_shards/train_randomorder__OP_0..121_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.136
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/CLEAR_v2.0.0_improved/train_randomorder_shards/train_randomorder__OP_0..20_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0565
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0133
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/mispeech_MECAT-QA/train_randomorder_shards/train_randomorder__OP_0..20_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0552
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/mispeech_MECAT-Caption/train_randomorder.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.0246
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/AudioCaps/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.0371
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/en/context/WavCaps/train_randomorder_shards/train_randomorder__OP_0..77_CL_.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.1088
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/Clotho/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0108
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/CompA-R/train_randomorder_shards/train_randomorder__OP_0..39_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0775
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/TACOS/train_randomorder_shards/train_randomorder__OP_0..6_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0319
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/CLEAR_v1.0.0_improved/train_randomorder_shards/train_randomorder__OP_0..121_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.136
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/CLEAR_v2.0.0_improved/train_randomorder_shards/train_randomorder__OP_0..20_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0565
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/clotho_aqa_improved/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0133
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/mispeech_MECAT-QA/train_randomorder_shards/train_randomorder__OP_0..20_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.0552
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/mispeech_MECAT-Caption/train_randomorder.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.0246
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/AudioCaps/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.0371
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-captioning/fr/context/WavCaps/train_randomorder_shards/train_randomorder__OP_0..77_CL_.jsonl
+      tags:
+        sub_task: sound_captioning
+      type: multimodal_conversation
+      weight: 0.1088
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/Clotho/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0002
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/CompA-R/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.0106
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/TACOS/train_randomorder.jsonl
+      type: multimodal_conversation
+      weight: 0.006
+    tags:
+      sub_task: sound_qa
+      task: sound
+    type: group
+    weight: 0.5086
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_captioning
+      type: multimodal_conversation
+      weight: 0.022
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/en/context/JamendoMaxCaps/train_randomorder_shards/train_randomorder__OP_0..72_CL_.jsonl
+      tags:
+        sub_task: music_captioning
+      type: multimodal_conversation
+      weight: 0.2933
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.022
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/FMA_GenreQA/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0388
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0609
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0218
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MusicCaps.Pretraining_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0337
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MTT.Finetuning_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0431
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/en/MusicQA/MTG.Evaluation_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0048
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_captioning
+      type: multimodal_conversation
+      weight: 0.022
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-captioning/fr/context/JamendoMaxCaps/train_randomorder_shards/train_randomorder__OP_0..72_CL_.jsonl
+      tags:
+        sub_task: music_captioning
+      type: multimodal_conversation
+      weight: 0.2933
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.022
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/FMA_GenreQA/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0388
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/LP-MusicCaps-MTT/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0017
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/fr/context/inclusionAI-AudioMCQ/mixed/MusicCaps/train_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0003
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MusicCaps.Pretraining_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0337
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTT.Finetuning_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0431
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/music/music-question-answering/fr/MusicQA/MTG.Evaluation_randomorder.jsonl
+      tags:
+        sub_task: music_qa
+      type: multimodal_conversation
+      weight: 0.0048
+    tags:
+      task: music
+    type: group
+    weight: 0.4914
+  tags:
+    task: aqa
+  type: group
+  weight: 0.0997
+- input_cfg:
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train_randomorder_shards/train_randomorder__OP_0..156_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.8983
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-gender-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.1017
+      tags:
+        lang: en
+      type: group
+      weight: 0.35
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-gender-recognition/train_randomorder_shards/train_randomorder__OP_0..73_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.8581
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-gender-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.1419
+      tags:
+        lang: fr
+      type: group
+      weight: 0.35
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_gender_randomorder_shards/train_gender_randomorder__OP_0..46_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.4599
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/multilingual_librispeech_de/train_gender_randomorder_shards/train_gender_randomorder__OP_0..63_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.5401
+      tags:
+        lang: de
+      type: group
+      weight: 0.1
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_gender_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.2065
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/multilingual_librispeech_es/train_gender_randomorder_shards/train_gender_randomorder__OP_0..26_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.7935
+      tags:
+        lang: es
+      type: group
+      weight: 0.1
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_gender_randomorder_shards/train_gender_randomorder__OP_0..23_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.6246
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/multilingual_librispeech_it/train_gender_randomorder_shards/train_gender_randomorder__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.3754
+      tags:
+        lang: it
+      type: group
+      weight: 0.1
+    tags:
+      sub_task: gender_reco
+    type: group
+    weight: 0.1803
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train_randomorder_shards/train_randomorder__OP_0..133_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.8909
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-age-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.1091
+      tags:
+        lang: en
+      type: group
+      weight: 0.35
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/CommonVoice_spk_attributes_reco/CommonVoice-age-recognition/train_randomorder_shards/train_randomorder__OP_0..57_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.843
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-age-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.157
+      tags:
+        lang: fr
+      type: group
+      weight: 0.35
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/de/SIFT-50M/content_level/common_voice_de/train_age_randomorder_shards/train_age_randomorder__OP_0..8_CL_.jsonl
+      tags:
+        lang: de
+      type: multimodal_conversation
+      weight: 0.1005
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/es/SIFT-50M/content_level/common_voice_es/train_age_randomorder.jsonl
+      tags:
+        lang: es
+      type: multimodal_conversation
+      weight: 0.0456
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-context-text-question/it/SIFT-50M/content_level/common_voice_it/train_age_randomorder_shards/train_age_randomorder__OP_0..19_CL_.jsonl
+      tags:
+        lang: it
+      type: multimodal_conversation
+      weight: 0.1539
+    tags:
+      sub_task: age_reco
+    type: group
+    weight: 0.1803
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_source/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.139
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/answer_with_time/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.139
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2sentence/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1456
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/time2word/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1458
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2sentence/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1459
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/word2time/train_randomorder_shards/train_randomorder__OP_0..9_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.1459
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/en/slue-phase-2-sqa5/format_json_answer/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.139
+      tags:
+        lang: en
+      type: group
+      weight: 0.5
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2sentence/train_randomorder_shards/train_randomorder__OP_0..15_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/time2word/train_randomorder_shards/train_randomorder__OP_0..15_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2sentence/train_randomorder_shards/train_randomorder__OP_0..15_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/temporal/fr/Multilingual_LibriSpeech/word2time/train_randomorder_shards/train_randomorder__OP_0..15_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.25
+      tags:
+        lang: fr
+      type: group
+      weight: 0.5
+    tags:
+      sub_task: temporal
+    type: group
+    weight: 0.1803
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.5055
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.4945
+      tags:
+        lang: en
+      type: group
+      weight: 0.17
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.1772
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.3246
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train_randomorder_shards/train_randomorder__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.4982
+      tags:
+        lang: fr
+      type: group
+      weight: 0.66
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/chat/train_randomorder_shards/train_randomorder__OP_0..39_CL_.jsonl
+        type: multimodal_conversation
+      tags:
+        lang: mixed
+      type: group
+      weight: 0.17
+    tags:
+      sub_task: diarization
+    type: group
+    weight: 0.1803
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/FCaps/mixed/train_randomorder_shards/train_randomorder__OP_0..21_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.6065
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/AcousticDS/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.1239
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/inclusionAI-AudioMCQ/mixed/SpeechCraft/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.2696
+      tags:
+        lang: en
+      type: group
+    tags:
+      sub_task: voice_captioning
+    type: group
+    weight: 0.1202
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/VoxLingua_lang_identification/train_randomorder.jsonl
+        type: multimodal_conversation
+      tags:
+        lang: en
+      type: group
+      weight: 0.5
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/VoxLingua_lang_identification/train_randomorder.jsonl
+        type: multimodal_conversation
+      tags:
+        lang: fr
+      type: group
+      weight: 0.5
+    tags:
+      sub_task: language_reco
+    type: group
+    weight: 0.0601
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/MELD/EmotionDS/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.4998
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/ssi-speech/ssi-speech-emotion-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.5002
+      tags:
+        lang: en
+      type: group
+      weight: 0.516
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/MELD/EmotionDS/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.4577
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/OreauFR_02/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.0634
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/emotional-speech-audio-dataset-4languages-fr/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.021
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/ssi-speech/ssi-speech-emotion-recognition/train_randomorder.jsonl
+        type: multimodal_conversation
+        weight: 0.4579
+      tags:
+        lang: fr
+      type: group
+      weight: 0.484
+    tags:
+      sub_task: emotion_reco
+    type: group
+    weight: 0.0583
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssd/train_randomorder.jsonl
+      tags:
+        lang: en
+        sub_task: sentence_stress_detection
+      type: multimodal_conversation
+      weight: 0.3333
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/fr/context/Stress/ssd/train_randomorder.jsonl
+      tags:
+        lang: fr
+        sub_task: sentence_stress_detection
+      type: multimodal_conversation
+      weight: 0.3333
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/en/context/Stress/ssr/train_randomorder.jsonl
+      tags:
+        lang: en
+        sub_task: sentence_stress_reasoning
+      type: multimodal_conversation
+      weight: 0.3333
+    type: group
+    weight: 0.0401
+  tags:
+    task: other
+  type: group
+  weight: 0.1013
+- input_cfg:
+  - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/MiscMultiTurn/train_randomorder_shards/train_randomorder__OP_0..19_CL_.jsonl
+    type: multimodal_conversation
+  tags:
+    lang: mixed
+    task: task_switching
+  type: group
+  weight: 0.0102

@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-23b
+  - _self_
+
+model:
+  automodel_parallel:
+    dp_replicate_size: 1
+    activation_checkpointing_llm: true
+
+trainer:
+  max_steps: 100_000
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 5000

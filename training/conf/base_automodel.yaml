@@ -1,0 +1,26 @@
+# @package _global_
+# Automodel "mixin": the additive config shared by every SALMAutomodel run.
+# Compose AFTER /base, before the recipe.
+#
+# trainer.strategy and model.lora are deliberately NOT here: base.yaml sets them
+# in SALM/DDP shape and Hydra can't delete keys, so an overlay cannot convert
+# them. salm_train._normalize_for_automodel() rewrites both in code.
+model:
+  use_nemo_automodel: true
+  # Fuse the lm_head matmul into the CE loss so the (B*T, vocab) logits are never
+  # materialized. Falls back to the plain path with a warning if unavailable.
+  fused_linear_cross_entropy: true
+  # Keep OFF: the bundled remote code's prepare_inputs_for_generation slices
+  # input_ids, which is None on SALM's inputs_embeds-only audio path, and crashes.
+  # NOTE: built-in trunk is `.model`, bundled is `.backbone` — the parallelizer and
+  # find_embedding_layer must accept both.
+  trust_remote_code: false
+  # Required even with built-in code: the dense Nemotron-H config carries a stray
+  # n_routed_experts=8, so automodel wrongly builds its native MoE model and the
+  # parallelizer crashes. force_hf routes to the HF dense model instead.
+  force_hf: true
+  # Uncomment to bypass TransformerEngine (e.g. if te.pytorch fails to load):
+  # automodel_backend:
+  #   attn: sdpa
+  #   linear: torch
+  #   rms_norm: torch_fp32

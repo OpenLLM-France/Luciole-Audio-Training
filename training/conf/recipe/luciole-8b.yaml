@@ -1,0 +1,24 @@
+# @package _global_
+# Recipe: LoRA r=64
+# Sized for 8B LLMs on 4×H100; trained with max_steps=10M, limit=250k. lora_dropout not set.
+model:
+  # HF config override applied at load time (threaded into from_pretrained by the fork's
+  # load_pretrained_* via _resolve_llm_config_overrides). Keep Nemotron-H's cross-layer
+  # residual stream in fp32 — cheap stability hygiene for Mamba2 training (kernels stay on).
+  llm_config_overrides:
+    residual_in_fp32: true
+  
+  optimizer:
+    lr: 2e-4
+  lora:
+    r: 64
+    lora_alpha: 64
+    task_type: CAUSAL_LM
+    target_modules: ["q_proj", "v_proj", "up_proj", "down_proj"]
+    lora_dropout: 0.0
+
+data:
+  train_ds:
+    num_buckets: 27
+    bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,418,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
+    bucket_batch_size: [238,200,173,146,120,104,92,84,76,70,64,59,50,48,46,42,40,38,36,33,30,28,21,13,6,2,1]

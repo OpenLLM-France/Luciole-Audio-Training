@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SALeM</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=41">
     <link rel="stylesheet" href="/static/vendor/github.min.css" id="hljs-theme-light">
     <link rel="stylesheet" href="/static/vendor/github-dark.min.css" id="hljs-theme-dark" disabled>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -115,6 +115,20 @@
                         <span class="model-name-tag">Model</span>
                         <span class="model-name-value" id="model-name-value">…</span>
                     </button>
+
+                    <!-- Choix du modèle, DANS la page : c'est un réglage qu'on change d'une
+                         requête à l'autre quand on compare, pas une préférence qu'on pose une
+                         fois — il n'avait rien à faire au fond du panneau Réglages.
+                         Masqué tant que le serveur n'annonce qu'un modèle (/healthz). -->
+                    <div class="model-picker hidden" id="model-row">
+                        <select id="set-model" class="model-picker-select"
+                            aria-label="Modèle qui répond"></select>
+                        <label class="model-picker-compare"
+                            title="Interroger tous les modèles et comparer leurs réponses">
+                            <input type="checkbox" id="set-compare">
+                            <span>Compare</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="status-cluster">
                     <button id="server-stats-btn" class="server-stats" type="button" aria-label="Server stats"
@@ -202,28 +216,6 @@
                     </button>
                     <textarea id="text-input" placeholder="Send a message..." rows="1" data-gramm="false"
                         wt-ignore-input="true" aria-label="Message"></textarea>
-                    <div class="effort-picker">
-                        <button id="effort-toggle" class="effort-toggle" type="button"
-                            aria-haspopup="true" aria-expanded="false" aria-label="Effort mode"
-                            title="Effort mode">
-                            <span class="effort-toggle-dot" aria-hidden="true"></span>
-                            <span class="effort-toggle-label" id="effort-toggle-label">Normal</span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                        <div id="effort-menu" class="effort-menu hidden" role="menu">
-                            <button data-value="normal" class="effort-menu-item" type="button" role="menuitem">
-                                <span class="effort-menu-name">Normal</span>
-                                <span class="effort-menu-hint">Quick replies — your settings</span>
-                            </button>
-                            <button data-value="max" class="effort-menu-item" type="button" role="menuitem">
-                                <span class="effort-menu-name">Max thinking</span>
-                                <span class="effort-menu-hint">Longer reasoning, lower temperature</span>
-                            </button>
-                        </div>
-                    </div>
                     <button id="stop-btn" class="icon-btn hidden" type="button" aria-label="Stop generation"
                         title="Stop generation (Esc)">
                         <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"
@@ -283,6 +275,9 @@
                     </label>
                     <div class="theme-picker" id="theme-picker"></div>
                 </div>
+
+                <!-- Le choix du modèle vivait ici ; il est remonté dans l'en-tête du chat,
+                     où il est visible et modifiable sans ouvrir ce panneau. -->
 
                 <div class="settings-row">
                     <label class="settings-label">Mic mode</label>
@@ -453,7 +448,10 @@
         </div>
     </template>
 
-    <script src="/static/client.js?v=37"></script>
+    <!-- Bumper ce v= à CHAQUE modification de client.js : sans ça le navigateur ressert sa
+         copie en cache et l'app tourne avec un JS antérieur. C'est ce qui a rendu le sélecteur
+         de modèle invisible — le JS caché ne le connaissait pas. -->
+    <script src="/static/client.js?v=43"></script>
 </body>
 
 </html>

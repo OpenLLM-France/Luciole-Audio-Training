@@ -1,0 +1,24 @@
+# @package _global_
+model:
+  optimizer:
+    lr: 2e-4
+  lora:
+    r: 64
+    lora_alpha: 64
+    task_type: CAUSAL_LM
+    target_modules: ["q_proj", "v_proj", "up_proj", "down_proj"]
+    lora_dropout: 0.0
+
+trainer:
+  max_steps: 10_000_000
+  limit_train_batches: 250_000
+
+data:
+  train_ds:
+    num_buckets: 27
+    bucket_duration_bins: [87,105,121,143,171,202,226,249,271,294,319,354,418,433,454,485,521,539,585,633,683,734,966,1545,3426,8832,16384]
+    bucket_batch_size: [238,200,173,146,120,104,92,84,76,70,64,59,50,48,46,42,40,38,36,33,30,28,21,13,6,2,1]
+
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 1000

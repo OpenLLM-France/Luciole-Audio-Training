@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import time
 import uuid
 import wave
@@ -18,14 +19,69 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from av.audio.resampler import AudioResampler
 
-from model_handler import SALMModel
+from remote_model import RemoteSALMModel
 
 # Configuration
 ROOT = Path(__file__).parent
-MODEL_PATH = os.getenv("MODEL_PATH", "/home/usertn2/MODELS/SpeechLM2/Canary-Llama-2.3B")
+# Les modèles sont servis par des serveurs vLLM : "nom=http://host:port,nom=http://host:port",
+# un serveur par modèle (vLLM n'en sert qu'un par processus). La démo ne charge aucun poids,
+# elle n'est qu'un client HTTP — c'est ce qui lui permet d'en exposer plusieurs, avec le
+# sélecteur et la comparaison, sans rien payer en mémoire.
+#
+# Le chargement des poids DANS ce processus (model_handler.SALMModel, NeMo en direct) a été
+# retiré le 2026-07-28. Il vit dans l'historique git jusqu'au commit 7db1bbf, avec l'image
+# salm-demo:8b qui allait avec. Motifs : décodage x1,2 à x1,8 plus lent, aucun batching, et
+# une image entière de contraintes croisées (nemo_automodel, PEFT épinglé par torchao) dont
+# le chemin vLLM n'a pas besoin.
+MODEL_ENDPOINTS = os.getenv("MODEL_ENDPOINTS", "")
+# Chemin du checkpoint, monté en lecture seule et utilisé UNIQUEMENT par /model-config pour
+# afficher le config.json dans l'interface. Plus rien ne charge de poids depuis ici.
+MODEL_PATH = os.getenv("MODEL_PATH", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
-MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 64))
+MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 1024))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
+# Optional system prompt seeded into every new session. Empty (the default) = no system
+# turn at all, i.e. the plain demo behaviour. SALM's formatter only knows user/assistant,
+# so remote_model folds any system turn into the first user message.
+# SYSTEM_PROMPT_FILE wins over SYSTEM_PROMPT (easier to pass a long prompt via a mount).
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "")
+_sys_prompt_file = os.getenv("SYSTEM_PROMPT_FILE", "")
+if _sys_prompt_file:
+    SYSTEM_PROMPT = Path(_sys_prompt_file).read_text()
+
+
+def _parse_model_specs():
+    """Découpe MODEL_ENDPOINTS ("nom=url,nom=url") en [(nom, url)].
+
+    Les noms viennent du client (sélecteur) et reviennent dans chaque message de token pour
+    router l'affichage : ils doivent être stables et lisibles. Sans nom explicite on prend le
+    dernier segment de l'URL, ce qui donne un port — utilisable, mais autant les nommer.
+    """
+    specs = []
+    for chunk in MODEL_ENDPOINTS.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        name, sep, url = chunk.partition("=")
+        if not sep:
+            name, url = os.path.basename(chunk.rstrip("/")), chunk
+        specs.append((name.strip(), url.strip()))
+    return specs
+
+
+def new_session():
+    """Fresh session state.
+
+    L'historique est PAR MODÈLE : en mode comparaison chaque modèle doit voir ses propres
+    réponses passées, pas celles de l'autre — sinon on ne compare plus deux modèles mais un
+    modèle et un modèle conditionné par son voisin. Les tours utilisateur sont donc dupliqués
+    dans chaque historique.
+    """
+    return {"history": {name: _fresh_history() for name, _ in _parse_model_specs()}}
+
+
+def _fresh_history():
+    return [{"role": "system", "content": SYSTEM_PROMPT}] if SYSTEM_PROMPT.strip() else []
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("WebRTC-App")
@@ -56,13 +112,56 @@ async def stream_generator_in_thread(generator_func, *args, **kwargs):
             break
         yield item
 
-# Initialize Model
-# We initialize it globally for now. In production, might want lazy loading or a separate worker.
-try:
-    salm_model = SALMModel(MODEL_PATH, default_instruction=DEFAULT_INSTRUCTION)
-except Exception as e:
-    logger.error(f"Could not load model: {e}")
-    salm_model = None
+# Mise en place des modèles au démarrage : on vérifie que chaque serveur répond, et on retient
+# l'identifiant qu'il sert. Un serveur injoignable ne condamne pas les autres — la démo reste
+# utilisable avec ceux qui ont répondu, et /healthz dit lesquels.
+MODELS = {}
+for _name, _url in _parse_model_specs():
+    try:
+        MODELS[_name] = RemoteSALMModel(_url, default_instruction=DEFAULT_INSTRUCTION, name=_name)
+        logger.info(f"Modèle '{_name}' servi par {_url}")
+    except Exception as e:
+        logger.error(f"Could not reach model '{_name}' at {_url}: {e}")
+
+# Modèle par défaut : le premier déclaré. C'est celui qui répond quand le client ne précise
+# rien — donc aussi tout client antérieur au sélecteur.
+DEFAULT_MODEL = next(iter(MODELS), None)
+# Compat : le code (et les intégrations) qui parlaient d'un modèle unique.
+salm_model = MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
+
+
+def get_model(name=None):
+    """Le modèle demandé, ou celui par défaut. None si aucun serveur n'a répondu."""
+    if name and name in MODELS:
+        return MODELS[name]
+    return MODELS.get(DEFAULT_MODEL) if DEFAULT_MODEL else None
+
+
+def selected_models(data):
+    """Rend [(nom, modèle)] pour une requête : un seul modèle, ou tous si comparaison.
+
+    `compare: true` l'emporte sur `model`. Les générations se feront en séquence dans cet
+    ordre (le GPU est unique), et chaque message émis porte son nom de modèle pour que le
+    client sache dans quelle colonne l'écrire.
+    """
+    if data.get("compare") and len(MODELS) > 1:
+        return list(MODELS.items())
+    name = data.get("model")
+    model = get_model(name)
+    if model is None:
+        return []
+    return [(name if name in MODELS else DEFAULT_MODEL, model)]
+
+
+def session_history(session_id: str, model_name: str):
+    """Historique d'UN modèle dans une session, créé à la volée.
+
+    À la volée parce que les sessions relues de sessions.json peuvent dater d'une
+    configuration où ce modèle n'existait pas — ou de l'époque où l'historique était une
+    simple liste (voir _load_sessions_from_disk).
+    """
+    hist = SESSIONS[session_id].setdefault("history", {})
+    return hist.setdefault(model_name, _fresh_history())
 
 class AudioTrackHandler:
     def __init__(self, track):
@@ -138,21 +237,55 @@ def _load_sessions_from_disk():
             data = json.load(f)
         if not isinstance(data, dict):
             return {}
+        # Migration : `history` était une liste (un seul modèle), c'est maintenant un dict
+        # {nom_de_modèle: liste}. Une session écrite par l'ancienne version est rattachée au
+        # modèle par défaut plutôt que jetée.
+        for sess in data.values():
+            if isinstance(sess, dict) and isinstance(sess.get("history"), list):
+                sess["history"] = {DEFAULT_MODEL: sess["history"]} if DEFAULT_MODEL else {}
         return data
     except Exception as e:
         logger.warning(f"Could not load sessions.json: {e}")
         return {}
 
 
+# Durée de vie des audios de conversation. Ils sont conservés au-delà de la requête
+# qui les a produits pour que les tours de suivi puissent les rejouer (voir
+# remote_model._build_messages), donc quelque chose doit finir par les effacer.
+# Au-delà de ce délai, un tour repasse en texte seul : dégradé, jamais une erreur.
+UPLOAD_TTL_S = float(os.getenv("UPLOAD_TTL_SECONDS", 6 * 3600))
+
+
+def _prune_uploads():
+    """Efface les audios de conversation périmés.
+
+    Purge par ÂGE et non par référence : les historiques vivent en mémoire, sont
+    rechargés amputés de leurs chemins au redémarrage, et une session n'est jamais
+    explicitement close — un balayage des références laisserait donc fuir les
+    fichiers des sessions abandonnées, c'est-à-dire la majorité.
+    """
+    uploads_dir = ROOT / "uploads"
+    if not uploads_dir.is_dir():
+        return
+    cutoff = time.time() - UPLOAD_TTL_S
+    for path in uploads_dir.glob("processed_*.wav"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+        except OSError:
+            pass
+
+
 def _serializable_sessions():
-    """Strip transient fields (audio paths point to /tmp files we delete)."""
+    """Strip transient fields (audio paths point to files we prune by age)."""
     out = {}
     for sid, sess in SESSIONS.items():
-        history = []
-        for turn in sess.get("history", []):
-            t = {k: v for k, v in turn.items() if k != "audio"}
-            history.append(t)
-        out[sid] = {"history": history}
+        histories = {}
+        for model_name, turns in (sess.get("history") or {}).items():
+            histories[model_name] = [
+                {k: v for k, v in turn.items() if k != "audio"} for turn in turns
+            ]
+        out[sid] = {"history": histories}
     return out
 
 
@@ -185,17 +318,30 @@ def schedule_save():
 SESSIONS.update(_load_sessions_from_disk())
 
 
-# Per-session latest-generation tracking. Lets a stale generation skip its
-# token emission and history append once a newer request has arrived.
-_SESSION_LATEST_GEN: dict = {}
+# Annulation explicite, par session. Avant, une requête plus récente rendait automatiquement
+# la précédente « stale » et l'avortait : impossible d'empiler deux questions dans une même
+# conversation, la seconde tuait la première. Désormais tout s'empile (une génération à la
+# fois, cf. GenerationQueue) et RIEN ne s'annule sans que l'utilisateur le demande — bouton
+# Stop (toute la conversation) ou suppression d'un message (cette requête-là).
+_CANCELLED: dict = {}   # session_id -> {gen_id annulés}
 
 
-def _mark_generation(session_id: str, gen_id: int):
-    _SESSION_LATEST_GEN[session_id] = gen_id
+def _cancel_generation(session_id: str, gen_id: int):
+    _CANCELLED.setdefault(session_id, set()).add(gen_id)
 
 
-def _is_stale(session_id: str, gen_id: int) -> bool:
-    return _SESSION_LATEST_GEN.get(session_id, gen_id) != gen_id
+def _is_cancelled(session_id: str, gen_id: int) -> bool:
+    return gen_id in _CANCELLED.get(session_id, ())
+
+
+def _forget_cancelled(session_id: str, gen_id: int):
+    """Une génération terminée n'a plus à figurer dans l'ensemble des annulées — sinon il
+    grossit indéfiniment sur une conversation longue."""
+    ids = _CANCELLED.get(session_id)
+    if ids:
+        ids.discard(gen_id)
+        if not ids:
+            _CANCELLED.pop(session_id, None)
 
 
 def _safe_send(channel, payload: dict) -> bool:
@@ -277,13 +423,9 @@ class GenerationQueue:
         return len(self.entries) + (1 if self.active else 0)
 
     def enqueue(self, session_id, gen_id, channel):
-        # Drop earlier waiting entries from the same session — a newer
-        # request supersedes them, no point keeping a slot for a generation
-        # the client has already abandoned.
-        evicted = [e for e in self.entries if e.session_id == session_id]
-        self.entries = [e for e in self.entries if e.session_id != session_id]
-        for e in evicted:
-            e.active_event.set()  # unblock awaiters; they'll see is_stale
+        # Plus d'éviction des requêtes d'une même session : elles font la queue, comme celles
+        # des autres sessions. Une seule génération tourne à la fois (le GPU est unique), le
+        # reste attend son tour, et seule une annulation explicite retire une entrée.
         if self._depth() >= self.max_depth:
             return None
         entry = _QueueEntry(session_id, gen_id, channel)
@@ -318,6 +460,29 @@ class GenerationQueue:
                 "generationId": e.gen_id,
             })
 
+    def cancel(self, session_id, gen_id=None) -> list:
+        """Annule les requêtes d'une session : une précise, ou toutes si gen_id est None.
+
+        Les entrées EN ATTENTE sont retirées de la file (leur `active_event` est armé pour
+        débloquer l'awaiter, qui verra l'annulation et s'arrêtera là). L'entrée ACTIVE, elle,
+        ne peut pas être retirée — sa génération tourne dans un thread ; on rend son gen_id
+        pour que l'appelant le marque annulé, et le stop_callback l'arrêtera au prochain token.
+        """
+        def matches(e):
+            return e.session_id == session_id and (gen_id is None or e.gen_id == gen_id)
+
+        cancelled = []
+        waiting = [e for e in self.entries if matches(e)]
+        self.entries = [e for e in self.entries if not matches(e)]
+        for e in waiting:
+            cancelled.append(e.gen_id)
+            e.active_event.set()
+        if self.active is not None and matches(self.active):
+            cancelled.append(self.active.gen_id)
+        self._maybe_activate()
+        self._broadcast()
+        return cancelled
+
     def metrics(self) -> dict:
         oldest_wait = 0.0
         if self.entries:
@@ -346,6 +511,9 @@ async def acquire_model_slot(session_id: str, gen_id: int, channel=None):
         yield
     finally:
         _GENERATION_QUEUE.release(entry)
+        # La génération est finie (menée à terme ou annulée) : son drapeau d'annulation n'a
+        # plus d'utilité et ne doit pas s'accumuler sur une conversation longue.
+        _forget_cancelled(entry.session_id, entry.gen_id)
 
 
 # Sliding-window per-session rate limit
@@ -402,11 +570,20 @@ async def _handle_audio_stop(channel, state, data):
     max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
     custom_instruction = data.get("instruction") or DEFAULT_INSTRUCTION
     effort_mode = data.get("effortMode", "normal")
-    session_id = state["session_id"]
+    # Le client envoie sa conversation courante à CHAQUE message. Se fier au seul
+    # session_id figé au /offer liait tout l'historique à la conversation ouverte au
+    # moment de la connexion : changer de conversation ne changeait rien côté serveur, et
+    # le modèle continuait de voir le contexte de la précédente. Repli sur la valeur du
+    # /offer pour les clients qui ne l'envoient pas.
+    session_id = data.get("sessionId") or state["session_id"]
+    if session_id not in SESSIONS:
+        SESSIONS[session_id] = new_session()
 
-    _mark_generation(session_id, generation_id)
+    # Plus de marquage « la dernière gagne » : cette requête s'ajoute simplement à la file.
+    # Elle ne s'arrêtera que sur annulation explicite (Stop, ou suppression du message).
 
-    if not salm_model:
+    targets = selected_models(data)
+    if not targets:
         _safe_send(channel, {"type": "response", "text": "Model not loaded."})
         if raw_audio_path and os.path.exists(raw_audio_path):
             os.remove(raw_audio_path)
@@ -420,18 +597,22 @@ async def _handle_audio_stop(channel, state, data):
 
     try:
         async with acquire_model_slot(session_id, generation_id, channel=channel):
-            if _is_stale(session_id, generation_id):
+            if _is_cancelled(session_id, generation_id):
                 logger.info(f"Skipping stale audio gen {generation_id} for session {session_id}")
                 if raw_audio_path and os.path.exists(raw_audio_path):
                     os.remove(raw_audio_path)
                 return
 
             clean_audio_path = None
+            audio_referenced = False
             try:
                 uploads_dir = ROOT / "uploads"
                 uploads_dir.mkdir(exist_ok=True)
+                _prune_uploads()
                 clean_audio_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
-                salm_model.process_audio(raw_audio_path, clean_audio_path)
+                # Le rééchantillonnage ne dépend pas du modèle : fait une fois, le fichier
+                # nettoyé sert ensuite aux deux générations en mode comparaison.
+                targets[0][1].process_audio(raw_audio_path, clean_audio_path)
 
                 try:
                     transcript = await _transcribe_path(clean_audio_path, already_in_slot=True)
@@ -444,49 +625,65 @@ async def _handle_audio_stop(channel, state, data):
                 except Exception as te:
                     logger.warning(f"Transcript pass failed: {te}")
 
-                t0 = time.perf_counter()
-                token_count = 0
-                full_response = ""
-                current_history = SESSIONS[session_id]["history"]
-                stop_check = lambda: _is_stale(session_id, generation_id)
-                async for token in stream_generator_in_thread(
-                    salm_model.generate_stream,
-                    audio_path=clean_audio_path,
-                    text_input=prompt or custom_instruction,
-                    history=current_history,
-                    stop_callback=stop_check,
-                    **_effort_overrides(effort_mode, max_tokens),
-                ):
-                    if _is_stale(session_id, generation_id):
-                        logger.info(f"Stale during stream; aborting audio gen {generation_id}")
-                        return
-                    if not _safe_send(channel, {"type": "token", "text": token, "generationId": generation_id}):
-                        logger.warning("DataChannel closed during streaming, stopping.")
-                        break
-                    full_response += token
-                    token_count += 1
+                for model_name, model in targets:
+                    t0 = time.perf_counter()
+                    token_count = 0
+                    full_response = ""
+                    current_history = session_history(session_id, model_name)
+                    stop_check = lambda: _is_cancelled(session_id, generation_id)
+                    async for token in stream_generator_in_thread(
+                        model.generate_stream,
+                        audio_path=clean_audio_path,
+                        text_input=prompt or custom_instruction,
+                        history=current_history,
+                        stop_callback=stop_check,
+                        **_effort_overrides(effort_mode, max_tokens),
+                    ):
+                        if _is_cancelled(session_id, generation_id):
+                            logger.info(f"Stale during stream; aborting audio gen {generation_id}")
+                            return
+                        if not _safe_send(channel, {"type": "token", "text": token,
+                                                    "generationId": generation_id,
+                                                    "model": model_name}):
+                            logger.warning("DataChannel closed during streaming, stopping.")
+                            break
+                        full_response += token
+                        token_count += 1
 
-                elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                _safe_send(channel, {
-                    "type": "done", "text": "", "generationId": generation_id,
-                    "tokenCount": token_count, "elapsedMs": elapsed_ms,
-                })
+                    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                    _safe_send(channel, {
+                        "type": "done", "text": "", "generationId": generation_id,
+                        "tokenCount": token_count, "elapsedMs": elapsed_ms,
+                        "model": model_name,
+                    })
 
-                clean_response = _strip_chatml_assistant(full_response)
-                if not clean_response.strip():
-                    logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
-                elif _looks_runaway(clean_response):
-                    logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
-                else:
-                    SESSIONS[session_id]["history"].append({"role": "user", "content": prompt or "Audio Message"})
-                    SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                    schedule_save()
+                    clean_response = _strip_chatml_assistant(full_response)
+                    if not clean_response.strip():
+                        logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
+                    elif _looks_runaway(clean_response):
+                        logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
+                    else:
+                        # `audio` fait tenir le tour de suivi : sans lui, une question
+                        # posée au tour d'après (« et de quoi ça parle ? ») n'a plus
+                        # aucun audio dans le contexte. Même convention que le chemin
+                        # upload. Le fichier doit donc SURVIVRE à cette requête.
+                        current_history.append({
+                            "role": "user",
+                            "content": prompt or "Audio Message",
+                            "audio": [clean_audio_path],
+                        })
+                        current_history.append({"role": "assistant", "content": clean_response})
+                        audio_referenced = True
+                        schedule_save()
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}"})
             finally:
-                if clean_audio_path and os.path.exists(clean_audio_path):
+                # Conservé seulement s'il est référencé par un historique ; sinon il ne
+                # servira jamais et part tout de suite. La purge par âge (_prune_uploads)
+                # se charge des fichiers référencés, une fois périmés.
+                if not audio_referenced and clean_audio_path and os.path.exists(clean_audio_path):
                     try:
                         os.remove(clean_audio_path)
                     except Exception:
@@ -512,26 +709,35 @@ async def _handle_text_only(channel, state, data):
     max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
     effort_mode = data.get("effortMode", "normal")
     regenerate = bool(data.get("regenerate", False))
-    session_id = state["session_id"]
+    # Le client envoie sa conversation courante à CHAQUE message. Se fier au seul
+    # session_id figé au /offer liait tout l'historique à la conversation ouverte au
+    # moment de la connexion : changer de conversation ne changeait rien côté serveur, et
+    # le modèle continuait de voir le contexte de la précédente. Repli sur la valeur du
+    # /offer pour les clients qui ne l'envoient pas.
+    session_id = data.get("sessionId") or state["session_id"]
+    if session_id not in SESSIONS:
+        SESSIONS[session_id] = new_session()
 
-    _mark_generation(session_id, generation_id)
+
+    targets = selected_models(data)
+    if not targets:
+        _safe_send(channel, {"type": "response", "text": "Model not loaded."})
+        return
 
     if regenerate:
         # `dropPairs` tells us how many user+assistant pairs to roll back
         # from the end of history before re-running. Defaults to 1 so
         # legacy clients regenerate just the last turn.
+        # Chaque modèle a son propre historique : on déroule ceux qui sont concernés.
         drop_pairs = max(1, int(data.get("dropPairs", 1)))
-        hist = SESSIONS[session_id]["history"]
-        for _ in range(drop_pairs):
-            if hist and hist[-1].get("role") == "assistant":
-                hist.pop()
-            if hist and hist[-1].get("role") == "user":
-                hist.pop()
+        for model_name, _ in targets:
+            hist = session_history(session_id, model_name)
+            for _ in range(drop_pairs):
+                if hist and hist[-1].get("role") == "assistant":
+                    hist.pop()
+                if hist and hist[-1].get("role") == "user":
+                    hist.pop()
         schedule_save()
-
-    if not salm_model:
-        _safe_send(channel, {"type": "response", "text": "Model not loaded."})
-        return
 
     if not check_rate_limit(session_id):
         _safe_send(channel, {"type": "rejected", "reason": "rate_limit", "generationId": generation_id})
@@ -539,57 +745,90 @@ async def _handle_text_only(channel, state, data):
 
     try:
         async with acquire_model_slot(session_id, generation_id, channel=channel):
-            if _is_stale(session_id, generation_id):
+            if _is_cancelled(session_id, generation_id):
                 logger.info(f"Skipping stale text gen {generation_id} for session {session_id}")
                 return
 
-            try:
-                t0 = time.perf_counter()
-                token_count = 0
-                full_response = ""
-                current_history = SESSIONS[session_id]["history"]
-                stop_check = lambda: _is_stale(session_id, generation_id)
-                async for token in stream_generator_in_thread(
-                    salm_model.generate_stream,
-                    text_input=prompt,
-                    history=current_history,
-                    stop_callback=stop_check,
-                    **_effort_overrides(effort_mode, max_tokens),
-                ):
-                    if _is_stale(session_id, generation_id):
-                        logger.info(f"Stale during stream; aborting text gen {generation_id}")
-                        return
-                    if not _safe_send(channel, {"type": "token", "text": token, "generationId": generation_id}):
-                        logger.warning("DataChannel closed during streaming, stopping.")
-                        break
-                    full_response += token
-                    token_count += 1
+            # En comparaison, les modèles passent l'un après l'autre : le GPU est unique,
+            # les paralléliser ne ferait que les ralentir mutuellement.
+            for model_name, model in targets:
+                try:
+                    t0 = time.perf_counter()
+                    token_count = 0
+                    full_response = ""
+                    current_history = session_history(session_id, model_name)
+                    stop_check = lambda: _is_cancelled(session_id, generation_id)
+                    async for token in stream_generator_in_thread(
+                        model.generate_stream,
+                        text_input=prompt,
+                        history=current_history,
+                        stop_callback=stop_check,
+                        **_effort_overrides(effort_mode, max_tokens),
+                    ):
+                        if _is_cancelled(session_id, generation_id):
+                            logger.info(f"Stale during stream; aborting text gen {generation_id}")
+                            return
+                        if not _safe_send(channel, {"type": "token", "text": token,
+                                                    "generationId": generation_id,
+                                                    "model": model_name}):
+                            logger.warning("DataChannel closed during streaming, stopping.")
+                            break
+                        full_response += token
+                        token_count += 1
 
-                elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                _safe_send(channel, {
-                    "type": "done", "text": "", "generationId": generation_id,
-                    "tokenCount": token_count, "elapsedMs": elapsed_ms,
-                })
+                    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                    _safe_send(channel, {
+                        "type": "done", "text": "", "generationId": generation_id,
+                        "tokenCount": token_count, "elapsedMs": elapsed_ms,
+                        "model": model_name,
+                    })
 
-                clean_response = _strip_chatml_assistant(full_response)
-                if not clean_response.strip():
-                    logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
-                elif _looks_runaway(clean_response):
-                    logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
-                else:
-                    SESSIONS[session_id]["history"].append({"role": "user", "content": prompt})
-                    SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                    schedule_save()
-            except Exception as e:
-                logger.error(f"Streaming error: {e}")
-                _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}"})
+                    clean_response = _strip_chatml_assistant(full_response)
+                    if not clean_response.strip():
+                        logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
+                    elif _looks_runaway(clean_response):
+                        logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
+                    else:
+                        current_history.append({"role": "user", "content": prompt})
+                        current_history.append({"role": "assistant", "content": clean_response})
+                        schedule_save()
+                except Exception as e:
+                    logger.error(f"Streaming error ({model_name}): {e}")
+                    _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}",
+                                         "model": model_name})
     except QueueFullError:
         _safe_send(channel, {"type": "rejected", "reason": "queue_full", "generationId": generation_id})
 
 
+# Empreinte automatique des assets. aiohttp sert /static/ SANS Cache-Control : le navigateur
+# applique alors sa fraîcheur heuristique et peut resservir un fichier périmé pendant des
+# heures. Le `?v=` écrit à la main dans index.html ne protège que ce qu'on a pensé à bumper —
+# ça a coûté deux faux diagnostics (un client.js caché qui masquait le sélecteur de modèle,
+# puis un styles.css caché qui empilait les réponses au lieu de les mettre en colonnes).
+# On estampille donc à la volée, à partir du mtime et de la taille du fichier : plus rien à
+# bumper, et l'URL change exactement quand le contenu change.
+_STATIC_ASSET_RE = re.compile(
+    r'(?P<attr>href|src)="(?P<path>/static/[^"?]+\.(?:css|js))(?:\?[^"]*)?"')
+
+
+def _stamp_static_assets(html: str) -> str:
+    def repl(m):
+        rel = m.group("path")
+        try:
+            st = (ROOT / rel.lstrip("/")).stat()
+        except OSError:
+            # Asset absent : on laisse l'URL telle quelle plutôt que de casser la page.
+            return m.group(0)
+        return f'{m.group("attr")}="{rel}?v={int(st.st_mtime)}-{st.st_size}"'
+    return _STATIC_ASSET_RE.sub(repl, html)
+
+
 async def index(request):
-    content = open(str(ROOT / 'static' / 'index.html')).read()
-    return web.Response(content_type='text/html', text=content)
+    content = _stamp_static_assets(open(str(ROOT / 'static' / 'index.html')).read())
+    # L'index porte les empreintes : le mettre en cache reviendrait à cacher les versions
+    # d'assets, et on retomberait exactement dans le problème qu'on vient de corriger.
+    return web.Response(content_type='text/html', text=content,
+                        headers={"Cache-Control": "no-cache"})
 
 async def offer(request):
     # Legacy endpoint, redirect to new logic if needed or just keep as is
@@ -601,7 +840,7 @@ async def offer_with_datachannel(request):
     session_id = params.get('sessionId', 'default')
     
     if session_id not in SESSIONS:
-        SESSIONS[session_id] = {"history": []}
+        SESSIONS[session_id] = new_session()
 
     pc = RTCPeerConnection()
     pcs.add(pc)
@@ -644,7 +883,7 @@ async def offer_with_datachannel(request):
     async def on_connection_state_change():
         if pc.connectionState in ("closed", "failed"):
             pcs.discard(pc)
-            _SESSION_LATEST_GEN.pop(state["session_id"], None)
+            _CANCELLED.pop(state["session_id"], None)
             _RATE_HITS.pop(state["session_id"], None)
 
     await pc.setRemoteDescription(offer)
@@ -681,6 +920,14 @@ async def upload_audio(request):
     max_tokens = MAX_NEW_TOKENS
     custom_instruction = None
     effort_mode = "normal"
+    model_choice = None
+    compare = False
+    regenerate = False
+    drop_pairs = 1
+    # 0 = client antérieur, qui n'en envoie pas : la requête reste alors non annulable, comme
+    # avant. C'est le chemin qu'emprunte tout accès distant (le micro WebRTC ne traverse pas un
+    # tunnel ssh), donc celui où Stop compte le plus.
+    generation_id = 0
 
     while True:
         field = await reader.next()
@@ -709,6 +956,22 @@ async def upload_audio(request):
             custom_instruction = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'effortMode':
             effort_mode = (await field.read(decode=True)).decode('utf-8')
+        elif field.name == 'model':
+            model_choice = (await field.read(decode=True)).decode('utf-8')
+        elif field.name == 'compare':
+            compare = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
+        elif field.name == 'regenerate':
+            regenerate = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
+        elif field.name == 'generationId':
+            try:
+                generation_id = int((await field.read(decode=True)).decode('utf-8'))
+            except (ValueError, TypeError):
+                pass
+        elif field.name == 'dropPairs':
+            try:
+                drop_pairs = int((await field.read(decode=True)).decode('utf-8'))
+            except (ValueError, TypeError):
+                pass
 
     if not file_written:
         return web.Response(status=400, text="No audio file received")
@@ -716,49 +979,94 @@ async def upload_audio(request):
     logger.info(f"Received file {filename} ({size} bytes) with prompt: {text_prompt} for session {session_id}")
 
     if session_id not in SESSIONS:
-        SESSIONS[session_id] = {"history": []}
-    current_history = SESSIONS[session_id]["history"]
+        SESSIONS[session_id] = new_session()
 
     if not check_rate_limit(session_id):
         return web.Response(status=429, text="Rate limit exceeded")
 
-    if salm_model:
+    targets = selected_models({"model": model_choice, "compare": compare})
+
+    # Renvoi d'un tour audio déjà joué (bouton Retry du client) : on déroule l'historique
+    # d'autant de paires user+assistant que le client vient d'en jeter, sinon le modèle
+    # reverrait l'ancien tour EN PLUS du nouveau. Même logique que _handle_text_only, appliquée
+    # à chaque modèle visé puisque les historiques sont séparés.
+    if regenerate:
+        for model_name, _ in targets:
+            hist = session_history(session_id, model_name)
+            for _ in range(max(1, drop_pairs)):
+                if hist and hist[-1].get("role") == "assistant":
+                    hist.pop()
+                if hist and hist[-1].get("role") == "user":
+                    hist.pop()
+        schedule_save()
+
+    # Réponses par modèle. L'upload n'est pas streamé : on rend les deux d'un coup, ce qui
+    # rend la comparaison plus simple à afficher que deux flux entrelacés.
+    responses = {}
+    # Chronométrage PAR MODÈLE. Sans lui, la comparaison est trompeuse : les deux bulles
+    # apparaissent ensemble à la fin, ce qui donne l'impression que les modèles ont mis le
+    # même temps alors qu'on a attendu la somme des deux. Même forme que le message `done`
+    # du flux temps réel, pour que le client n'ait qu'un seul rendu à écrire.
+    stats = {}
+    if targets:
         clean_audio_path = None
         try:
-            async with acquire_model_slot(session_id, 0, channel=None):
+            async with acquire_model_slot(session_id, generation_id, channel=None):
+                if generation_id and _is_cancelled(session_id, generation_id):
+                    # Annulée pendant l'attente en file : on ne génère rien du tout.
+                    logger.info(f"Upload {generation_id} annulé avant génération.")
+                    if os.path.exists(filename):
+                        os.remove(filename)
+                    return web.json_response({"text": "", "responses": {}, "cancelled": True})
                 try:
                     logger.info(f"Starting generation for session {session_id}...")
 
+                    _prune_uploads()
                     processed_filename = f"processed_{uuid.uuid4().hex}.wav"
                     clean_audio_path = str(uploads_dir / processed_filename)
-                    salm_model.process_audio(filename, clean_audio_path)
+                    targets[0][1].process_audio(filename, clean_audio_path)
 
-                    full_response = ""
-                    async for token in stream_generator_in_thread(salm_model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, **_effort_overrides(effort_mode, max_tokens)):
-                        full_response += token
+                    stop_check = (lambda: _is_cancelled(session_id, generation_id)) \
+                        if generation_id else None
+                    for model_name, model in targets:
+                        current_history = session_history(session_id, model_name)
+                        full_response = ""
+                        t0 = time.perf_counter()
+                        token_count = 0
+                        async for token in stream_generator_in_thread(model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, stop_callback=stop_check, **_effort_overrides(effort_mode, max_tokens)):
+                            full_response += token
+                            token_count += 1
+                        # Un fragment SSE = un token côté vLLM ; c'est le même comptage que
+                        # dans le flux temps réel, donc les deux chemins sont comparables.
+                        stats[model_name] = {
+                            "tokenCount": token_count,
+                            "elapsedMs": int((time.perf_counter() - t0) * 1000),
+                        }
 
-                    clean_response = _strip_chatml_assistant(full_response)
-                    logger.info(f"Generation complete for session {session_id}")
+                        clean_response = _strip_chatml_assistant(full_response)
+                        logger.info(f"Generation complete for session {session_id} ({model_name})")
 
-                    instruction = text_prompt or custom_instruction or salm_model.default_instruction
-                    prompt_content = f"{instruction}\n{salm_model.model.audio_locator_tag}\n"
+                        instruction = text_prompt or custom_instruction or model.default_instruction
+                        prompt_content = f"{instruction}\n{model.audio_locator_tag}\n"
 
-                    user_turn = {
-                        "role": "user",
-                        "content": prompt_content,
-                        "audio": [clean_audio_path]
-                    }
+                        user_turn = {
+                            "role": "user",
+                            "content": prompt_content,
+                            "audio": [clean_audio_path]
+                        }
 
-                    if not clean_response.strip():
-                        logger.warning(f"Empty response for upload session {session_id}; skipping history append.")
-                    elif _looks_runaway(clean_response):
-                        logger.warning(f"Detected runaway response for upload session {session_id}; skipping history append.")
-                    else:
-                        SESSIONS[session_id]["history"].append(user_turn)
-                        SESSIONS[session_id]["history"].append({"role": "assistant", "content": clean_response})
-                        schedule_save()
+                        if not clean_response.strip():
+                            logger.warning(f"Empty response for upload session {session_id}; skipping history append.")
+                        elif _looks_runaway(clean_response):
+                            logger.warning(f"Detected runaway response for upload session {session_id}; skipping history append.")
+                        else:
+                            current_history.append(user_turn)
+                            current_history.append({"role": "assistant", "content": clean_response})
+                            schedule_save()
 
-                    response = clean_response
+                        responses[model_name] = clean_response
+
+                    response = responses.get(targets[0][0], "")
 
                 except Exception as e:
                     logger.error(f"Error during generation: {e}")
@@ -778,7 +1086,9 @@ async def upload_audio(request):
     if os.path.exists(filename):
         os.remove(filename)
 
-    return web.json_response({"text": response})
+    # `text` reste la réponse du premier modèle : les clients d'avant le sélecteur
+    # continuent de marcher sans rien savoir de `responses`.
+    return web.json_response({"text": response, "responses": responses, "stats": stats})
 
 TRANSCRIBE_INSTRUCTION = (
     "Transcribe the audio verbatim. Output only the transcription, "
@@ -791,13 +1101,18 @@ async def _transcribe_path(clean_audio_path: str, *, session_id: str = "transcri
 
     Touches the model. If `already_in_slot=True` the caller is already inside
     `acquire_model_slot()`; otherwise this function acquires its own slot.
+
+    Toujours le modèle par défaut, même en comparaison : c'est la transcription de CE QUE
+    L'UTILISATEUR A DIT, affichée une fois au-dessus des réponses. La faire varier selon le
+    modèle comparé n'aurait pas de sens, et la faire deux fois doublerait l'attente.
     """
-    if not salm_model:
+    model = get_model()
+    if model is None:
         return ""
 
     def _run():
         try:
-            return salm_model.generate(
+            return model.generate(
                 audio_path=clean_audio_path,
                 text_input=TRANSCRIBE_INSTRUCTION,
                 history=None,
@@ -816,7 +1131,7 @@ async def _transcribe_path(clean_audio_path: str, *, session_id: str = "transcri
 
 async def transcribe_audio(request):
     """Standalone transcription endpoint for client-uploaded audio files."""
-    if not salm_model:
+    if get_model() is None:
         return web.json_response({"text": "", "error": "Model not loaded."}, status=503)
 
     reader = await request.multipart()
@@ -844,7 +1159,7 @@ async def transcribe_audio(request):
         if not file_written:
             return web.json_response({"text": "", "error": "No audio provided"}, status=400)
 
-        salm_model.process_audio(raw_path, clean_path)
+        get_model().process_audio(raw_path, clean_path)
         transcript = await _transcribe_path(clean_path)
         return web.json_response({"text": transcript.strip()})
     except Exception as e:
@@ -861,7 +1176,13 @@ async def transcribe_audio(request):
 
 def _model_display_name() -> str:
     """Best-effort human label for the loaded model. Prefers the MODEL_PATH
-    basename (e.g. 'Canary-Qwen3.5B-Thinking'), falls back to BASE_MODEL."""
+    basename (e.g. 'Canary-Qwen3.5B-Thinking'), falls back to BASE_MODEL.
+
+    Avec plusieurs modèles, les noms du registre l'emportent : le basename de MODEL_PATH
+    vaudrait "model" (le point de montage figé du Dockerfile) pour tout le monde.
+    """
+    if MODELS:
+        return " + ".join(MODELS)
     path = (os.getenv("MODEL_PATH") or "").rstrip("/")
     if path:
         name = os.path.basename(path)
@@ -907,8 +1228,11 @@ async def model_config(request):
 async def metrics(request):
     """Lightweight metrics for monitoring queue health + session count."""
     return web.json_response({
-        "model_loaded": salm_model is not None,
+        "model_loaded": bool(MODELS),
         "model_name": _model_display_name(),
+        "models": list(MODELS),
+        "default_model": DEFAULT_MODEL,
+        "backend": "vllm",
         "queue": _GENERATION_QUEUE.metrics(),
         "sessions": len(SESSIONS),
         "active_pcs": len(pcs),
@@ -925,10 +1249,89 @@ async def reset_session(request):
         params = {}
     session_id = params.get("sessionId", "default")
     if session_id in SESSIONS:
-        SESSIONS[session_id]["history"] = []
+        # Repart d'un dict vide plutôt que d'une liste : l'historique est par modèle depuis
+        # l'ajout du sélecteur, et session_history() recréera ce qu'il faut à la volée.
+        SESSIONS[session_id]["history"] = {}
         schedule_save()
         logger.info(f"Reset session history for {session_id}")
     return web.json_response({"ok": True, "sessionId": session_id})
+
+
+async def cancel_generation(request):
+    """Annule des générations d'UNE conversation.
+
+    `generationId` absent = tout ce que cette conversation a en cours ou en attente (bouton
+    Stop). Présent = cette requête-là seulement (suppression d'un message), les autres restent
+    dans la file. C'est cette distinction qui rend l'empilement utilisable : on retire une
+    question de la file sans renoncer aux suivantes.
+    """
+    try:
+        params = await request.json()
+    except Exception:
+        params = {}
+    session_id = params.get("sessionId", "default")
+    gen_id = params.get("generationId")
+
+    # Les entrées en attente sortent de la file ; l'active ne peut qu'être marquée, sa boucle
+    # verra le drapeau au prochain token (stop_callback de model_handler).
+    cancelled = _GENERATION_QUEUE.cancel(session_id, gen_id)
+    if gen_id is not None and gen_id not in cancelled:
+        # Pas encore dans la file : la requête peut être en vol côté client, ou déjà finie. On
+        # marque quand même — si elle arrive, elle s'arrêtera aussitôt.
+        cancelled.append(gen_id)
+    for cid in cancelled:
+        _cancel_generation(session_id, cid)
+
+    logger.info(f"Annulation session {session_id} : {cancelled or 'rien à annuler'}")
+    return web.json_response({"ok": True, "cancelled": cancelled})
+
+
+async def delete_turn(request):
+    """Retire UN tour (user + assistant) de l'historique serveur d'une conversation.
+
+    Le client sait supprimer un message au milieu de sa conversation ; sans ce pendant côté
+    serveur, le modèle continuerait de voir dans son contexte un tour que l'utilisateur a
+    effacé. Chaque historique de modèle est une suite de paires (user, assistant) : une réponse
+    vide ou en boucle n'est jamais ajoutée, donc jamais de paire dépareillée.
+
+    `pairIndex` est l'index du tour côté client. Les deux historiques peuvent avoir divergé
+    (une génération annulée n'ajoute rien ici alors que le message existe là-bas), on vérifie
+    donc le texte avant de supprimer : `userText` doit s'y retrouver. Sinon on ne touche à rien
+    et on le dit — mieux vaut un tour de trop dans le contexte qu'un tour innocent supprimé.
+    """
+    try:
+        params = await request.json()
+    except Exception:
+        params = {}
+    session_id = params.get("sessionId", "default")
+    pair_index = params.get("pairIndex")
+    user_text = (params.get("userText") or "").strip()
+
+    if session_id not in SESSIONS or not isinstance(pair_index, int) or pair_index < 0:
+        return web.json_response({"ok": False, "reason": "bad_request"}, status=400)
+
+    result = {}
+    for model_name, hist in (SESSIONS[session_id].get("history") or {}).items():
+        user_positions = [i for i, turn in enumerate(hist) if turn.get("role") == "user"]
+        if pair_index >= len(user_positions):
+            result[model_name] = "hors_limites"
+            continue
+        pos = user_positions[pair_index]
+        stored = (hist[pos].get("content") or "").strip()
+        # Un tour audio stocke l'instruction, pas le texte tapé : on ne compare que si le
+        # client nous a donné quelque chose à comparer.
+        if user_text and user_text not in stored:
+            result[model_name] = "texte_different"
+            continue
+        end = pos + 1
+        if end < len(hist) and hist[end].get("role") == "assistant":
+            end += 1
+        del hist[pos:end]
+        result[model_name] = "supprime"
+
+    schedule_save()
+    logger.info(f"Suppression du tour {pair_index} de {session_id} : {result}")
+    return web.json_response({"ok": True, "models": result})
 
 
 async def on_shutdown(app):
@@ -944,13 +1347,21 @@ if __name__ == "__main__":
     app.router.add_post("/offer", offer_with_datachannel)
     app.router.add_post("/upload", upload_audio)
     app.router.add_post("/reset-session", reset_session)
+    app.router.add_post("/cancel", cancel_generation)
+    app.router.add_post("/delete-turn", delete_turn)
     app.router.add_post("/transcribe", transcribe_audio)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/model-config", model_config)
+    # model_loaded : vrai dès qu'AU MOINS un modèle a chargé. C'est ce que sonde le DAG
+    # (DemoReadySensor) ; une démo qui a perdu un modèle sur deux reste utilisable, et
+    # `models` dit lesquels ont réellement chargé.
     app.router.add_get("/healthz", lambda r: web.json_response({
         "ok": True,
-        "model_loaded": salm_model is not None,
+        "model_loaded": bool(MODELS),
         "model_name": _model_display_name(),
+        "models": list(MODELS),
+        "default_model": DEFAULT_MODEL,
+        "backend": "vllm",
     }))
     app.router.add_static("/static/", path=ROOT / "static", name="static")
     

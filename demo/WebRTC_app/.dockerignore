@@ -5,3 +5,8 @@ venv
 .git
 .idea
 .vscode
+
+# model/ pèse ~14 Go : le checkpoint est monté sur /app/model, jamais copié.
+model
+uploads
+sessions.json

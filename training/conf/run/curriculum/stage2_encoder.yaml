@@ -1,0 +1,67 @@
+# @package _global_
+# ============================================================
+# CURRICULUM STAGE 2 of 3 — ENCODER TUNING (adapter + encoder).
+# Thaw the audio encoder: adapter + perception.encoder train; LLM,
+# embeddings and preprocessor stay frozen, LoRA still disabled.
+# (Encoder unfrozen by DROPPING the "^perception\.encoder\..+$"
+# pattern from base's 4-pattern freeze.)
+# Encoder: parakeet-tdt-0.6b-v3 with LOCAL attention (passed via
+# --speech-encoder-model; rel_pos_local_attn set below).
+# Data: v3 stage-2 mix (ASR 29%, QA 35%, AQA + OTHER expanded).
+#
+# Warm-start = stage 1's LAST checkpoint. Its filename embeds the step
+# (e.g. 010000-last.ckpt), so resolve it with a glob and export CHECKPOINT
+# BEFORE launching. slurm_launcher.py submits with `sbatch --export=ALL`, so
+# the exported var reaches the job, where ${oc.env:CHECKPOINT} below resolves
+# it at config load. NOTE: CHECKPOINT is NOT baked into the materialized
+# snapshot .slurm (unlike --speech-encoder-model etc.), so re-running that
+# snapshot requires re-exporting CHECKPOINT in the submitting shell.
+#
+# Launch (from training/; --data-version overrides input_cfg):
+#   # runs of the 1B are filed under <root>/Luciole-1B by the launcher
+#   EXP=${EXPERIMENT_ROOT:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}/Luciole-1B
+#   export CHECKPOINT=$(ls -t "$EXP"/luciole_v3_stage1/checkpoints/*-last.ckpt | head -1)
+#   python slurm_launcher.py \
+#     --config run/curriculum/stage2_encoder \
+#     --data-version v3/input_cfg_train_stage2.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --job-name luciole_v3_stage2
+# ============================================================
+defaults:
+  - /base
+  - /recipe: luciole
+  - _self_
+
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}   # warm-start from stage 1
+  lora: null          # no LoRA — LLM stays frozen
+  freeze_params:      # drop "^perception\.encoder\..+$" → encoder trains; LLM frozen
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+  # encoder_chunk_size: 30
+  optimizer:
+    lr: 1e-4
+  lr_scheduler:
+    min_lr: 1e-5
+
+trainer:
+  max_steps: 200_000
+
+# Stage-2-only bucketing override (recipe keeps the full 28-bucket / max_duration
+# 1200 layout). The encoder is unfrozen here → memory-heavy, and the recipe's top
+# 16384 bin (~1310 s) overflowed the preprocessor STFT (cuFFT CUFFT_INVALID_SIZE)
+# and the GPU. So drop max_duration to 600 s and re-bucket: the top bin is now
+# 6852 (~548 s, 25 buckets) with stage-2's OWN (smaller) batch sizes. Replace
+# bucket_batch_size with the output of
+# curriculum/oomptimizer_stage2_encoder.slurm (25 values).
+data:
+  train_ds:
+    num_buckets: 14
+    bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2048]
+    bucket_batch_size: [31,27,18,16,14,12,11,9,7,6,5,5,3,1]
+    max_duration: 150
+    max_tokens: 2048
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 10000

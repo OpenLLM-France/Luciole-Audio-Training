@@ -1,0 +1,106 @@
+# @package _global_
+# ============================================================
+# "TOUT ENTRAÎNER" — adapter + encoder + LoRA, warm-started from the
+# single-phase LoRA run instead of from curriculum stage 1.
+#
+# Why: the single-phase run (encoder FROZEN) drives every speech-like task to
+# its floor fast (asr_en 0.27, qa_en 0.44 by ~2.5k) but SOUND and MUSIC barely
+# move (still ~1.9 / ~2.2 at 60k) — the signature of a frozen SPEECH encoder,
+# which the adapter+LoRA cannot compensate for. Unfreezing it is the single
+# biggest lever for sound/music.
+#
+# Warm start = luciole_v3_singlephase step=020000, the elbow: speech/QA fully
+# converged, sound/music/arabic still on their downslope, so the adapter+LoRA is
+# not yet over-committed to the frozen encoder's limits. (NOT the older
+# xp_data_v3_parakeet_rote — full attention, incompatible with this line.)
+#
+# Trainable: adapter + encoder + LoRA. The LLM base stays frozen; LoRA cannot be
+# frozen from config (`parts/lora.py:33` always adds `^.+\.lora_.+$` to
+# prevent_freeze_params, which wins over freeze_params in `freeze_and_subset`).
+#
+# Launch (from training/):
+#   EXP=${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}
+#   export CHECKPOINT="$EXP/luciole_v3_singlephase/checkpoints/step=020000.ckpt"
+#   python slurm_launcher.py \
+#     --config run/xp/stage2_from_lora \
+#     --data-version v3_2/input_cfg_train_stage2_ood_weighted_randomorder_sharded.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --job-name stage2_from_lora --gpus 4 --time 01:00:00 --qos dev --nodes 1
+# ============================================================
+defaults:
+  - /base
+  # LOCAL attention (rel_pos_local_attn [128,128]) + ROTE + LoRA r=64 — exactly
+  # the recipe the warm-start checkpoint was produced with. Do NOT switch: a
+  # different attention would silently drop weights (see the lora note below) and
+  # run the encoder under a masking scheme it was never trained with.
+  - /recipe: luciole
+  - _self_
+
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}
+
+  # ROTE — redundant with recipe/luciole (same values), kept explicit as a
+  # guard so a recipe edit can't silently change the geometry vs the checkpoint.
+  perception:
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
+
+  # Must match the checkpoint (96 `*.lora_*` tensors on q_proj/v_proj). A different
+  # r would drop them WITHOUT ERROR: set_model_dict_for_partial_init keeps only
+  # matching-shape keys, so the following strict load trivially passes.
+  lora:
+    r: 64
+    lora_alpha: 64
+
+  # Encoder pattern DROPPED -> encoder trains. LoRA stays trainable via the
+  # prevent_freeze_params mechanism described above. LLM base + embeddings +
+  # preprocessor stay frozen.
+  freeze_params:
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+
+  # 1e-4 — the stage-2 LR sweep's pick (xp_encoder_lr, 1e-8..1e-2), and 2e-4 was
+  # then tried head-to-head on this exact config (jobs 104778 vs 38044, same 0.8330
+  # step-0 baseline) and is WORSE:
+  #     step        499     2499     4999
+  #     1e-4     0.8311   0.8232   0.8154   <- under baseline from the first val
+  #     2e-4     0.8604   0.8496   0.8486   <- never gets back under it
+  # On sound_en — the metric this run exists for — 2e-4 was still above its own
+  # baseline at 5k (1.9531 vs 1.9395) where 1e-4 had reached 1.8887. Warm starting
+  # from a converged checkpoint is what makes 2e-4 destructive, so a longer horizon
+  # will not rescue it; don't re-raise the peak without new evidence.
+  optimizer:
+    lr: 1e-4
+  lr_scheduler:
+    min_lr: 1e-6
+
+trainer:
+  # Also the cosine horizon (lr_scheduler.max_steps = ${trainer.max_steps}).
+  #
+  # 200k, NOT 100k: at 100k the plateau was the SCHEDULE dying, not the model
+  # converging (job 38044).
+  #     step   30k    40k    50k    60k    80k   100k
+  #     lr    8.0e-5 6.6e-5 5.1e-5 3.6e-5 1.1e-5 1.0e-6
+  #     val    .7812  .7754  .7695  .7656  .7637  .7637
+  # val_loss falls ~0.006 per 10k steps while the LR is alive and freezes once it
+  # goes under ~2e-5; per-task bests were all late and none had turned back up.
+  #
+  # Must be a FRESH run, not --resume: resuming would continue the old 100k cosine
+  # already at min_lr. At 0.280 s/step (measured) 200k is ~15h30, inside a 20h t3.
+  max_steps: 200_000
+
+# Memory. Attention is LOCAL, as in the warm-start run, so the only added cost is
+# the now-TRAINABLE encoder's activations. The layout below is stage 2's validated
+# one, measured with the same local attention. If it still OOMs, re-run
+# curriculum/oomptimizer_stage2_encoder.slurm.
+data:
+  train_ds:
+    num_buckets: 14
+    bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2048]
+    bucket_batch_size: [31,27,18,16,14,12,11,9,7,6,5,5,3,1]
+    max_duration: 150
+    max_tokens: 2048

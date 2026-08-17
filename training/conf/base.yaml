@@ -1,0 +1,181 @@
+# @package _global_
+# Shared skeleton. Every run composes: base + one recipe (+ optional phase).
+# Model choice is env-driven (LLM_MODEL, SPEECH_ENCODER_MODEL, PROMPT_FORMAT).
+
+defaults:
+  # Validation dataset list, kept in its own file like the train input_cfg.
+  # Each key in it becomes a `val_loss_<key>` scalar. Override: ++data/val=<name>
+  - data/val: v3_2
+  - _self_
+
+############ Model ############
+model:
+  # Dump the peak-allocated-per-bucket table every N steps.
+  bucket_memory_every: 2500
+  pretrained_llm: ${oc.env:LLM_MODEL}
+  pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}
+  pretrained_weights: true  # If false → load architecture only
+  dtype: bf16
+
+  # Default 4-pattern freeze for LoRA-finetune runs.
+  # Phase files override this to thaw specific modules.
+  freeze_params:
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+    - "^perception\\.encoder\\..+$"
+
+  prevent_freeze_params: []
+
+  prompt_format: ${oc.env:PROMPT_FORMAT}
+  audio_locator_tag: "<|audio|>"
+  token_equivalent_duration: 0.08
+
+  # Default LoRA shape; recipes fill in r / lora_alpha, phases may set lora: null.
+  lora:
+    task_type: CAUSAL_LM
+    target_modules: ["q_proj", "v_proj"]
+    lora_dropout: 0.0
+
+  perception:
+    target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
+    output_dim: 2048
+    modality_adapter:
+       _target_: nemo.collections.speechlm2.modules.perception.IdentityConnector
+       d_model: 1024
+    encoder:
+        self_attention_model: rel_pos_local_attn
+        att_context_size: [128, 128]
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    betas: [0.9, 0.98]
+    weight_decay: 1e-3
+    foreach: true
+
+  lr_scheduler:
+    _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
+    warmup_steps: 500
+    min_lr: 1e-6
+    max_steps: ${trainer.max_steps}
+
+############ Trainer ############
+trainer:
+  devices: -1
+  accelerator: gpu
+  num_nodes: 1
+  precision: bf16-true
+
+  max_epochs: -1
+
+  limit_train_batches: 10_000
+  accumulate_grad_batches: 1
+
+  limit_val_batches: 16
+  val_check_interval: 500
+  num_sanity_val_steps: 1
+  inference_mode: false
+
+  sync_batchnorm: true
+  log_every_n_steps: 10
+  logger: false
+  use_distributed_sampler: false
+  enable_checkpointing: false
+
+  gradient_clip_val: 1.0
+
+  strategy:
+    _target_: lightning.pytorch.strategies.DDPStrategy
+    gradient_as_bucket_view: true
+    find_unused_parameters: true
+
+############ Data ############
+data:
+  train_ds:
+    sample_rate: 16000
+    prompt_format: ${model.prompt_format}
+    token_equivalent_duration: ${model.token_equivalent_duration}
+    audio_locator_tag: ${model.audio_locator_tag}
+
+    num_workers: 4
+    seed: 42
+    shuffle: true
+    # "trng" = fresh shard order from OS entropy on every restart. Required because
+    # nothing restores dataloader position on resume, so a constant seed would replay
+    # the same prefix forever. Beware "randomized": despite the name it varies only
+    # across workers/ranks, not across runs. slurm_launcher.py pins a fixed seed on
+    # --qos dev so short comparison runs stay reproducible.
+    shard_seed: "trng"
+    text_field: "answer"
+    lang_field: target_lang
+    use_lhotse: true
+    use_multimodal_sampling: true
+    measure_total_length: true
+
+    min_duration: 0.1
+    min_tokens: 2
+    max_tokens: 16384
+    max_duration: 1200
+    use_bucketing: true
+    bucket_buffer_size: 20000
+
+    input_cfg: null   # overridden by slurm_launcher.py / runtime
+
+  validation_ds:
+    prompt_format: ${model.prompt_format}
+    token_equivalent_duration: ${model.token_equivalent_duration}
+    audio_locator_tag: ${model.audio_locator_tag}
+
+    sample_rate: 16000
+    batch_size: 8
+    num_workers: 2
+    seed: 42
+    # NOT "trng", unlike train_ds: validation must score the same data every time.
+    # A literal int rather than "randomized", which derives from `seed` and varies with
+    # the GPU count. Note neither protects against a num_workers change.
+    shard_seed: 42
+    text_field: "answer"
+    lang_field: target_lang
+    use_lhotse: true
+    use_multimodal_sampling: true
+    measure_total_length: true
+
+    datasets: {}   # filled by conf/data/val/*.yaml via defaults
+
+validate_before_fit: true
+validation_schedule:
+  steps: [500, 1000, 1500, 2000, 2500, 5000, 7500, 10000, 15000, 20000]
+  then_every: 10000
+
+############ Experiment Manager ############
+exp_manager:
+  exp_dir: null
+  name: "SALM-multitasks"
+
+  create_tensorboard_logger: true
+  create_checkpoint_callback: true
+  use_datetime_version: false
+
+  resume_from_checkpoint: null
+  resume_if_exists: true
+  resume_ignore_no_checkpoint: true
+
+  create_wandb_logger: false
+
+  checkpoint_callback_params:
+    filename: "{step:06.0f}"
+    monitor: "step"
+    mode: "max"
+    every_n_epochs: null
+    save_top_k: -1
+    always_save_nemo: false
+    save_nemo_on_train_end: false
+    every_n_train_steps: 5000
+    # Sinon le -last (46 Go sur le 23B) est réécrit à chaque fin de validation.
+    save_on_train_epoch_end: true
+    
