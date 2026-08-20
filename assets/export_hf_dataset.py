@@ -10,9 +10,13 @@ What it produces under ``OUTPUT_ROOT`` (e.g.
 
     data/<domain>/<task>/<Split>.jsonl   the conversations, text + metadata only,
                                          with audio paths rewritten to *relative* ones
-    audio/<domain>/<task>/<Split>/...    hard links (default; or --copy / --symlinks) to the
+    audio/<domain>/<Dataset>/...         hard links (default; or --copy / --symlinks) to the
                                          real audio files (NOT meant to be pushed to the Hub
-                                         — too heavy; served separately e.g. over HTTP)
+                                         — too heavy; served separately e.g. over HTTP).
+                                         Task-independent; <Dataset> carries the audio's
+                                         language for speech (CommonVoice_en) but not for
+                                         music/sound (FMA_GenreQA), so a clip shared across
+                                         tasks / text-languages is linked exactly once.
     README.md                            dataset card: the template at ``--card-dir/README.md``
                                          with ``configs:``/``language:``/``size_categories:``
                                          and the license + audio-availability tables injected
@@ -27,7 +31,8 @@ audio is not redistributable keep their text but their audio is not linked/hoste
 The conversation schema is kept identical to the source manifests (turns with
 ``from``/``value``/``type`` and ``duration``/``offset``); only the absolute audio
 paths inside ``type: audio`` turns are rewritten to be relative to ``OUTPUT_ROOT``
-(``audio/<domain>/<task>/<Split>/<sub-path>``).
+(``audio/<domain>/<Dataset>/<sub-path>`` — task-independent, with the audio's language in
+``<Dataset>`` for speech, so a clip reused across tasks / text-languages is stored once).
 
 Splits are one-per-leaf-manifest, named ``<DatasetName>_<language>``. Full datasets
 are exported (no sub-sampling); the YAML ``weight`` fields are ignored.
@@ -35,7 +40,7 @@ are exported (no sub-sampling); the YAML ``weight`` fields are ignored.
 Usage
 -----
     python assets/export_hf_dataset.py \
-        training/conf/data/v3/input_cfg_train.yaml \
+        adapter_training/training/conf/data/v3/input_cfg_train.yaml \
         /data-server/public_future/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset \
         --data-root /data-server/datasets/audio
 
@@ -170,6 +175,25 @@ def normalize_base(base: str) -> str:
     return m.group(1) if (m and m.group(1)) else base
 
 
+def strip_lang_suffix(name: str, language) -> str:
+    """Drop a trailing language / language-pair suffix from a split name, to get the
+    LANGUAGE-NEUTRAL name used for the (shared) audio folder.
+
+    Language variants of a dataset often reuse the *same* audio and differ only in the
+    text (e.g. ``FMA_GenreQA_en`` / ``FMA_GenreQA_fr`` describe the same music clips; a
+    translation set reuses one source-language audio for every target). Foldering audio
+    by the language-suffixed split name duplicates those clips once per language, so the
+    audio folder uses this stripped name instead:
+    ``FMA_GenreQA_en`` -> ``FMA_GenreQA``, ``CommonVoice_en_fr`` -> ``CommonVoice``.
+    """
+    if not language:
+        return name
+    suf = sanitize(language)  # 'en-fr' -> 'en_fr', 'fr' -> 'fr'
+    if suf and name.lower().endswith("_" + suf.lower()):
+        return name[: -(len(suf) + 1)]
+    return name
+
+
 def compose_split_name(raw_base: str, lang: str | None) -> str:
     """Build a split name: normalized base + language suffix, without duplicating the language.
 
@@ -184,6 +208,35 @@ def compose_split_name(raw_base: str, lang: str | None) -> str:
     if not lang_s or base.lower() == lang_s or base.lower().endswith("_" + lang_s):
         return base
     return f"{base}_{lang_s}"
+
+
+def audio_group_name(split) -> str:
+    """User-friendly AUDIO folder name for a split — ``<Dataset>`` in
+    ``audio/<domain>/<Dataset>/…``. The task is intentionally NOT part of it, so a clip
+    reused across tasks (e.g. Common Voice audio serving both ASR and translation) is
+    stored once. The name carries the AUDIO's spoken language when it has one, so the
+    audio of different-language speech is never mixed in a folder:
+
+      - music / sound: no spoken language  -> just the dataset base (``FMA_GenreQA``);
+      - translation (source_lang set, or an ``xx-yy`` language): the audio is the SOURCE
+        language                            -> ``CommonVoice_en`` (for en->fr, en->de, …);
+      - otherwise (ASR, recognition, …): the split language is the audio language
+                                          -> ``CommonVoice_en``, ``Multilingual_LibriSpeech_de``.
+
+    De-duplication itself is keyed on the absolute source path, so even when this name is
+    imperfect (e.g. a fixed-language corpus whose split language reflects the prompt text),
+    a shared clip is still materialised once; the name only affects which folder it lands in.
+    """
+    base = strip_lang_suffix(split.name, split.language)
+    domain = split.domain
+    if domain in ("music", "sound"):
+        return base
+    tags = split.leaves[0].tags if split.leaves else {}
+    audio_lang = tags.get("source_lang") or tags.get("lang") or split.language or ""
+    audio_lang = sanitize(str(audio_lang).split("-")[0])  # source side of an "xx-yy" pair
+    if audio_lang and not base.lower().endswith("_" + audio_lang.lower()):
+        return f"{base}_{audio_lang}"
+    return base
 
 
 # --------------------------------------------------------------------------- #
@@ -924,6 +977,12 @@ def export(args):
     n_excluded = 0
     n_stats_seen = 0
     n_stats_hit = 0
+    # Audio de-duplication (whole export, across tasks): map each absolute source file
+    # to the single destination it is materialised at, so a clip reused across languages
+    # AND across tasks (e.g. Common Voice audio serving ASR + translation) is linked once.
+    # audio_src_by_dest guards against two different sources colliding on the same path.
+    audio_dest_by_src: dict = {}   # abs_src -> rel_ref
+    audio_src_by_dest: dict = {}   # rel_ref -> abs_src
 
     for (domain, task, name), split in splits.items():
         manifests = [lf.manifest for lf in split.leaves]
@@ -1003,8 +1062,13 @@ def export(args):
                 break
         prefix = common_audio_prefix(audio_paths)
 
-        # ---- Pass 2: write jsonl with relative paths + create symlinks.
-        rel_audio_root = os.path.join("audio", split.rel_dir, name)
+        # ---- Pass 2: write jsonl with relative paths + materialise audio (deduplicated).
+        # Audio goes in audio/<domain>/<Dataset>/… — task-independent, and language-tagged
+        # only when the audio itself has a spoken language (see audio_group_name). Each
+        # source file is materialised exactly once across the whole export (audio_dest_by_src);
+        # a distinct source colliding on the same path falls back to the fully-qualified
+        # audio/<domain>/<task>/<split>/… folder (unique & safe).
+        rel_audio_root = os.path.join("audio", domain, audio_group_name(split))
         if audio_ok:
             du["audio_dirs"].add(rel_audio_root)
         out_jsonl = os.path.join(data_dir, split.rel_dir, f"{name}.jsonl")
@@ -1012,7 +1076,7 @@ def export(args):
         n_rows = 0
         n_audio = 0
         total_dur = 0.0
-        linked = set()
+        split_refs = set()   # distinct audio files THIS split references (linked here or reused)
 
         if not args.dry_run:
             os.makedirs(os.path.dirname(out_jsonl), exist_ok=True)
@@ -1027,16 +1091,28 @@ def export(args):
                         rec = json.loads(line)
                         for turn in iter_audio_values(rec):
                             src = turn["value"]
-                            rel_in_split = os.path.relpath(src, prefix) if prefix else os.path.basename(src)
-                            rel_ref = os.path.join(rel_audio_root, rel_in_split)
-                            turn["value"] = rel_ref
-                            n_audio += 1
-                            if isinstance(turn.get("duration"), (int, float)):
-                                total_dur += turn["duration"]
-                            # link the file (once per file) unless linking is disabled
-                            # or this dataset's audio is not redistributable
-                            if rel_ref not in linked:
-                                linked.add(rel_ref)
+                            rel_ref = audio_dest_by_src.get(src)
+                            if rel_ref is None:
+                                rel_in_split = os.path.relpath(src, prefix) if prefix else os.path.basename(src)
+                                # Pick a destination that NO OTHER source already owns, so two
+                                # distinct source files can never collapse onto one path (which
+                                # would drop one of them). Try, in order:
+                                #   1) the shared audio/<domain>/<Dataset>/… path (the common case),
+                                #   2) the fully-qualified audio/<domain>/<task>/<split>/… path,
+                                #   3) a numeric suffix — absolute last resort, effectively never hit.
+                                free = lambda p: audio_src_by_dest.get(p, src) == src
+                                rel_ref = os.path.join(rel_audio_root, rel_in_split)
+                                if not free(rel_ref):
+                                    rel_ref = os.path.join("audio", split.rel_dir, name, rel_in_split)
+                                    if not free(rel_ref):
+                                        stem, ext = os.path.splitext(rel_ref)
+                                        k = 2
+                                        while not free(f"{stem}__{k}{ext}"):
+                                            k += 1
+                                        rel_ref = f"{stem}__{k}{ext}"
+                                audio_src_by_dest[rel_ref] = src
+                                audio_dest_by_src[src] = rel_ref
+                                # materialise the file once (first time this source is seen)
                                 if not os.path.exists(src):
                                     n_missing_audio += 1
                                     if args.verbose:
@@ -1046,6 +1122,11 @@ def export(args):
                                     os.makedirs(os.path.dirname(link_path), exist_ok=True)
                                     if not os.path.lexists(link_path):
                                         _make_link(src, link_path, args)
+                            turn["value"] = rel_ref
+                            split_refs.add(rel_ref)
+                            n_audio += 1
+                            if isinstance(turn.get("duration"), (int, float)):
+                                total_dur += turn["duration"]
                         if writer:
                             out_rec = uniform_record(rec, rec_language, f"{name}_{n_rows}")
                             writer.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
@@ -1073,7 +1154,7 @@ def export(args):
         stats_rows.append({
             "domain": domain, "task": task, "split": name,
             "language": split.language or "",
-            "examples": samples, "audio_files": len(linked),
+            "examples": samples, "audio_files": len(split_refs),
             "audio_refs": n_audio, "duration_hours": round(dur_sec / 3600.0, 2),
             "audio_hosted": "yes" if audio_ok else "no",
             "license_text": du["license_text"], "license_audio": du["license_audio"],
@@ -1085,7 +1166,7 @@ def export(args):
             "audio_dir": rel_audio_root if audio_ok else None,  # relative; None when not hosted
             "language": split.language,
             "examples": samples,
-            "audio_files": len(linked),
+            "audio_files": len(split_refs),
             "audio_hosted": audio_ok,
             "license_text": du["license_text"],
             "license_audio": du["license_audio"],
@@ -1093,7 +1174,7 @@ def export(args):
             "audio_source_url": du["url"],
             "sources": du["sources"] or ([{"url": du["url"]}] if du["url"] else []),
         }
-        print(f"  {domain}/{task}/{name}: {samples} ex, {len(linked)} audio "
+        print(f"  {domain}/{task}/{name}: {samples} ex, {len(split_refs)} audio "
               f"({round(dur_sec/3600,1)} h){'' if audio_ok else '  [audio NOT hosted]'}")
 
     # ---- Write side files (stats, index) + the dataset card (README + LICENSES).

@@ -101,8 +101,14 @@ Each turn in `conversations` has:
 | `offset` | float | start offset in the audio file, in seconds (when the turn uses a segment; `null` otherwise) |
 
 Audio is referenced by a **relative path** of the form
-`audio/<domain>/<task>/<Split>/<file>`, e.g.
-`audio/speech/asr/FLEURS_fr/16207707140941618664.wav`.
+`audio/<domain>/<Dataset>/<file>`, e.g.
+`audio/speech/FLEURS_fr/16207707140941618664.wav`. The path is **task-independent** and the
+`<Dataset>` folder carries the **audio's own language** when it is speech
+(`CommonVoice_en`, `Multilingual_LibriSpeech_de`, …) but no language when the audio has none
+(`FMA_GenreQA` for music). As a result a clip that is reused across several splits — the same
+recording serving both transcription and translation, or one music track with Q&A in several
+languages — is stored **once** and referenced by each split, instead of being copied per
+task or per text-language. (The `data/` splits themselves keep their language-suffixed names.)
 
 Example record:
 
@@ -111,7 +117,7 @@ Example record:
   "id": "735",
   "conversations": [
     {"from": "User", "value": "Faites une transcription complète du fichier audio.", "type": "text"},
-    {"from": "User", "value": "audio/speech/asr/FLEURS_fr/16207707140941618664.wav", "type": "audio", "duration": 8.88},
+    {"from": "User", "value": "audio/speech/FLEURS_fr/16207707140941618664.wav", "type": "audio", "duration": 8.88},
     {"from": "Assistant", "value": "Les permis doivent être réservés à l'avance. …", "type": "text"}
   ],
   "language": "fr",
