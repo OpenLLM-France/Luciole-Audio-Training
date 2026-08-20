@@ -19,3 +19,4 @@ tmp/
 adapter_training/nemo/convert_to_hf/log/
 demo/WebRTC_app/uploads
 demo/WebRTC_app/models
+demo/WebRTC_app/.env
