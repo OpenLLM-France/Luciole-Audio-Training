@@ -10,6 +10,7 @@
 #SBATCH --qos=qos_gpu_h100-dev
 #SBATCH --account=wuh@h100
 #SBATCH --constraint=h100
+#SBATCH --mail-type=ALL
 
 # Some dependencies are needed to run newer NeMo versions
 # inside the NeMo 2.4.0 environment.
