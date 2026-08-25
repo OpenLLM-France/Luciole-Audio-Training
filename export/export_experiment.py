@@ -5,6 +5,7 @@ runs the same conversion as `to_hf.py` per checkpoint, then rewrites the exporte
 `config.json` to reference portable model names instead of local training paths.
 """
 import argparse
+import gc
 import json
 import re
 import sys
@@ -123,6 +124,26 @@ def patch_config_json(config_path: Path) -> bool:
     return changed
 
 
+def free_gpu_memory() -> None:
+    """Release the GPU memory held by the previously exported checkpoint.
+
+    Each model is moved onto the GPU in ``to_hf.load_model``; dropping the Python
+    reference only returns the blocks to torch's CUDA caching allocator, which keeps
+    them reserved for the process. Without an explicit ``empty_cache`` the exports pile
+    up and the 2nd/3rd checkpoint OOMs even though any single one fits on the GPU. A GC
+    pass first drops the (possibly cycle-referenced, or exception-traceback-pinned)
+    model so its storage is actually free before we hand the blocks back.
+    """
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+
+
 def export_one(ckpt_path: Path, class_path: str, exp_config: Path, output_dir: Path, force: bool) -> bool:
     config_json = output_dir / "config.json"
     if output_dir.exists() and config_json.exists() and not force:
@@ -196,6 +217,10 @@ def main():
 
     failures = []
     for step, ckpt_path in selected:
+        # Start every export from a clean allocator: free the previous checkpoint's GPU
+        # memory here, at the loop boundary, where the prior iteration's exception context
+        # (which would otherwise pin a failed export's partial model) has already cleared.
+        free_gpu_memory()
         output_dir = hf_root / ckpt_path.stem.replace("=", "_")
         print(f"\n[step={step}] exporting {ckpt_path.name} -> {output_dir}")
         try:
