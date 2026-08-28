@@ -138,13 +138,28 @@ def get_model(name=None):
 
 
 def selected_models(data):
-    """Rend [(nom, modèle)] pour une requête : un seul modèle, ou tous si comparaison.
+    """Rend [(nom, modèle)] pour une requête : un seul modèle, ou un sous-ensemble (voire tous)
+    si comparaison.
 
-    `compare: true` l'emporte sur `model`. Les générations se feront en séquence dans cet
-    ordre (le GPU est unique), et chaque message émis porte son nom de modèle pour que le
-    client sache dans quelle colonne l'écrire.
+    `compare: true` l'emporte sur `model`. En comparaison, le client peut restreindre à un
+    sous-ensemble via `compareModels` (liste de noms, ou chaîne "a,b,c") ; sinon tous les
+    modèles sont comparés. Les générations se feront en séquence dans l'ordre de MODELS (le GPU
+    est unique), et chaque message émis porte son nom de modèle pour que le client sache dans
+    quelle colonne l'écrire.
     """
     if data.get("compare") and len(MODELS) > 1:
+        # Sous-ensemble optionnel à comparer. On garde l'ordre de MODELS pour un placement de
+        # colonnes stable, et on exige au moins deux noms valides — sinon (client antérieur au
+        # sélecteur multi-modèles, ou sélection incohérente) on compare TOUS les modèles,
+        # l'ancien comportement.
+        wanted = data.get("compareModels")
+        if isinstance(wanted, str):
+            wanted = [w.strip() for w in wanted.split(",") if w.strip()]
+        if wanted:
+            wanted = set(wanted)
+            chosen = [(n, m) for n, m in MODELS.items() if n in wanted]
+            if len(chosen) >= 2:
+                return chosen
         return list(MODELS.items())
     name = data.get("model")
     model = get_model(name)
@@ -922,6 +937,7 @@ async def upload_audio(request):
     effort_mode = "normal"
     model_choice = None
     compare = False
+    compare_models = None
     regenerate = False
     drop_pairs = 1
     # 0 = client antérieur, qui n'en envoie pas : la requête reste alors non annulable, comme
@@ -960,6 +976,10 @@ async def upload_audio(request):
             model_choice = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'compare':
             compare = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
+        elif field.name == 'compareModels':
+            # Sous-ensemble à comparer, "a,b,c" — selected_models le découpe et retombe sur
+            # « tous » s'il reste moins de deux noms valides.
+            compare_models = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'regenerate':
             regenerate = (await field.read(decode=True)).decode('utf-8').lower() in ("1", "true", "yes", "on")
         elif field.name == 'generationId':
@@ -984,7 +1004,8 @@ async def upload_audio(request):
     if not check_rate_limit(session_id):
         return web.Response(status=429, text="Rate limit exceeded")
 
-    targets = selected_models({"model": model_choice, "compare": compare})
+    targets = selected_models({"model": model_choice, "compare": compare,
+                               "compareModels": compare_models})
 
     # Renvoi d'un tour audio déjà joué (bouton Retry du client) : on déroule l'historique
     # d'autant de paires user+assistant que le client vient d'en jeter, sinon le modèle

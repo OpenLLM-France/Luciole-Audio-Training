@@ -124,10 +124,15 @@
                         <select id="set-model" class="model-picker-select"
                             aria-label="Modèle qui répond"></select>
                         <label class="model-picker-compare"
-                            title="Interroger tous les modèles et comparer leurs réponses">
+                            title="Interroger plusieurs modèles et comparer leurs réponses">
                             <input type="checkbox" id="set-compare">
                             <span>Compare</span>
                         </label>
+                        <!-- Choix des modèles à comparer, peuplé dynamiquement (une case par
+                             modèle). Masqué tant qu'il n'y a que deux modèles (comparer = les
+                             deux) ou que « Compare » n'est pas coché. -->
+                        <div class="compare-models hidden" id="compare-models"
+                            role="group" aria-label="Modèles à comparer"></div>
                     </div>
                 </div>
                 <div class="status-cluster">

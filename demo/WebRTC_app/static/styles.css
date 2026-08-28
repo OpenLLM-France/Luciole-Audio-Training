@@ -2541,6 +2541,48 @@ textarea::placeholder {
     accent-color: hsl(var(--primary-foreground));
 }
 
+/* Choix des modèles à comparer, dans le prolongement de la case « Compare ». Affiché seulement
+   au-delà de deux modèles (à deux, comparer = les deux) et quand « Compare » est coché — c'est
+   client.js/updateCompareUI qui pose/retire .hidden. Pas de règle .hidden globale ici : chaque
+   composant a la sienne, d'où la ligne dédiée ci-dessous. */
+.compare-models {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 3px 10px;
+    border-left: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+}
+
+.compare-models.hidden {
+    display: none;
+}
+
+.compare-model-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.compare-model-option:has(input:checked) {
+    color: hsl(var(--foreground));
+}
+
+.compare-model-option input {
+    accent-color: hsl(var(--primary));
+    margin: 0;
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+}
+
 /* Sur petit écran l'en-tête est déjà chargé : on garde le sélecteur (c'est l'objet du
    changement) mais on laisse tomber le libellé du bouton, l'état de la case suffit. */
 @media (max-width: 640px) {

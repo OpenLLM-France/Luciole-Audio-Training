@@ -38,6 +38,7 @@ const setMaxTokens = document.getElementById('set-max-tokens');
 const modelRow = document.getElementById('model-row');
 const setModel = document.getElementById('set-model');
 const setCompare = document.getElementById('set-compare');
+const compareModelsBox = document.getElementById('compare-models');
 const setInstruction = document.getElementById('set-instruction');
 const micMeter = document.getElementById('mic-meter');
 const micMeterBar = micMeter ? micMeter.querySelector('.mic-meter-bar') : null;
@@ -106,7 +107,8 @@ const DEFAULT_SETTINGS = {
     instruction: 'Listen to the audio and answer the question:',
     effortMode: 'normal',    // 'normal' | 'max' — server pins decoding params when 'max'
     model: '',               // '' = modèle par défaut du serveur
-    compare: false,          // true = tous les modèles répondent, l'un après l'autre
+    compare: false,          // true = plusieurs modèles répondent, l'un après l'autre
+    compareModels: [],       // sous-ensemble à comparer quand >2 modèles ; [] = tous
 };
 
 // VAD tunables (silenceMs and speechThreshold are read from settings)
@@ -347,9 +349,10 @@ function syncSettingsForm() {
     if (setModel) setModel.value = settings.model || '';
     if (setCompare) {
         setCompare.checked = !!settings.compare;
-        // Comparer, c'est interroger TOUS les modèles : le choix d'un modèle unique n'a
-        // alors plus de sens, on grise le sélecteur plutôt que de le laisser mentir.
-        if (setModel) setModel.disabled = !!settings.compare;
+        // Comparer, c'est interroger plusieurs modèles : le choix d'un modèle unique n'a alors
+        // plus de sens (sélecteur grisé), et au-delà de deux modèles on affiche les cases pour
+        // choisir lesquels comparer. updateCompareUI() centralise ces deux effets.
+        updateCompareUI();
     }
     setInstruction.value = settings.instruction;
 }
@@ -1929,7 +1932,55 @@ async function loadAvailableModels() {
         settings.model = availableModels[0] || '';
         setModel.value = settings.model;
     }
-    if (setCompare) setModel.disabled = !!settings.compare;
+    renderCompareModels();
+    updateCompareUI();
+}
+
+// Quels modèles comparer. Vide/incohérent (ou moins de deux cochés) = TOUS — c'est aussi le
+// repli du serveur. À deux modèles, comparer = les deux, sans sélection à faire.
+function comparedModels() {
+    if (!settings.compare) return [];
+    if (availableModels.length <= 2) return availableModels.slice();
+    const chosen = (settings.compareModels || []).filter((n) => availableModels.includes(n));
+    return chosen.length >= 2 ? chosen : availableModels.slice();
+}
+
+// (Re)construit une case par modèle disponible ; l'état coché reflète settings.compareModels
+// (« tous » par défaut). Décocher sous deux modèles retombe sur « tous » (cf. comparedModels) :
+// on ne bloque pas les cases pour ne pas piéger l'utilisateur.
+function renderCompareModels() {
+    if (!compareModelsBox) return;
+    compareModelsBox.innerHTML = '';
+    const active = new Set(comparedModels());
+    availableModels.forEach((name) => {
+        const label = document.createElement('label');
+        label.className = 'compare-model-option';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = name;
+        cb.checked = active.has(name);
+        cb.addEventListener('change', () => {
+            settings.compareModels = Array.from(
+                compareModelsBox.querySelectorAll('input:checked')).map((i) => i.value);
+            saveSettings(settings);
+        });
+        const span = document.createElement('span');
+        span.textContent = name;
+        label.appendChild(cb);
+        label.appendChild(span);
+        compareModelsBox.appendChild(label);
+    });
+}
+
+// Grise le sélecteur mono-modèle en comparaison, et n'affiche les cases « quoi comparer » que
+// lorsqu'elles servent : au moins trois modèles ET comparaison active (à deux, comparer = les
+// deux, aucun choix à faire).
+function updateCompareUI() {
+    if (setModel) setModel.disabled = !!settings.compare;
+    if (compareModelsBox) {
+        const show = !!settings.compare && availableModels.length > 2;
+        compareModelsBox.classList.toggle('hidden', !show);
+    }
 }
 
 if (setModel) {
@@ -1941,7 +1992,7 @@ if (setModel) {
 if (setCompare) {
     setCompare.addEventListener('change', () => {
         settings.compare = setCompare.checked;
-        if (setModel) setModel.disabled = settings.compare;
+        updateCompareUI();
         saveSettings(settings);
     });
 }
@@ -1949,8 +2000,15 @@ loadAvailableModels();
 
 function modelPayload() {
     const p = {};
-    if (settings.compare) p.compare = true;
-    else if (settings.model) p.model = settings.model;
+    if (settings.compare) {
+        p.compare = true;
+        const names = comparedModels();
+        // La liste n'est envoyée que pour un VRAI sous-ensemble ; sinon le serveur compare tous
+        // les modèles de lui-même (et les clients antérieurs n'envoient rien).
+        if (names.length >= 2 && names.length < availableModels.length) p.compareModels = names;
+    } else if (settings.model) {
+        p.model = settings.model;
+    }
     return p;
 }
 
@@ -2389,8 +2447,15 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1, use
     formData.append('maxTokens', String(settings.maxTokens));
     formData.append('instruction', settings.instruction);
     formData.append('effortMode', settings.effortMode);
-    if (settings.compare) formData.append('compare', 'true');
-    else if (settings.model) formData.append('model', settings.model);
+    if (settings.compare) {
+        formData.append('compare', 'true');
+        const names = comparedModels();
+        if (names.length >= 2 && names.length < availableModels.length) {
+            formData.append('compareModels', names.join(','));
+        }
+    } else if (settings.model) {
+        formData.append('model', settings.model);
+    }
 
     // Même problème que pour le streaming : le fetch est asynchrone, l'utilisateur peut avoir
     // changé de conversation avant la réponse. On retient d'où part la requête.
