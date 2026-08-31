@@ -81,6 +81,7 @@ TASK_HATCHES = {
     "music_captioning": "***",
     "mqa": "...",
     "task_switching": "x+x",  # multi-task mix — busy crosshatch
+    "text_only": "//.",  # text-only instruction / chat (no audio)
 }
 
 # Fixed sort order for languages. Used everywhere a stable language ordering
@@ -339,6 +340,12 @@ def plot_composition(
     # ── Coverage check: every group_field value in the data must appear ──────
     plotted_keys = {lbl_map[lbl]["task"].strip().lower() for lbl in all_labels}
     missing_keys = keys_in_data - plotted_keys
+    if missing_keys:
+        # A group with zero size under the current metric (e.g. text-only data
+        # has no audio duration) legitimately cannot appear in that metric's
+        # pie; only flag groups that DO have size but still went unplotted.
+        sized = df.groupby(df[group_field].fillna("").astype(str).map(_key))[raw_col].sum()
+        missing_keys = {k for k in missing_keys if sized.get(k, 0) > 0}
     if missing_keys:
         raise ValueError(
             f"{group_field} value(s) {sorted(missing_keys)} present in the data but not "
@@ -804,6 +811,9 @@ def main():
     for task in task_order.index:
         if not task:
             continue
+        if task_order.get(task, 0) <= 0:
+            print(f"   (skipping {args.metric} subtask plot for task='{task}': zero {args.metric})")
+            continue
         sub = df[df["task_type"].fillna("").astype(str).str.strip().str.lower() == task].copy()
         if sub.empty:
             continue
@@ -827,6 +837,8 @@ def main():
     # Per-(sub)task dataset and language distribution plots
     for task in task_order.index:
         if not task:
+            continue
+        if task_order.get(task, 0) <= 0:
             continue
         sub_t = df[df["task_type"].fillna("").astype(str).str.strip().str.lower() == task].copy()
         if sub_t.empty:
