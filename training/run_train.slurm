@@ -38,7 +38,7 @@ set -euo pipefail
 
 # --- Models / data
 # (defined before the output folders: those are grouped per LLM, see llm_family below)
-LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/finetune/luciole_final/Luciole-1B-SFT-1.1}"
+LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/sft/luciole_1b/final/Luciole-1B-Instruct-1.1}"
 SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo}"
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen}"
@@ -65,7 +65,7 @@ EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm
 TMP_CACHE="$SCRATCH/.cache"
 
 # --- Data version (override with: DATA_VERSION=v3 sbatch run_train.slurm)
-DATA_VERSION=${DATA_VERSION:-v2}
+DATA_VERSION=${DATA_VERSION:-v4}
 
 # --- Config file
 CONFIG_NAME="${CONFIG_NAME:-run/luciole}"  # Hydra config name (no .yaml); e.g. run/luciole, run/v2

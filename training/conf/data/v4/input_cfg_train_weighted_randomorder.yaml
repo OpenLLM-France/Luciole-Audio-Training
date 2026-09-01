@@ -909,7 +909,7 @@
     - type: multimodal_conversation
       weight: 0.0200   # mixed (12.2 h, 2.0K samples)
       tags: {sub_task: multiturn_aqa, lang: en}
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_multiturn/mixed/train_randomorder.jsonl
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved_multiturn/mixed/train_randomorder.jsonl
 - type: group
   weight: 0.0102   # —, 289.8K samples
   tags: {task: text_only, lang: en}

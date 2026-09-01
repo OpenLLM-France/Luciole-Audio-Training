@@ -235,7 +235,7 @@ def main():
     g_train.add_argument("--config", default="run/luciole",
                          help="Hydra config name under conf/ (default: %(default)s). "
                               "Use 'run/<name>' to pick a composed run file.")
-    g_train.add_argument("--data-version", default="v2",
+    g_train.add_argument("--data-version", default="v4",
                          help="Subfolder under conf/data/ (default: %(default)s)")
     g_train.add_argument("--subdir", default=None,
                          help="Group this run under an extra folder inside its model "
