@@ -235,6 +235,13 @@ class AudioTrackHandler:
 pcs = set()
 handlers = {}
 
+# Une RTCPeerConnection par session, réutilisée d'un enregistrement à l'autre au lieu d'en
+# recréer une à chaque /offer : recréer forçait une négociation ICE/DTLS complète (~10s) pour
+# CHAQUE question posée au micro, alors qu'une connexion déjà établie peut juste être
+# renégociée (rapide : même transport ICE, cf. bundlePolicy côté client) pour recevoir la
+# piste audio suivante.
+PC_BY_SESSION = {}
+
 # ---------------------------------------------------------------------------
 # Session store with JSON-file persistence
 # ---------------------------------------------------------------------------
@@ -857,49 +864,63 @@ async def offer_with_datachannel(request):
     if session_id not in SESSIONS:
         SESSIONS[session_id] = new_session()
 
-    pc = RTCPeerConnection()
-    pcs.add(pc)
-    
-    # Store state for this connection
-    state = {
-        "handler": None,
-        "channel": None,
-        "text_input": "",
-        "session_id": session_id # Reference to session ID
-    }
+    existing = PC_BY_SESSION.get(session_id)
+    if existing is not None and existing["pc"].connectionState in ("closed", "failed"):
+        pcs.discard(existing["pc"])
+        PC_BY_SESSION.pop(session_id, None)
+        existing = None
 
-    @pc.on("datachannel")
-    def on_datachannel(channel):
-        state["channel"] = channel
-        
-        @channel.on("message")
-        async def on_message(message):
-            logger.info(f"Received message: {message}")
-            try:
-                data = json.loads(message)
-            except Exception:
-                data = {"type": "text", "text": message}
+    if existing is not None:
+        # Renégociation sur la connexion déjà ouverte : ne PAS ré-attacher les handlers
+        # (déjà branchés la première fois) ni recréer state, sous peine de doublons.
+        pc = existing["pc"]
+        state = existing["state"]
+    else:
+        pc = RTCPeerConnection()
+        pcs.add(pc)
 
-            mtype = data.get("type")
-            if mtype == "stop" and state["handler"]:
-                await _handle_audio_stop(channel, state, data)
-            elif mtype == "text_only":
-                await _handle_text_only(channel, state, data)
+        # Store state for this connection
+        state = {
+            "handler": None,
+            "channel": None,
+            "text_input": "",
+            "session_id": session_id # Reference to session ID
+        }
+        PC_BY_SESSION[session_id] = {"pc": pc, "state": state}
 
-    @pc.on("track")
-    async def on_track(track):
-        if track.kind == "audio":
-            logger.info("Audio track received")
-            handler = AudioTrackHandler(track)
-            state["handler"] = handler
-            await handler.start_recording()
+        @pc.on("datachannel")
+        def on_datachannel(channel):
+            state["channel"] = channel
 
-    @pc.on("connectionstatechange")
-    async def on_connection_state_change():
-        if pc.connectionState in ("closed", "failed"):
-            pcs.discard(pc)
-            _CANCELLED.pop(state["session_id"], None)
-            _RATE_HITS.pop(state["session_id"], None)
+            @channel.on("message")
+            async def on_message(message):
+                logger.info(f"Received message: {message}")
+                try:
+                    data = json.loads(message)
+                except Exception:
+                    data = {"type": "text", "text": message}
+
+                mtype = data.get("type")
+                if mtype == "stop" and state["handler"]:
+                    await _handle_audio_stop(channel, state, data)
+                elif mtype == "text_only":
+                    await _handle_text_only(channel, state, data)
+
+        @pc.on("track")
+        async def on_track(track):
+            if track.kind == "audio":
+                logger.info("Audio track received")
+                handler = AudioTrackHandler(track)
+                state["handler"] = handler
+                await handler.start_recording()
+
+        @pc.on("connectionstatechange")
+        async def on_connection_state_change():
+            if pc.connectionState in ("closed", "failed"):
+                pcs.discard(pc)
+                PC_BY_SESSION.pop(state["session_id"], None)
+                _CANCELLED.pop(state["session_id"], None)
+                _RATE_HITS.pop(state["session_id"], None)
 
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()

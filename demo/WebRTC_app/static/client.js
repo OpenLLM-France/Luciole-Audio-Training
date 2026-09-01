@@ -51,6 +51,10 @@ const suggestedPromptsTpl = document.getElementById('suggested-prompts-template'
 let pc = null;
 let dc = null;
 let localStream = null;
+// Sender de la piste micro sur pc, gardé d'un enregistrement à l'autre : le retirer au Stop
+// (cf. stopRecording) laisse son transceiver "inactive" mais en place, pour que le prochain
+// addTrack le réutilise au lieu d'empiler un nouveau m-line audio par enregistrement.
+let micSender = null;
 let isRecording = false;
 let currentFile = null;
 let currentThinkingMsg = null;
@@ -900,6 +904,7 @@ function startNewChat() {
 
     if (pc) { pc.close(); pc = null; }
     dc = null;
+    micSender = null;
     setStatus(null, 'Idle');
 
     currentFile = null;
@@ -1034,6 +1039,10 @@ async function startWebRTC() {
     const config = {
         sdpSemantics: 'unified-plan',
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        // Une seule paire de candidats/un seul transport ICE pour toute la connexion : le fait
+        // d'ajouter la piste micro plus tard (cf. startRecording) déclenche une renégociation,
+        // mais elle réutilise ce transport déjà établi au lieu d'en regatherer un nouveau.
+        bundlePolicy: 'max-bundle',
     };
 
     pc = new RTCPeerConnection(config);
@@ -2132,9 +2141,16 @@ window.addEventListener('touchend', pttUp);
 
 async function startRecording({ ptt = false } = {}) {
     try {
-        if (pc) { pc.close(); pc = null; }
-
-        await startWebRTC();
+        // Le serveur réutilise désormais la même RTCPeerConnection pour toute la session (au
+        // lieu d'en recréer une par /offer) : on peut donc garder pc ouvert d'un enregistrement
+        // à l'autre et se contenter d'y ajouter la piste audio + renégocier, plutôt que de
+        // repayer la négociation ICE/DTLS complète (~10s) à chaque question.
+        const pcIsUsable = pc && dc && dc.readyState === 'open'
+            && pc.connectionState !== 'failed' && pc.connectionState !== 'closed';
+        if (!pcIsUsable) {
+            if (pc) { pc.close(); pc = null; }
+            await startWebRTC();
+        }
 
         localStream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -2146,7 +2162,7 @@ async function startRecording({ ptt = false } = {}) {
             video: false,
         });
 
-        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+        localStream.getTracks().forEach((track) => { micSender = pc.addTrack(track, localStream); });
 
         // Tee the same stream into a local recorder so we can replay later.
         recordedChunks = [];
@@ -2266,6 +2282,12 @@ async function stopRecording() {
         if (localStream) {
             localStream.getTracks().forEach((track) => track.stop());
             localStream = null;
+        }
+        // pc reste ouvert (cf. startRecording) : libérer le sender pour que le prochain
+        // addTrack réutilise ce même transceiver au lieu d'empiler un m-line audio de plus.
+        if (pc && micSender) {
+            try { pc.removeTrack(micSender); } catch (e) { /* pc déjà fermé entre-temps */ }
+            micSender = null;
         }
     };
 
@@ -2924,3 +2946,19 @@ window.addEventListener('beforeunload', () => {
 renderEmptyState();
 renderChatHistory();
 startStatsPolling();
+
+// Pré-établir la connexion WebRTC (data channel + ICE/DTLS) dès le chargement, sans piste
+// audio : ça encaisse le coût de négociation pendant que l'utilisateur lit/tape, au lieu de
+// le lui faire subir au premier clic sur le micro. Le serveur garde cette même connexion pour
+// toute la session (cf. PC_BY_SESSION côté app.py), donc startRecording() n'a ensuite plus
+// qu'à y ajouter la piste audio et renégocier — rapide, même transport ICE déjà établi.
+async function warmUpConnection() {
+    try {
+        await startWebRTC();
+        await negotiate();
+    } catch (e) {
+        console.warn('WebRTC warm-up failed; will connect on demand instead.', e);
+        if (pc) { pc.close(); pc = null; }
+    }
+}
+warmUpConnection();
