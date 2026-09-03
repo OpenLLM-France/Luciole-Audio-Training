@@ -691,7 +691,7 @@ async def _handle_audio_stop(channel, state, data):
                         # upload. Le fichier doit donc SURVIVRE à cette requête.
                         current_history.append({
                             "role": "user",
-                            "content": prompt or "Audio Message",
+                            "content": prompt or custom_instruction,
                             "audio": [clean_audio_path],
                         })
                         current_history.append({"role": "assistant", "content": clean_response})
@@ -1075,7 +1075,14 @@ async def upload_audio(request):
                         full_response = ""
                         t0 = time.perf_counter()
                         token_count = 0
-                        async for token in stream_generator_in_thread(model.generate_stream, audio_path=clean_audio_path, text_input=text_prompt, history=current_history, stop_callback=stop_check, **_effort_overrides(effort_mode, max_tokens)):
+                        async for token in stream_generator_in_thread(
+                            model.generate_stream,
+                            audio_path=clean_audio_path,
+                            text_input=text_prompt or custom_instruction,
+                            history=current_history,
+                            stop_callback=stop_check,
+                            **_effort_overrides(effort_mode, max_tokens),
+                        ):
                             full_response += token
                             token_count += 1
                         # Un fragment SSE = un token côté vLLM ; c'est le même comptage que
