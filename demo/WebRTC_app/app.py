@@ -247,12 +247,19 @@ class AudioTrackHandler:
 pcs = set()
 handlers = {}
 
-# Une RTCPeerConnection par session, réutilisée d'un enregistrement à l'autre au lieu d'en
-# recréer une à chaque /offer : recréer forçait une négociation ICE/DTLS complète (~10s) pour
-# CHAQUE question posée au micro, alors qu'une connexion déjà établie peut juste être
-# renégociée (rapide : même transport ICE, cf. bundlePolicy côté client) pour recevoir la
-# piste audio suivante.
-PC_BY_SESSION = {}
+# Une RTCPeerConnection par ONGLET client (connectionId), réutilisée d'un enregistrement à
+# l'autre — et d'une conversation à l'autre — au lieu d'en recréer une à chaque /offer : recréer
+# forçait une négociation ICE/DTLS complète (~10s) pour CHAQUE question posée au micro, alors
+# qu'une connexion déjà établie peut juste être renégociée (rapide : même transport ICE, cf.
+# bundlePolicy côté client) pour recevoir la piste audio suivante.
+#
+# connectionId (identité de la CONNEXION) est volontairement distinct de sessionId (identité de
+# la CONVERSATION, portée par chaque message et par SESSIONS) : les confondre faisait qu'un
+# changement de conversation, en changeant sessionId, invalidait implicitement la connexion déjà
+# négociée sous l'ancien id — le client renégociait alors avec le nouveau, le serveur n'en
+# retrouvait pas trace dans PC_BY_CONNECTION et créait une RTCPeerConnection distincte, dont la
+# réponse SDP ne correspondait plus à celle déjà en place côté client → échec silencieux.
+PC_BY_CONNECTION = {}
 
 # ---------------------------------------------------------------------------
 # Session store with JSON-file persistence
@@ -604,12 +611,12 @@ async def _handle_audio_stop(channel, state, data):
     max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
     custom_instruction = data.get("instruction") or DEFAULT_INSTRUCTION
     effort_mode = data.get("effortMode", "normal")
-    # Le client envoie sa conversation courante à CHAQUE message. Se fier au seul
-    # session_id figé au /offer liait tout l'historique à la conversation ouverte au
-    # moment de la connexion : changer de conversation ne changeait rien côté serveur, et
-    # le modèle continuait de voir le contexte de la précédente. Repli sur la valeur du
-    # /offer pour les clients qui ne l'envoient pas.
-    session_id = data.get("sessionId") or state["session_id"]
+    # Le client envoie sa conversation courante à CHAQUE message : il n'y a plus de session_id
+    # figé au /offer pour s'y replier (la connexion, elle, est identifiée par connectionId — pas
+    # par conversation, voir PC_BY_CONNECTION). Se fier à un tel repli liait tout l'historique à
+    # la conversation ouverte au moment de la connexion : changer de conversation ne changeait
+    # rien côté serveur, et le modèle continuait de voir le contexte de la précédente.
+    session_id = data.get("sessionId") or "default"
     if session_id not in SESSIONS:
         SESSIONS[session_id] = new_session()
 
@@ -743,12 +750,12 @@ async def _handle_text_only(channel, state, data):
     max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
     effort_mode = data.get("effortMode", "normal")
     regenerate = bool(data.get("regenerate", False))
-    # Le client envoie sa conversation courante à CHAQUE message. Se fier au seul
-    # session_id figé au /offer liait tout l'historique à la conversation ouverte au
-    # moment de la connexion : changer de conversation ne changeait rien côté serveur, et
-    # le modèle continuait de voir le contexte de la précédente. Repli sur la valeur du
-    # /offer pour les clients qui ne l'envoient pas.
-    session_id = data.get("sessionId") or state["session_id"]
+    # Le client envoie sa conversation courante à CHAQUE message : il n'y a plus de session_id
+    # figé au /offer pour s'y replier (la connexion, elle, est identifiée par connectionId — pas
+    # par conversation, voir PC_BY_CONNECTION). Se fier à un tel repli liait tout l'historique à
+    # la conversation ouverte au moment de la connexion : changer de conversation ne changeait
+    # rien côté serveur, et le modèle continuait de voir le contexte de la précédente.
+    session_id = data.get("sessionId") or "default"
     if session_id not in SESSIONS:
         SESSIONS[session_id] = new_session()
 
@@ -871,15 +878,16 @@ async def offer(request):
 async def offer_with_datachannel(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params['sdp'], type=params['type'])
-    session_id = params.get('sessionId', 'default')
-    
-    if session_id not in SESSIONS:
-        SESSIONS[session_id] = new_session()
+    # connectionId identifie l'onglet, pas la conversation (cf. le commentaire sur
+    # PC_BY_CONNECTION) : la conversation, elle, voyage dans sessionId à CHAQUE message
+    # (_handle_audio_stop / _handle_text_only), indépendamment de la connexion qui les porte.
+    # Repli sur 'sessionId' pour un client plus ancien qui n'enverrait pas encore connectionId.
+    connection_id = params.get('connectionId') or params.get('sessionId') or 'default'
 
-    existing = PC_BY_SESSION.get(session_id)
+    existing = PC_BY_CONNECTION.get(connection_id)
     if existing is not None and existing["pc"].connectionState in ("closed", "failed"):
         pcs.discard(existing["pc"])
-        PC_BY_SESSION.pop(session_id, None)
+        PC_BY_CONNECTION.pop(connection_id, None)
         existing = None
 
     if existing is not None:
@@ -896,9 +904,9 @@ async def offer_with_datachannel(request):
             "handler": None,
             "channel": None,
             "text_input": "",
-            "session_id": session_id # Reference to session ID
+            "connection_id": connection_id,
         }
-        PC_BY_SESSION[session_id] = {"pc": pc, "state": state}
+        PC_BY_CONNECTION[connection_id] = {"pc": pc, "state": state}
 
         @pc.on("datachannel")
         def on_datachannel(channel):
@@ -930,9 +938,13 @@ async def offer_with_datachannel(request):
         async def on_connection_state_change():
             if pc.connectionState in ("closed", "failed"):
                 pcs.discard(pc)
-                PC_BY_SESSION.pop(state["session_id"], None)
-                _CANCELLED.pop(state["session_id"], None)
-                _RATE_HITS.pop(state["session_id"], None)
+                PC_BY_CONNECTION.pop(state["connection_id"], None)
+                # _CANCELLED / _RATE_HITS restent keyés par sessionId (conversation), pas par
+                # connectionId : une connexion peut avoir porté plusieurs conversations pendant
+                # sa durée de vie, donc plus moyen de savoir ici LEQUEL purger sans risquer d'en
+                # évincer un encore utilisé par un autre onglet. On laisse ces deux dicts se
+                # purger via leur propre logique (_forget_cancelled, fenêtre glissante du rate
+                # limit) plutôt que de deviner une clé à la fermeture de la connexion.
 
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()

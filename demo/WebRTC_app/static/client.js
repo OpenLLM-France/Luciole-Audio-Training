@@ -59,6 +59,13 @@ let isRecording = false;
 let currentFile = null;
 let currentThinkingMsg = null;
 let sessionId = 'session_' + Date.now();
+// Identifiant de la CONNEXION WebRTC (pc/dc), distinct de sessionId (la CONVERSATION). Fixe
+// pour toute la durée de l'onglet — ne change jamais en changeant de chat, contrairement à
+// sessionId. Sert de clé côté serveur (PC_BY_SESSION) pour l'/offer ; sessionId continue de
+// voyager dans chaque message (stop/text_only) pour router l'historique. Les séparer évite
+// qu'un changement de conversation invalide la connexion déjà négociée (cf. le commentaire de
+// warmUpConnection plus bas).
+const connectionId = (crypto.randomUUID ? crypto.randomUUID() : 'conn_' + Date.now() + '_' + Math.random().toString(36).slice(2));
 let currentMessages = [];
 let pttHoldActive = false;
 let reconnectAttempt = 0;
@@ -902,10 +909,10 @@ function startNewChat() {
     currentMessages = [];
     renderEmptyState();
 
-    if (pc) { pc.close(); pc = null; }
-    dc = null;
+    // La connexion WebRTC (pc/dc) ne dépend plus de sessionId (voir connectionId, défini plus
+    // haut) : changer de conversation n'a plus besoin de la fermer/rouvrir, seulement de
+    // remettre l'UI à zéro.
     micSender = null;
-    setStatus(null, 'Idle');
 
     currentFile = null;
     filePreview.classList.add('hidden');
@@ -1054,7 +1061,14 @@ async function startWebRTC() {
     pc.addEventListener('iceconnectionstatechange', () => {
         if (!pc) return;
         const s = pc.iceConnectionState;
-        if (s === 'failed' || s === 'disconnected') {
+        // 'disconnected' est transitoire (hoquet NAT/réseau de quelques secondes) : l'agent ICE
+        // le récupère tout seul et ne passe à 'failed' que s'il n'y arrive vraiment pas. Le
+        // traiter comme 'failed' ici jetait une connexion encore bonne — souvent juste après le
+        // pré-établissement au chargement — et forçait une reconnexion complète (ICE/DTLS, ~10s)
+        // au moment où l'utilisateur appuyait sur le micro. D'où le « parfois il faut attendre,
+        // parfois non ».
+        if (s === 'failed') {
+            micBtn.disabled = true; // ré-activé quand le nouveau data channel s'ouvre
             scheduleReconnect();
         }
     });
@@ -1066,6 +1080,7 @@ function setupDataChannel(channel) {
     channel.onopen = () => {
         setStatus('connected', 'Ready');
         reconnectAttempt = 0;
+        micBtn.disabled = false;
     };
 
     channel.onmessage = (evt) => {
@@ -1901,7 +1916,9 @@ async function negotiate() {
         body: JSON.stringify({
             sdp: pc.localDescription.sdp,
             type: pc.localDescription.type,
-            sessionId,
+            // connectionId, pas sessionId : cette connexion sert toute la durée de l'onglet,
+            // indépendamment du chat affiché (voir la définition de connectionId plus haut).
+            connectionId,
         }),
     });
 
@@ -2118,6 +2135,7 @@ micBtn.addEventListener('click', async () => {
 });
 
 // PTT: hold mic to record
+let pttStartPromise = null;
 function pttDown(e) {
     if (settings.micMode !== 'ptt') return;
     if (e.cancelable) e.preventDefault();
@@ -2125,13 +2143,18 @@ function pttDown(e) {
     pttHoldActive = true;
     micBtn.classList.add('ptt-active');
     if (streamState.isStreaming) finalizeStream();
-    startRecording({ ptt: true }).catch(() => { pttHoldActive = false; });
+    pttStartPromise = startRecording({ ptt: true }).catch(() => { pttHoldActive = false; });
 }
-function pttUp() {
+async function pttUp() {
     if (settings.micMode !== 'ptt') return;
     if (!pttHoldActive) return;
     pttHoldActive = false;
     micBtn.classList.remove('ptt-active');
+    // startRecording() est async (négociation WebRTC, getUserMedia…) : si le clic est relâché
+    // avant qu'elle ait fini, isRecording est encore false ici et le stop se perdrait sans
+    // attendre — l'enregistrement démarrerait juste après et ne s'arrêterait jamais (le VAD
+    // auto-stop est désactivé en PTT).
+    if (pttStartPromise) await pttStartPromise;
     if (isRecording) stopRecording();
 }
 micBtn.addEventListener('mousedown', pttDown);
@@ -2953,12 +2976,16 @@ startStatsPolling();
 // toute la session (cf. PC_BY_SESSION côté app.py), donc startRecording() n'a ensuite plus
 // qu'à y ajouter la piste audio et renégocier — rapide, même transport ICE déjà établi.
 async function warmUpConnection() {
+    micBtn.disabled = true; // ré-activé par setupDataChannel().onopen une fois le data channel prêt
     try {
         await startWebRTC();
         await negotiate();
     } catch (e) {
         console.warn('WebRTC warm-up failed; will connect on demand instead.', e);
         if (pc) { pc.close(); pc = null; }
+        // Le warm-up a échoué : on retombe sur le comportement précédent (connexion à la
+        // demande, au premier appui) plutôt que de bloquer le micro indéfiniment.
+        micBtn.disabled = false;
     }
 }
 warmUpConnection();
