@@ -87,6 +87,7 @@ class RemoteSALMModel:
         if ready_timeout is None:
             ready_timeout = float(os.getenv("MODEL_ENDPOINT_READY_TIMEOUT", 300))
         self.served_model = self._wait_ready(ready_timeout)
+        self._warm_up()
 
     # ── disponibilité ──
 
@@ -114,6 +115,23 @@ class RemoteSALMModel:
             if time.monotonic() >= deadline:
                 raise RuntimeError(f"Serveur vLLM injoignable sur {self.base_url} : {last_error}")
             time.sleep(3)
+
+    def _warm_up(self):
+        """Force la compilation des noyaux Triton avant de rendre la main, pour que ce soit le
+        démarrage du serveur qui la paie (voir la note sur read_timeout ci-dessus : ~100 s de
+        plus pour un gros modèle) et non la première question d'un vrai utilisateur.
+
+        Bloquant par choix : `__init__` ne rend la main qu'une fois cette génération terminée,
+        donc `self.served_model` n'est considéré prêt qu'après. Un échec ne doit pas empêcher de
+        démarrer — au pire, la compilation aura lieu au premier vrai appel, comme avant.
+        """
+        logger.info(f"Warmup de {self.name} : génération factice pour compiler les noyaux…")
+        started = time.monotonic()
+        try:
+            self.generate(text_input="Bonjour", max_new_tokens=4)
+            logger.info(f"Warmup de {self.name} terminé en {time.monotonic() - started:.1f}s")
+        except Exception as e:
+            logger.warning(f"Warmup de {self.name} échoué ({e}) — compilation reportée au premier appel réel.")
 
     # ── audio ──
 

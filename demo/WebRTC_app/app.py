@@ -9,6 +9,7 @@ import re
 import time
 import uuid
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from dotenv import load_dotenv
 import threading
@@ -115,13 +116,24 @@ async def stream_generator_in_thread(generator_func, *args, **kwargs):
 # Mise en place des modèles au démarrage : on vérifie que chaque serveur répond, et on retient
 # l'identifiant qu'il sert. Un serveur injoignable ne condamne pas les autres — la démo reste
 # utilisable avec ceux qui ont répondu, et /healthz dit lesquels.
+#
+# En parallèle sur un thread par modèle : chaque constructeur bloque sur du réseau (attente du
+# serveur puis warmup, voir remote_model.py), donc les faire en série ferait attendre la somme
+# des démarrages au lieu du plus lent. Le GIL se libère pendant l'I/O, donc des threads suffisent
+# — pas besoin d'event loop, qui n'existe pas encore à ce stade du module.
 MODELS = {}
-for _name, _url in _parse_model_specs():
-    try:
-        MODELS[_name] = RemoteSALMModel(_url, default_instruction=DEFAULT_INSTRUCTION, name=_name)
-        logger.info(f"Modèle '{_name}' servi par {_url}")
-    except Exception as e:
-        logger.error(f"Could not reach model '{_name}' at {_url}: {e}")
+_specs = _parse_model_specs()
+with ThreadPoolExecutor(max_workers=len(_specs) or 1) as _pool:
+    _futures = {
+        _name: _pool.submit(RemoteSALMModel, _url, default_instruction=DEFAULT_INSTRUCTION, name=_name)
+        for _name, _url in _specs
+    }
+    for _name, _url in _specs:  # ordre des specs, pas ordre d'arrivée : DEFAULT_MODEL doit rester le premier déclaré
+        try:
+            MODELS[_name] = _futures[_name].result()
+            logger.info(f"Modèle '{_name}' servi par {_url}")
+        except Exception as e:
+            logger.error(f"Could not reach model '{_name}' at {_url}: {e}")
 
 # Modèle par défaut : le premier déclaré. C'est celui qui répond quand le client ne précise
 # rien — donc aussi tout client antérieur au sélecteur.
