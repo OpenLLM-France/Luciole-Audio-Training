@@ -15,8 +15,6 @@ const statusIndicator = document.getElementById('connection-status');
 const newChatBtn = document.getElementById('new-chat-btn');
 const historyContainer = document.getElementById('history');
 const filePreview = document.getElementById('file-preview');
-const fileNameSpan = document.getElementById('file-name');
-const removeFileBtn = document.getElementById('remove-file-btn');
 const themeToggle = document.getElementById('theme-toggle');
 const menuToggle = document.getElementById('menu-toggle');
 const sidebar = document.getElementById('sidebar');
@@ -48,21 +46,19 @@ const chatArea = document.getElementById('chat-area');
 const suggestedPromptsTpl = document.getElementById('suggested-prompts-template');
 
 // ---- State ------------------------------------------------------------------
+// pc/dc : uniquement pour le data channel (streaming des réponses texte). Le micro n'y touche
+// plus — voir startRecording/stopRecording : il est enregistré côté client (MediaRecorder) et
+// envoyé comme un fichier normal via /upload, comme un audio déposé ou sélectionné.
 let pc = null;
 let dc = null;
 let localStream = null;
-// Sender de la piste micro sur pc, gardé d'un enregistrement à l'autre : le retirer au Stop
-// (cf. stopRecording) laisse son transceiver "inactive" mais en place, pour que le prochain
-// addTrack le réutilise au lieu d'empiler un nouveau m-line audio par enregistrement.
-let micSender = null;
 let isRecording = false;
-let currentFile = null;
 let currentThinkingMsg = null;
 let sessionId = 'session_' + Date.now();
 // Identifiant de la CONNEXION WebRTC (pc/dc), distinct de sessionId (la CONVERSATION). Fixe
 // pour toute la durée de l'onglet — ne change jamais en changeant de chat, contrairement à
-// sessionId. Sert de clé côté serveur (PC_BY_SESSION) pour l'/offer ; sessionId continue de
-// voyager dans chaque message (stop/text_only) pour router l'historique. Les séparer évite
+// sessionId. Sert de clé côté serveur (PC_BY_CONNECTION) pour l'/offer ; sessionId continue de
+// voyager dans chaque message (text_only, /upload) pour router l'historique. Les séparer évite
 // qu'un changement de conversation invalide la connexion déjà négociée (cf. le commentaire de
 // warmUpConnection plus bas).
 const connectionId = (crypto.randomUUID ? crypto.randomUUID() : 'conn_' + Date.now() + '_' + Math.random().toString(36).slice(2));
@@ -73,11 +69,11 @@ let reconnectTimer = null;
 let streamStartTime = 0;
 let streamTokenCount = 0;
 
-// Per-recording: a MediaRecorder that captures the same mic stream we send
-// over WebRTC, so we can replay the user's audio locally.
+// Per-recording: a MediaRecorder that captures the mic stream entirely client-side (no WebRTC
+// media track — see startRecording/stopRecording). Its output becomes a staged File, exactly
+// like an uploaded/dropped one (see addStagedFile), sent only once the user hits Send.
 let mediaRecorder = null;
 let recordedChunks = [];
-let pendingMicAudioMsg = null; // user message div awaiting its audio blob
 
 // Track of the most-recent user audio message that's waiting on a transcript
 // from the server (mic) or the /transcribe endpoint (upload).
@@ -724,7 +720,8 @@ function _doSaveCurrentChat() {
     const history = loadChatHistory();
     const first = currentMessages[0] || {};
     const titleSource = (first.text && first.text.trim()) || (first.transcript && first.transcript.trim());
-    const chatTitle = titleSource ? titleSource.substring(0, 50) : (first.audioUrl ? 'Voice message' : 'New Chat');
+    const hasAudio = first.audioUrl || (first.audioUrls && first.audioUrls.length);
+    const chatTitle = titleSource ? titleSource.substring(0, 50) : (hasAudio ? 'Voice message' : 'New Chat');
     const chatData = { id: sessionId, title: chatTitle, timestamp: Date.now(), messages: currentMessages };
     const existingIndex = history.chats.findIndex((c) => c.id === sessionId);
     if (existingIndex >= 0) history.chats[existingIndex] = chatData;
@@ -779,8 +776,10 @@ function loadChat(chatId) {
         // the field was never set on this message.
         transcript: 'transcript' in msg ? msg.transcript : null,
         // Blob URLs survive in-session (no reload). They die on full reload —
-        // IndexedDB would be needed to persist the actual bytes.
+        // IndexedDB would be needed to persist the actual bytes. audioUrl (singulier) reste lu
+        // pour les tours enregistrés avant le support multi-audio.
         audioUrl: msg.audioUrl || null,
+        audioUrls: msg.audioUrls || null,
         model: msg.model || null,
         turn: msg.turn || null,
     })._messageData = msg; });
@@ -912,10 +911,7 @@ function startNewChat() {
     // La connexion WebRTC (pc/dc) ne dépend plus de sessionId (voir connectionId, défini plus
     // haut) : changer de conversation n'a plus besoin de la fermer/rouvrir, seulement de
     // remettre l'UI à zéro.
-    micSender = null;
-
-    currentFile = null;
-    filePreview.classList.add('hidden');
+    clearStagedFiles();
 
     const history = loadChatHistory();
     history.currentChatId = sessionId;
@@ -1063,12 +1059,9 @@ async function startWebRTC() {
         const s = pc.iceConnectionState;
         // 'disconnected' est transitoire (hoquet NAT/réseau de quelques secondes) : l'agent ICE
         // le récupère tout seul et ne passe à 'failed' que s'il n'y arrive vraiment pas. Le
-        // traiter comme 'failed' ici jetait une connexion encore bonne — souvent juste après le
-        // pré-établissement au chargement — et forçait une reconnexion complète (ICE/DTLS, ~10s)
-        // au moment où l'utilisateur appuyait sur le micro. D'où le « parfois il faut attendre,
-        // parfois non ».
+        // traiter comme 'failed' ici jetait une connexion encore bonne et forçait une
+        // reconnexion complète (ICE/DTLS, ~10s) inutilement.
         if (s === 'failed') {
-            micBtn.disabled = true; // ré-activé quand le nouveau data channel s'ouvre
             scheduleReconnect();
         }
     });
@@ -1080,7 +1073,6 @@ function setupDataChannel(channel) {
     channel.onopen = () => {
         setStatus('connected', 'Ready');
         reconnectAttempt = 0;
-        micBtn.disabled = false;
     };
 
     channel.onmessage = (evt) => {
@@ -1755,20 +1747,23 @@ async function retryUserMessage(userMsgDiv) {
     }
 
     const prompt = (userData.text || '').trim();
-    // L'audio d'origine : le File pour un fichier déposé, sinon la blob URL de l'enregistrement
-    // micro. Les blob URLs ne survivent pas à un rechargement complet de la page — on le dit
-    // plutôt que de renvoyer une requête muette.
-    const audioUrl = userMsgDiv._audioUrl || userData.audioUrl || null;
-    let blob = userMsgDiv._file || null;
-    if (!blob && audioUrl) {
+    // Les audios d'origine : les Files du tour (upload(s) et/ou clip(s) micro), sinon les blob
+    // URLs persistées. Les blob URLs ne survivent pas à un rechargement complet de la page — on
+    // le dit plutôt que de renvoyer une requête muette. `_audioUrls`/`audioUrl` (singulier)
+    // restent lus pour un tour d'avant le support multi-audio.
+    const audioUrls = userMsgDiv._audioUrls || userData.audioUrls
+        || (userMsgDiv._audioUrl ? [userMsgDiv._audioUrl] : null)
+        || (userData.audioUrl ? [userData.audioUrl] : null) || [];
+    let files = userMsgDiv._files || null;
+    if (!files && audioUrls.length) {
         try {
-            blob = await (await fetch(audioUrl)).blob();
+            files = await Promise.all(audioUrls.map((u) => fetch(u).then((r) => r.blob())));
         } catch (e) {
             showToast("L'audio de ce message n'est plus en mémoire (page rechargée)");
             return;
         }
     }
-    if (!blob && !prompt) {
+    if ((!files || !files.length) && !prompt) {
         showToast('Nothing to retry');
         return;
     }
@@ -1798,13 +1793,13 @@ async function retryUserMessage(userMsgDiv) {
         }
     }
 
-    if (blob) {
-        const url = URL.createObjectURL(blob);
-        const msg = appendMessage('user', prompt, { audioUrl: url, transcript: '' });
-        msg._file = blob;
+    if (files && files.length) {
+        const urls = files.map((f) => URL.createObjectURL(f));
+        const msg = appendMessage('user', prompt, { audioUrls: urls, transcript: '' });
+        msg._files = files;
         pendingTranscriptMsg = msg;
-        requestUploadTranscript(blob, msg);
-        uploadFile(blob, prompt, { regenerate: true, dropPairs, userMsg: msg });
+        requestUploadTranscript(files[0], msg);
+        uploadFile(files, prompt, { regenerate: true, dropPairs, userMsg: msg });
     } else {
         appendMessage('user', prompt);
         sendTextOnly(prompt, { regenerate: true, dropPairs });
@@ -1884,8 +1879,12 @@ function regenerateMessage(assistantMsgDiv) {
 function revokeAudioUrls(messages) {
     if (!messages) return;
     for (const m of messages) {
-        if (m && m.audioUrl && typeof m.audioUrl === 'string' && m.audioUrl.startsWith('blob:')) {
-            try { URL.revokeObjectURL(m.audioUrl); } catch (e) { /* ignore */ }
+        if (!m) continue;
+        const urls = m.audioUrls && m.audioUrls.length ? m.audioUrls : (m.audioUrl ? [m.audioUrl] : []);
+        for (const u of urls) {
+            if (typeof u === 'string' && u.startsWith('blob:')) {
+                try { URL.revokeObjectURL(u); } catch (e) { /* ignore */ }
+            }
         }
     }
 }
@@ -2068,24 +2067,74 @@ function stopGeneration() {
     cancelGenerations();
 }
 
-removeFileBtn.addEventListener('click', () => {
-    currentFile = null;
-    audioInput.value = '';
-    filePreview.classList.add('hidden');
-});
-
 uploadBtn.addEventListener('click', () => audioInput.click());
 
 audioInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
+    audioInput.value = '';
     if (!file) return;
-    setCurrentFile(file);
+    addStagedFile(file, 'upload');
 });
 
-function setCurrentFile(file) {
-    currentFile = file;
-    fileNameSpan.textContent = file.name;
+// Pile des audios en attente pour le PROCHAIN tour : upload(s), dépôt(s), et/ou clip(s)
+// micro (enregistrés côté client, voir stopRecording) — jusqu'à MAX_AUDIOS_PER_TURN, tous
+// envoyés ensemble par /upload quand Send est cliqué. Remplace l'ancien currentFile unique.
+const MAX_AUDIOS_PER_TURN = 4;
+let currentFiles = [];
+
+function addStagedFile(file, origin = 'upload') {
+    if (currentFiles.length >= MAX_AUDIOS_PER_TURN) {
+        showToast(`Maximum ${MAX_AUDIOS_PER_TURN} audios per turn`);
+        return false;
+    }
+    currentFiles.push({ id: `clip_${Date.now()}_${Math.random().toString(36).slice(2)}`, file, origin });
+    renderFilePreview();
+    return true;
+}
+
+function removeStagedFile(id) {
+    currentFiles = currentFiles.filter((f) => f.id !== id);
+    renderFilePreview();
+}
+
+function clearStagedFiles() {
+    currentFiles = [];
+    renderFilePreview();
+}
+
+function renderFilePreview() {
+    filePreview.innerHTML = '';
+    if (!currentFiles.length) {
+        filePreview.classList.add('hidden');
+        return;
+    }
     filePreview.classList.remove('hidden');
+    currentFiles.forEach(({ id, file, origin }) => {
+        const item = document.createElement('div');
+        item.className = 'file-preview-item';
+
+        const info = document.createElement('div');
+        info.className = 'file-preview-info';
+        info.innerHTML = origin === 'mic'
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+        const name = document.createElement('span');
+        name.className = 'file-preview-name';
+        name.textContent = file.name;
+        info.appendChild(name);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'file-preview-remove';
+        removeBtn.setAttribute('aria-label', 'Remove audio');
+        removeBtn.title = 'Remove audio';
+        removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        removeBtn.addEventListener('click', () => removeStagedFile(id));
+
+        item.appendChild(info);
+        item.appendChild(removeBtn);
+        filePreview.appendChild(item);
+    });
 }
 
 // =============================================================================
@@ -2121,7 +2170,7 @@ chatArea.addEventListener('drop', (e) => {
         showToast('Only audio files are supported');
         return;
     }
-    setCurrentFile(file);
+    addStagedFile(file, 'upload');
 });
 
 // =============================================================================
@@ -2150,10 +2199,10 @@ async function pttUp() {
     if (!pttHoldActive) return;
     pttHoldActive = false;
     micBtn.classList.remove('ptt-active');
-    // startRecording() est async (négociation WebRTC, getUserMedia…) : si le clic est relâché
-    // avant qu'elle ait fini, isRecording est encore false ici et le stop se perdrait sans
-    // attendre — l'enregistrement démarrerait juste après et ne s'arrêterait jamais (le VAD
-    // auto-stop est désactivé en PTT).
+    // startRecording() est async (getUserMedia — la permission micro peut prendre un moment,
+    // surtout au premier appel) : si le clic est relâché avant qu'elle ait fini, isRecording
+    // est encore false ici et le stop se perdrait sans attendre — l'enregistrement démarrerait
+    // juste après et ne s'arrêterait jamais (le VAD auto-stop est désactivé en PTT).
     if (pttStartPromise) await pttStartPromise;
     if (isRecording) stopRecording();
 }
@@ -2162,19 +2211,22 @@ micBtn.addEventListener('touchstart', pttDown, { passive: false });
 window.addEventListener('mouseup', pttUp);
 window.addEventListener('touchend', pttUp);
 
+function _clipExtensionFor(mimeType) {
+    if (mimeType && mimeType.includes('mp4')) return 'm4a';
+    if (mimeType && mimeType.includes('ogg')) return 'ogg';
+    return 'webm';
+}
+
 async function startRecording({ ptt = false } = {}) {
     try {
-        // Le serveur réutilise désormais la même RTCPeerConnection pour toute la session (au
-        // lieu d'en recréer une par /offer) : on peut donc garder pc ouvert d'un enregistrement
-        // à l'autre et se contenter d'y ajouter la piste audio + renégocier, plutôt que de
-        // repayer la négociation ICE/DTLS complète (~10s) à chaque question.
-        const pcIsUsable = pc && dc && dc.readyState === 'open'
-            && pc.connectionState !== 'failed' && pc.connectionState !== 'closed';
-        if (!pcIsUsable) {
-            if (pc) { pc.close(); pc = null; }
-            await startWebRTC();
+        if (currentFiles.length >= MAX_AUDIOS_PER_TURN) {
+            showToast(`Maximum ${MAX_AUDIOS_PER_TURN} audios per turn`);
+            return;
         }
 
+        // Capture 100% côté client (getUserMedia + MediaRecorder) : le micro ne touche plus à
+        // `pc` du tout — voir le commentaire sur l'état en haut du fichier. Pas de négociation
+        // WebRTC à attendre ici, juste la permission micro.
         localStream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 channelCount: 1,
@@ -2185,9 +2237,6 @@ async function startRecording({ ptt = false } = {}) {
             video: false,
         });
 
-        localStream.getTracks().forEach((track) => { micSender = pc.addTrack(track, localStream); });
-
-        // Tee the same stream into a local recorder so we can replay later.
         recordedChunks = [];
         try {
             const mime = pickRecorderMime();
@@ -2195,32 +2244,15 @@ async function startRecording({ ptt = false } = {}) {
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
-            mediaRecorder.onstop = () => {
-                if (!recordedChunks.length || !pendingMicAudioMsg) return;
-                const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-                const url = URL.createObjectURL(blob);
-                const contentDiv = pendingMicAudioMsg.querySelector('.content');
-                if (contentDiv) {
-                    const player = buildAudioPlayer(url);
-                    const transcriptBox = contentDiv.querySelector('.transcript-box');
-                    if (transcriptBox) contentDiv.insertBefore(player, transcriptBox);
-                    else contentDiv.appendChild(player);
-                }
-                pendingMicAudioMsg._audioUrl = url;
-                if (pendingMicAudioMsg._messageData) {
-                    pendingMicAudioMsg._messageData.audioUrl = url;
-                    saveCurrentChat();
-                }
-                pendingMicAudioMsg = null;
-                recordedChunks = [];
-            };
             mediaRecorder.start();
         } catch (err) {
-            console.warn('MediaRecorder unavailable; recordings will not be playable.', err);
+            console.warn('MediaRecorder unavailable; cannot record.', err);
             mediaRecorder = null;
+            localStream.getTracks().forEach((track) => track.stop());
+            localStream = null;
+            showToast('Recording not supported in this browser');
+            return;
         }
-
-        await negotiate();
 
         isRecording = true;
         micBtn.classList.add('recording');
@@ -2258,6 +2290,9 @@ async function startRecording({ ptt = false } = {}) {
     }
 }
 
+// Arrête juste l'enregistrement et l'ajoute à la pile en attente (comme un fichier
+// déposé/sélectionné) — ne déclenche plus de génération toute seule. C'est Send qui envoie tout
+// ce qui est en attente (texte + audios, mix upload/micro) en une seule requête /upload.
 async function stopRecording() {
     isRecording = false;
     micBtn.classList.remove('recording');
@@ -2267,86 +2302,72 @@ async function stopRecording() {
 
     if (vadController) { vadController.stop(); vadController = null; }
 
-    const prompt = textInput.value.trim();
-    textInput.value = '';
-    autoResizeTextarea();
-
-    // Render the user message FIRST so pendingMicAudioMsg is set before
-    // mediaRecorder fires onstop (otherwise we race and lose the blob).
-    if (dc && dc.readyState === 'open') {
-        if (streamState.isStreaming) finalizeStream();
-        streamState.currentGenerationId += 1;
-        // Origine de la génération + sessionId envoyé à CHAQUE message : le serveur liait son
-        // historique à la conversation en cours au moment du /offer, et ne la voyait donc
-        // jamais changer.
-        markGenerationOrigin(streamState.currentGenerationId);
-        dc.send(JSON.stringify({
-            type: 'stop',
-            text: prompt,
-            sessionId,
-            generationId: streamState.currentGenerationId,
-            maxTokens: settings.maxTokens,
-            instruction: settings.instruction,
-            effortMode: settings.effortMode,
-            ...modelPayload(),
-        }));
-
-        const userMsg = appendMessage('user', prompt || '', { transcript: '' });
-        trackPending(userMsg, streamState.currentGenerationId);
-        pendingMicAudioMsg = userMsg;
-        pendingTranscriptMsg = userMsg;
-        showThinkingMessage();
-    }
-
-    // Stop MediaRecorder, then defer stopping the underlying tracks until
-    // onstop has fired — otherwise the recorder loses its final chunk in
-    // some browsers and the audio shows up empty.
-    const cleanupTracks = () => {
+    const stopTracks = () => {
         if (localStream) {
             localStream.getTracks().forEach((track) => track.stop());
             localStream = null;
         }
-        // pc reste ouvert (cf. startRecording) : libérer le sender pour que le prochain
-        // addTrack réutilise ce même transceiver au lieu d'empiler un m-line audio de plus.
-        if (pc && micSender) {
-            try { pc.removeTrack(micSender); } catch (e) { /* pc déjà fermé entre-temps */ }
-            micSender = null;
-        }
     };
 
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        const prior = mediaRecorder.onstop;
-        mediaRecorder.onstop = (ev) => {
-            try { if (prior) prior.call(mediaRecorder, ev); }
-            finally { cleanupTracks(); }
-        };
-        try { mediaRecorder.stop(); } catch (e) { cleanupTracks(); }
-    } else {
-        cleanupTracks();
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        stopTracks();
+        return;
     }
+
+    // Attendre le blob final avant de rendre la main : c'est ce qui permet à stopRecording()
+    // d'ajouter le clip à currentFiles avant que l'appelant (VAD, PTT, clic) ne continue.
+    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+    const blob = await new Promise((resolve) => {
+        mediaRecorder.onstop = () => resolve(new Blob(recordedChunks, { type: mimeType }));
+        try {
+            mediaRecorder.stop();
+        } catch (e) {
+            resolve(new Blob(recordedChunks, { type: mimeType }));
+        }
+    });
+    recordedChunks = [];
+    stopTracks();
+
+    if (!blob.size) {
+        showToast('No audio recorded');
+        return;
+    }
+    const file = new File([blob], `mic-recording-${Date.now()}.${_clipExtensionFor(mimeType)}`, { type: mimeType });
+    addStagedFile(file, 'mic');
 }
 
 // =============================================================================
 // Send / Upload
 // =============================================================================
 function sendMessage() {
+    // Un enregistrement en cours n'est pas encore un audio envoyable (il ne rejoint
+    // currentFiles qu'à l'arrêt, voir stopRecording) : envoyer maintenant créerait soit une
+    // bulle fantôme sans rien derrière (texte tapé pendant l'enregistrement, silencieusement
+    // perdu), soit un tour sans l'audio qu'on est justement en train d'enregistrer.
+    if (isRecording) {
+        showToast('Recording — stop it first to send');
+        return;
+    }
+
     const text = textInput.value.trim();
 
-    if (currentFile) {
-        const blobUrl = URL.createObjectURL(currentFile);
+    if (currentFiles.length) {
+        const files = currentFiles.map((f) => f.file);
+        const blobUrls = files.map((f) => URL.createObjectURL(f));
         const userMsg = appendMessage(
             'user',
             text || '',
-            { audioUrl: blobUrl, transcript: '' },
+            { audioUrls: blobUrls, transcript: '' },
         );
-        // Le fichier lui-même, gardé sur la bulle : c'est ce qui permet à Retry de renvoyer
-        // la requête sans redemander de sélectionner le fichier.
-        userMsg._file = currentFile;
+        // Les fichiers eux-mêmes, gardés sur la bulle : c'est ce qui permet à Retry de renvoyer
+        // la requête sans redemander de sélectionner les fichiers.
+        userMsg._files = files;
         pendingTranscriptMsg = userMsg;
-        requestUploadTranscript(currentFile, userMsg);
-        uploadFile(currentFile, text, { userMsg });
-        currentFile = null;
-        filePreview.classList.add('hidden');
+        // Un seul transcript par tour, sur le PREMIER audio — comparer 2 clips ou combiner
+        // upload+micro n'a pas de « la » question à transcrire de façon évidente.
+        requestUploadTranscript(files[0], userMsg);
+        uploadFile(files, text, { userMsg });
+        clearStagedFiles();
         audioInput.value = '';
         textInput.value = '';
         autoResizeTextarea();
@@ -2358,8 +2379,7 @@ function sendMessage() {
     const userMsg = appendMessage('user', text);
     textInput.value = '';
     autoResizeTextarea();
-
-    if (!isRecording) sendTextOnly(text, { userMsg });
+    sendTextOnly(text, { userMsg });
 }
 
 async function sendTextOnly(text, { regenerate = false, dropPairs = 1, userMsg = null } = {}) {
@@ -2468,7 +2488,7 @@ function emitAssistant(originChat, text, opts = {}) {
     }
 }
 
-async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1, userMsg = null } = {}) {
+async function uploadFile(files, prompt, { regenerate = false, dropPairs = 1, userMsg = null } = {}) {
     // L'upload passait un generationId figé à 0 côté serveur : ni Stop ni suppression ne
     // pouvaient le viser. Il prend maintenant un id du même compteur que le streaming.
     streamState.currentGenerationId += 1;
@@ -2477,7 +2497,10 @@ async function uploadFile(file, prompt, { regenerate = false, dropPairs = 1, use
     trackPending(userMsg, generationId);
 
     const formData = new FormData();
-    formData.append('audio', file);
+    // Un champ 'audio' répété par fichier — upload(s), dépôt(s), et/ou clip(s) micro enregistrés
+    // côté client (voir stopRecording) : /upload les traite tous et construit un seul tour avec
+    // autant de blocs audio.
+    (Array.isArray(files) ? files : [files]).forEach((f) => formData.append('audio', f));
     formData.append('sessionId', sessionId);
     formData.append('generationId', String(generationId));
     // Renvoi d'un tour déjà joué : le serveur doit dérouler son historique d'autant de paires
@@ -2593,7 +2616,11 @@ function ensureEmptyStateRemoved() {
 
 // `transcript`: pass `null` to omit the dropdown entirely, `''` to render the
 // "Transcribing…" placeholder, or any non-empty string to render the text.
-function appendMessage(role, text, { silent = false, audioUrl = null, transcript = null, model = null, turn = null, stats = null } = {}) {
+function appendMessage(role, text, { silent = false, audioUrl = null, audioUrls = null, transcript = null, model = null, turn = null, stats = null } = {}) {
+    // audioUrls (pluriel, plusieurs audios dans un même tour) est la forme courante ;
+    // audioUrl (singulier) reste lu pour les tours d'historique enregistrés avant ce
+    // changement — les deux ne coexistent jamais dans un appel neuf.
+    const urls = audioUrls && audioUrls.length ? audioUrls : (audioUrl ? [audioUrl] : []);
     ensureEmptyStateRemoved();
 
     // Storage uses 'assistant' (set by finalizeStream) but the existing CSS
@@ -2682,10 +2709,9 @@ function appendMessage(role, text, { silent = false, audioUrl = null, transcript
             contentDiv.classList.add('is-audio-only');
         }
 
-        if (audioUrl) {
-            const player = buildAudioPlayer(audioUrl);
-            contentDiv.appendChild(player);
-            msgDiv._audioUrl = audioUrl;
+        if (urls.length) {
+            urls.forEach((u) => contentDiv.appendChild(buildAudioPlayer(u)));
+            msgDiv._audioUrls = urls;
         }
 
         if (transcript !== null) {
@@ -2719,7 +2745,7 @@ function appendMessage(role, text, { silent = false, audioUrl = null, transcript
     if (!silent && (currentMessages.length > 0 || role === 'user')) {
         const data = { role, text };
         if (transcript !== null) data.transcript = transcript;
-        if (audioUrl) data.audioUrl = audioUrl;
+        if (urls.length) data.audioUrls = urls;
         if (model) data.model = model;
         // Persisté pour que rouvrir la conversation retrouve les colonnes : sans la clé de
         // tour, deux réponses comparées se réempileraient l'une sous l'autre.
@@ -2970,22 +2996,18 @@ renderEmptyState();
 renderChatHistory();
 startStatsPolling();
 
-// Pré-établir la connexion WebRTC (data channel + ICE/DTLS) dès le chargement, sans piste
-// audio : ça encaisse le coût de négociation pendant que l'utilisateur lit/tape, au lieu de
-// le lui faire subir au premier clic sur le micro. Le serveur garde cette même connexion pour
-// toute la session (cf. PC_BY_SESSION côté app.py), donc startRecording() n'a ensuite plus
-// qu'à y ajouter la piste audio et renégocier — rapide, même transport ICE déjà établi.
+// Pré-établir le data channel dès le chargement : ça encaisse le coût de négociation ICE/DTLS
+// pendant que l'utilisateur lit/tape, au lieu de le lui faire subir au premier envoi d'un
+// message texte (sendTextOnly() se reconnecte à la demande si ça échoue, voir plus bas). Le
+// micro, lui, n'a plus besoin de cette connexion du tout — il enregistre entièrement côté
+// client (voir startRecording/stopRecording) et part par /upload, pas par le data channel.
 async function warmUpConnection() {
-    micBtn.disabled = true; // ré-activé par setupDataChannel().onopen une fois le data channel prêt
     try {
         await startWebRTC();
         await negotiate();
     } catch (e) {
         console.warn('WebRTC warm-up failed; will connect on demand instead.', e);
         if (pc) { pc.close(); pc = null; }
-        // Le warm-up a échoué : on retombe sur le comportement précédent (connexion à la
-        // demande, au premier appui) plutôt que de bloquer le micro indéfiniment.
-        micBtn.disabled = false;
     }
 }
 warmUpConnection();

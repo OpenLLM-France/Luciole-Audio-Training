@@ -178,8 +178,17 @@ class RemoteSALMModel:
             encoded = base64.b64encode(f.read()).decode("ascii")
         return {"type": "input_audio", "input_audio": {"data": encoded, "format": "wav"}}
 
-    def _build_messages(self, audio_path, text_input, history):
+    def _build_messages(self, audio_paths, text_input, history):
         raw_history = history if history else []
+        # Un seul chemin encore accepté par confort d'appel (transcription, tests) ; le tour
+        # courant peut désormais porter plusieurs audios (upload multiple + micro), comme les
+        # tours d'historique le font déjà via `_history_audio_paths`.
+        if isinstance(audio_paths, str):
+            audio_paths = [audio_paths]
+        # Plafonné au budget serveur : le tour courant ne doit pas à lui seul l'épuiser au
+        # point de faire déborder `budget` en négatif plus bas (rejeu d'historique alors privé
+        # de tout audio sans raison).
+        audio_paths = [p for p in (audio_paths or []) if p][:_MAX_AUDIOS_PER_PROMPT]
 
         # Même repli que SALMModel : les tours système sont fondus dans le premier
         # message utilisateur, pour que les deux modes voient exactement le même prompt.
@@ -198,7 +207,7 @@ class RemoteSALMModel:
                 if paths:
                     replayable.append((len(messages) - 1, paths))
 
-        if audio_path:
+        if audio_paths:
             instruction = text_input if text_input else self.default_instruction
         else:
             if not text_input:
@@ -211,13 +220,14 @@ class RemoteSALMModel:
         if system_prefix and messages:
             messages[0]["content"] = system_prefix + messages[0]["content"]
 
-        if audio_path:
+        if audio_paths:
             # Texte d'abord, audio ensuite : le rendu du template place la balise à
             # l'endroit du bloc audio, ce qui reproduit le `{instruction}\n<|audio|>\n`
-            # de SALMModel. L'ordre inverse fait boucler les deux modèles (mesuré).
-            content = [
-                {"type": "text", "text": instruction},
-                self._audio_block(audio_path),
+            # de SALMModel. L'ordre inverse fait boucler les deux modèles (mesuré). Plusieurs
+            # blocs audio dans un même tour (comparer 2 clips, ou question orale + fichier) :
+            # même forme qu'un tour d'historique rejoué avec plusieurs audios.
+            content = [{"type": "text", "text": instruction}] + [
+                self._audio_block(p) for p in audio_paths
             ]
         else:
             content = instruction
@@ -228,7 +238,7 @@ class RemoteSALMModel:
         # les PLUS RÉCENTS : le budget doit d'abord servir l'audio du tour courant,
         # puis remonter le fil. Les tours évincés restent en texte seul — dégradé,
         # jamais une erreur.
-        budget = _MAX_AUDIOS_PER_PROMPT - (1 if audio_path else 0)
+        budget = _MAX_AUDIOS_PER_PROMPT - len(audio_paths)
         for idx, paths in reversed(replayable):
             if budget <= 0:
                 break
@@ -259,8 +269,8 @@ class RemoteSALMModel:
 
     # ── génération ──
 
-    def generate(self, audio_path=None, text_input=None, history=None, max_new_tokens=360):
-        messages = self._build_messages(audio_path, text_input, history)
+    def generate(self, audio_paths=None, text_input=None, history=None, max_new_tokens=360):
+        messages = self._build_messages(audio_paths, text_input, history)
         if messages is None:
             return "Please provide text or audio input."
         payload = self._payload(messages, max_new_tokens, None, None, stream=False)
@@ -276,7 +286,7 @@ class RemoteSALMModel:
             logger.error(f"Inference error ({self.name}): {e}")
             raise e
 
-    def generate_stream(self, audio_path=None, text_input=None, history=None,
+    def generate_stream(self, audio_paths=None, text_input=None, history=None,
                         max_new_tokens=360, stop_callback=None,
                         min_new_tokens=None, temperature=None):
         """Rend les deltas de tokens, comme le TextIteratorStreamer local.
@@ -284,7 +294,7 @@ class RemoteSALMModel:
         `stop_callback` est consulté entre deux fragments ; on ferme alors la réponse,
         ce qui annule la requête côté serveur et libère le GPU pour la suivante.
         """
-        messages = self._build_messages(audio_path, text_input, history)
+        messages = self._build_messages(audio_paths, text_input, history)
         if messages is None:
             yield "Please provide text or audio input."
             return

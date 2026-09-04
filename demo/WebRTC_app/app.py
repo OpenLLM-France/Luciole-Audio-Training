@@ -8,7 +8,6 @@ import os
 import re
 import time
 import uuid
-import wave
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,7 +17,6 @@ load_dotenv()
 
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
-from av.audio.resampler import AudioResampler
 
 from remote_model import RemoteSALMModel
 
@@ -40,6 +38,11 @@ MODEL_ENDPOINTS = os.getenv("MODEL_ENDPOINTS", "")
 MODEL_PATH = os.getenv("MODEL_PATH", "")
 PORT = int(os.getenv("PORT", 7860))  # HuggingFace Spaces uses port 7860
 MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 1024))
+# Garde-fou côté serveur pour /upload : nombre de champs 'audio' acceptés dans un même POST
+# (upload multiple + enregistrement micro dans le même tour). Le plugin vLLM plafonne de toute
+# façon le nombre de blocs audio par prompt (voir _MAX_AUDIOS_PER_PROMPT côté remote_model.py) ;
+# ce plafond-ci évite juste qu'un client buggé fasse écrire un nombre arbitraire de fichiers.
+MAX_AUDIOS_PER_UPLOAD = int(os.getenv("MODEL_MAX_AUDIOS_PER_PROMPT", 4))
 DEFAULT_INSTRUCTION = os.getenv("DEFAULT_INSTRUCTION", "Listen to the audio and answer the question:")
 # Optional system prompt seeded into every new session. Empty (the default) = no system
 # turn at all, i.e. the plain demo behaviour. SALM's formatter only knows user/assistant,
@@ -190,62 +193,7 @@ def session_history(session_id: str, model_name: str):
     hist = SESSIONS[session_id].setdefault("history", {})
     return hist.setdefault(model_name, _fresh_history())
 
-class AudioTrackHandler:
-    def __init__(self, track):
-        self.track = track
-        self.resampler = AudioResampler(format='s16', layout='mono', rate=16000)
-        self.frames = []
-        self.task = None
-        self.is_recording = False
-        self.saved_path = None
-
-    async def start_recording(self):
-        self.is_recording = True
-        self.frames = []
-        self.saved_path = None
-        self.task = asyncio.create_task(self.process_track())
-
-    async def stop_recording(self):
-        self.is_recording = False
-        if self.task:
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
-        return self.save_audio()
-
-    async def process_track(self):
-        while self.is_recording:
-            try:
-                frame = await self.track.recv()
-                # Resample immediately to save memory and processing time later
-                for resampled_frame in self.resampler.resample(frame):
-                    self.frames.append(resampled_frame.to_ndarray().tobytes())
-            except Exception as e:
-                logger.error(f"Error receiving frame: {e}")
-                break
-
-    def save_audio(self):
-        if self.saved_path:
-            return self.saved_path
-            
-        if not self.frames:
-            return None
-        
-        filename = f"/tmp/webrtc_{uuid.uuid4().hex}.wav"
-        with wave.open(filename, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2) # 16-bit
-            wf.setframerate(16000)
-            wf.writeframes(b"".join(self.frames))
-        
-        self.saved_path = filename
-        return filename
-
-# Global dictionary to store handlers associated with PCs
 pcs = set()
-handlers = {}
 
 # Une RTCPeerConnection par ONGLET client (connectionId), réutilisée d'un enregistrement à
 # l'autre — et d'une conversation à l'autre — au lieu d'en recréer une à chaque /offer : recréer
@@ -603,146 +551,6 @@ def _looks_runaway(text: str) -> bool:
             return True
     return False
 
-async def _handle_audio_stop(channel, state, data):
-    """Process the 'stop' (mic-recording-finished) message from the client."""
-    raw_audio_path = await state["handler"].stop_recording()
-    prompt = data.get("text", "")
-    generation_id = data.get("generationId", 0)
-    max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
-    custom_instruction = data.get("instruction") or DEFAULT_INSTRUCTION
-    effort_mode = data.get("effortMode", "normal")
-    # Le client envoie sa conversation courante à CHAQUE message : il n'y a plus de session_id
-    # figé au /offer pour s'y replier (la connexion, elle, est identifiée par connectionId — pas
-    # par conversation, voir PC_BY_CONNECTION). Se fier à un tel repli liait tout l'historique à
-    # la conversation ouverte au moment de la connexion : changer de conversation ne changeait
-    # rien côté serveur, et le modèle continuait de voir le contexte de la précédente.
-    session_id = data.get("sessionId") or "default"
-    if session_id not in SESSIONS:
-        SESSIONS[session_id] = new_session()
-
-    # Plus de marquage « la dernière gagne » : cette requête s'ajoute simplement à la file.
-    # Elle ne s'arrêtera que sur annulation explicite (Stop, ou suppression du message).
-
-    targets = selected_models(data)
-    if not targets:
-        _safe_send(channel, {"type": "response", "text": "Model not loaded."})
-        if raw_audio_path and os.path.exists(raw_audio_path):
-            os.remove(raw_audio_path)
-        return
-
-    if not check_rate_limit(session_id):
-        _safe_send(channel, {"type": "rejected", "reason": "rate_limit", "generationId": generation_id})
-        if raw_audio_path and os.path.exists(raw_audio_path):
-            os.remove(raw_audio_path)
-        return
-
-    try:
-        async with acquire_model_slot(session_id, generation_id, channel=channel):
-            if _is_cancelled(session_id, generation_id):
-                logger.info(f"Skipping stale audio gen {generation_id} for session {session_id}")
-                if raw_audio_path and os.path.exists(raw_audio_path):
-                    os.remove(raw_audio_path)
-                return
-
-            clean_audio_path = None
-            audio_referenced = False
-            try:
-                uploads_dir = ROOT / "uploads"
-                uploads_dir.mkdir(exist_ok=True)
-                _prune_uploads()
-                clean_audio_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
-                # Le rééchantillonnage ne dépend pas du modèle : fait une fois, le fichier
-                # nettoyé sert ensuite aux deux générations en mode comparaison.
-                targets[0][1].process_audio(raw_audio_path, clean_audio_path)
-
-                try:
-                    transcript = await _transcribe_path(clean_audio_path, already_in_slot=True)
-                    if transcript:
-                        _safe_send(channel, {
-                            "type": "audio_transcript",
-                            "text": transcript.strip(),
-                            "generationId": generation_id,
-                        })
-                except Exception as te:
-                    logger.warning(f"Transcript pass failed: {te}")
-
-                for model_name, model in targets:
-                    t0 = time.perf_counter()
-                    token_count = 0
-                    full_response = ""
-                    current_history = session_history(session_id, model_name)
-                    stop_check = lambda: _is_cancelled(session_id, generation_id)
-                    async for token in stream_generator_in_thread(
-                        model.generate_stream,
-                        audio_path=clean_audio_path,
-                        text_input=prompt or custom_instruction,
-                        history=current_history,
-                        stop_callback=stop_check,
-                        **_effort_overrides(effort_mode, max_tokens),
-                    ):
-                        if _is_cancelled(session_id, generation_id):
-                            logger.info(f"Stale during stream; aborting audio gen {generation_id}")
-                            return
-                        if not _safe_send(channel, {"type": "token", "text": token,
-                                                    "generationId": generation_id,
-                                                    "model": model_name}):
-                            logger.warning("DataChannel closed during streaming, stopping.")
-                            break
-                        full_response += token
-                        token_count += 1
-
-                    elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                    _safe_send(channel, {
-                        "type": "done", "text": "", "generationId": generation_id,
-                        "tokenCount": token_count, "elapsedMs": elapsed_ms,
-                        "model": model_name,
-                    })
-
-                    clean_response = _strip_chatml_assistant(full_response)
-                    if not clean_response.strip():
-                        logger.warning(f"Empty assistant response for session {session_id}; skipping history append.")
-                    elif _looks_runaway(clean_response):
-                        logger.warning(f"Runaway response detected for session {session_id}; skipping history append.")
-                    else:
-                        # `audio` fait tenir le tour de suivi : sans lui, une question
-                        # posée au tour d'après (« et de quoi ça parle ? ») n'a plus
-                        # aucun audio dans le contexte. Même convention que le chemin
-                        # upload. Le fichier doit donc SURVIVRE à cette requête.
-                        current_history.append({
-                            "role": "user",
-                            "content": prompt or custom_instruction,
-                            "audio": [clean_audio_path],
-                        })
-                        current_history.append({"role": "assistant", "content": clean_response})
-                        audio_referenced = True
-                        schedule_save()
-
-            except Exception as e:
-                logger.error(f"Streaming error: {e}")
-                _safe_send(channel, {"type": "response", "text": f"Error: {str(e)}"})
-            finally:
-                # Conservé seulement s'il est référencé par un historique ; sinon il ne
-                # servira jamais et part tout de suite. La purge par âge (_prune_uploads)
-                # se charge des fichiers référencés, une fois périmés.
-                if not audio_referenced and clean_audio_path and os.path.exists(clean_audio_path):
-                    try:
-                        os.remove(clean_audio_path)
-                    except Exception:
-                        pass
-                if raw_audio_path and os.path.exists(raw_audio_path):
-                    try:
-                        os.remove(raw_audio_path)
-                    except Exception:
-                        pass
-    except QueueFullError:
-        _safe_send(channel, {"type": "rejected", "reason": "queue_full", "generationId": generation_id})
-        if raw_audio_path and os.path.exists(raw_audio_path):
-            try:
-                os.remove(raw_audio_path)
-            except Exception:
-                pass
-
-
 async def _handle_text_only(channel, state, data):
     """Process a text-only generation request."""
     prompt = data.get("text", "")
@@ -880,7 +688,7 @@ async def offer_with_datachannel(request):
     offer = RTCSessionDescription(sdp=params['sdp'], type=params['type'])
     # connectionId identifie l'onglet, pas la conversation (cf. le commentaire sur
     # PC_BY_CONNECTION) : la conversation, elle, voyage dans sessionId à CHAQUE message
-    # (_handle_audio_stop / _handle_text_only), indépendamment de la connexion qui les porte.
+    # (_handle_text_only), indépendamment de la connexion qui les porte.
     # Repli sur 'sessionId' pour un client plus ancien qui n'enverrait pas encore connectionId.
     connection_id = params.get('connectionId') or params.get('sessionId') or 'default'
 
@@ -901,7 +709,6 @@ async def offer_with_datachannel(request):
 
         # Store state for this connection
         state = {
-            "handler": None,
             "channel": None,
             "text_input": "",
             "connection_id": connection_id,
@@ -921,18 +728,13 @@ async def offer_with_datachannel(request):
                     data = {"type": "text", "text": message}
 
                 mtype = data.get("type")
-                if mtype == "stop" and state["handler"]:
-                    await _handle_audio_stop(channel, state, data)
-                elif mtype == "text_only":
+                if mtype == "text_only":
                     await _handle_text_only(channel, state, data)
 
-        @pc.on("track")
-        async def on_track(track):
-            if track.kind == "audio":
-                logger.info("Audio track received")
-                handler = AudioTrackHandler(track)
-                state["handler"] = handler
-                await handler.start_recording()
+        # Plus de piste audio à recevoir : le micro est enregistré côté client
+        # (MediaRecorder) et envoyé comme un fichier normal via /upload, au même titre qu'un
+        # audio déposé/sélectionné. Cette connexion ne sert donc plus qu'au data channel
+        # (streaming des réponses texte) — pas de handler @pc.on("track") ici.
 
         @pc.on("connectionstatechange")
         async def on_connection_state_change():
@@ -966,14 +768,21 @@ async def offer_with_datachannel(request):
     )
 
 async def upload_audio(request):
+    """Reçoit un tour complet en un seul POST multipart : texte + 0 à N fichiers audio (champ
+    `audio`, répété — plusieurs fichiers déposés/sélectionnés, ou un enregistrement micro fait
+    côté client via MediaRecorder puis envoyé comme un fichier normal). Le micro ne passe plus
+    par une piste WebRTC en direct : voir le commentaire sur PC_BY_CONNECTION dans
+    offer_with_datachannel — cette route est désormais le seul chemin d'entrée audio."""
     reader = await request.multipart()
-    file_written = False
-    
+
     # Use a local uploads directory for visibility
     uploads_dir = ROOT / "uploads"
     uploads_dir.mkdir(exist_ok=True)
-    
-    filename = str(uploads_dir / f"upload_{uuid.uuid4().hex}.wav")
+
+    # Un fichier RAW par champ 'audio' reçu, dans l'ordre d'arrivée — plafonné pour ne pas
+    # laisser un client buggé ou malveillant en envoyer un nombre arbitraire (même plafond que
+    # le budget de blocs audio par prompt côté modèle).
+    raw_filenames = []
     size = 0
     text_prompt = ""
     session_id = "default"
@@ -996,14 +805,20 @@ async def upload_audio(request):
             break
 
         if field.name == 'audio':
-            with open(filename, 'wb') as f:
+            if len(raw_filenames) >= MAX_AUDIOS_PER_UPLOAD:
+                # Champ en trop : on le draine sans l'écrire, pour ne pas planter le parsing
+                # multipart du reste de la requête.
+                await field.read()
+                continue
+            raw_filename = str(uploads_dir / f"upload_{uuid.uuid4().hex}.wav")
+            with open(raw_filename, 'wb') as f:
                 while True:
                     chunk = await field.read_chunk()
                     if not chunk:
                         break
                     size += len(chunk)
                     f.write(chunk)
-            file_written = True
+            raw_filenames.append(raw_filename)
         elif field.name == 'text':
             text_prompt = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'sessionId':
@@ -1038,10 +853,10 @@ async def upload_audio(request):
             except (ValueError, TypeError):
                 pass
 
-    if not file_written:
+    if not raw_filenames:
         return web.Response(status=400, text="No audio file received")
 
-    logger.info(f"Received file {filename} ({size} bytes) with prompt: {text_prompt} for session {session_id}")
+    logger.info(f"Received {len(raw_filenames)} file(s) ({size} bytes total) with prompt: {text_prompt} for session {session_id}")
 
     if session_id not in SESSIONS:
         SESSIONS[session_id] = new_session()
@@ -1075,22 +890,27 @@ async def upload_audio(request):
     # du flux temps réel, pour que le client n'ait qu'un seul rendu à écrire.
     stats = {}
     if targets:
-        clean_audio_path = None
+        clean_audio_paths = []
         try:
             async with acquire_model_slot(session_id, generation_id, channel=None):
                 if generation_id and _is_cancelled(session_id, generation_id):
                     # Annulée pendant l'attente en file : on ne génère rien du tout.
                     logger.info(f"Upload {generation_id} annulé avant génération.")
-                    if os.path.exists(filename):
-                        os.remove(filename)
+                    for raw_filename in raw_filenames:
+                        if os.path.exists(raw_filename):
+                            os.remove(raw_filename)
                     return web.json_response({"text": "", "responses": {}, "cancelled": True})
                 try:
                     logger.info(f"Starting generation for session {session_id}...")
 
                     _prune_uploads()
-                    processed_filename = f"processed_{uuid.uuid4().hex}.wav"
-                    clean_audio_path = str(uploads_dir / processed_filename)
-                    targets[0][1].process_audio(filename, clean_audio_path)
+                    # Le rééchantillonnage ne dépend pas du modèle : fait une fois par fichier,
+                    # les fichiers nettoyés servent ensuite à toutes les générations (comparaison
+                    # comme audios multiples dans un même tour).
+                    for raw_filename in raw_filenames:
+                        clean_path = str(uploads_dir / f"processed_{uuid.uuid4().hex}.wav")
+                        targets[0][1].process_audio(raw_filename, clean_path)
+                        clean_audio_paths.append(clean_path)
 
                     stop_check = (lambda: _is_cancelled(session_id, generation_id)) \
                         if generation_id else None
@@ -1101,7 +921,7 @@ async def upload_audio(request):
                         token_count = 0
                         async for token in stream_generator_in_thread(
                             model.generate_stream,
-                            audio_path=clean_audio_path,
+                            audio_paths=clean_audio_paths,
                             text_input=text_prompt or custom_instruction,
                             history=current_history,
                             stop_callback=stop_check,
@@ -1125,7 +945,7 @@ async def upload_audio(request):
                         user_turn = {
                             "role": "user",
                             "content": prompt_content,
-                            "audio": [clean_audio_path]
+                            "audio": clean_audio_paths,
                         }
 
                         if not clean_response.strip():
@@ -1143,21 +963,25 @@ async def upload_audio(request):
 
                 except Exception as e:
                     logger.error(f"Error during generation: {e}")
-                    if clean_audio_path and os.path.exists(clean_audio_path):
-                        os.remove(clean_audio_path)
-                    if os.path.exists(filename):
-                        os.remove(filename)
+                    for clean_path in clean_audio_paths:
+                        if os.path.exists(clean_path):
+                            os.remove(clean_path)
+                    for raw_filename in raw_filenames:
+                        if os.path.exists(raw_filename):
+                            os.remove(raw_filename)
                     return web.Response(status=500, text=f"Error processing audio: {str(e)}")
         except QueueFullError:
-            if os.path.exists(filename):
-                os.remove(filename)
+            for raw_filename in raw_filenames:
+                if os.path.exists(raw_filename):
+                    os.remove(raw_filename)
             return web.Response(status=503, text="Server busy, queue full")
     else:
         response = "Model not loaded."
 
-    # Cleanup RAW file
-    if os.path.exists(filename):
-        os.remove(filename)
+    # Cleanup RAW files (les versions nettoyées, elles, survivent — référencées par l'historique)
+    for raw_filename in raw_filenames:
+        if os.path.exists(raw_filename):
+            os.remove(raw_filename)
 
     # `text` reste la réponse du premier modèle : les clients d'avant le sélecteur
     # continuent de marcher sans rien savoir de `responses`.
@@ -1186,7 +1010,7 @@ async def _transcribe_path(clean_audio_path: str, *, session_id: str = "transcri
     def _run():
         try:
             return model.generate(
-                audio_path=clean_audio_path,
+                audio_paths=[clean_audio_path],
                 text_input=TRANSCRIBE_INSTRUCTION,
                 history=None,
                 max_new_tokens=128,
