@@ -863,7 +863,7 @@
       tags: {sub_task: multiturn_temporal, lang: en}
     # Clotho-AQA, questions sur des sons : 1 952
     - type: multimodal_conversation
-      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_multiturn/mixed/train.jsonl
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/sounds/audio-question-answering/en/context/clotho_aqa_improved_multiturn/mixed/train.jsonl
       weight: 0.02
       tags: {sub_task: multiturn_aqa, lang: en}
 
