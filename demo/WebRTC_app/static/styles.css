@@ -1475,6 +1475,18 @@ body::before {
     font-size: 0.85em;
 }
 
+/* Plusieurs audios dans un tour = plusieurs blocs, chacun étiqueté. */
+.transcript-content + .transcript-content {
+    margin-top: 4px;
+}
+
+.transcript-label {
+    font-weight: 600;
+    font-size: 0.9em;
+    opacity: 0.7;
+    margin-bottom: 2px;
+}
+
 .message.user .transcript-content {
     background: hsl(var(--primary-foreground) / 0.12);
     color: hsl(var(--primary-foreground));

@@ -617,6 +617,7 @@ function pickRecorderMime() {
 }
 
 applyMicModeUI();
+syncSettingsForm();
 
 
 const clearContextBtn = document.getElementById('clear-context-btn');
@@ -719,7 +720,8 @@ function _doSaveCurrentChat() {
     if (currentMessages.length === 0) return;
     const history = loadChatHistory();
     const first = currentMessages[0] || {};
-    const titleSource = (first.text && first.text.trim()) || (first.transcript && first.transcript.trim());
+    const firstTranscript = (first.transcripts && first.transcripts.filter(Boolean).join(' ')) || first.transcript;
+    const titleSource = (first.text && first.text.trim()) || (firstTranscript && firstTranscript.trim());
     const hasAudio = first.audioUrl || (first.audioUrls && first.audioUrls.length);
     const chatTitle = titleSource ? titleSource.substring(0, 50) : (hasAudio ? 'Voice message' : 'New Chat');
     const chatData = { id: sessionId, title: chatTitle, timestamp: Date.now(), messages: currentMessages };
@@ -773,8 +775,10 @@ function loadChat(chatId) {
         stats: msg.stats || null,
         silent: true,
         // Preserve the empty-string "pending" transcript shape; only omit when
-        // the field was never set on this message.
+        // the field was never set on this message. `transcript` (singulier) reste lu pour
+        // les tours enregistrés avant le support multi-audio.
         transcript: 'transcript' in msg ? msg.transcript : null,
+        transcripts: 'transcripts' in msg ? msg.transcripts : null,
         // Blob URLs survive in-session (no reload). They die on full reload —
         // IndexedDB would be needed to persist the actual bytes. audioUrl (singulier) reste lu
         // pour les tours enregistrés avant le support multi-audio.
@@ -1278,7 +1282,7 @@ function handleRejected(data) {
 
 function applyTranscript(text) {
     if (!pendingTranscriptMsg) return;
-    const el = pendingTranscriptMsg._transcriptEl;
+    const el = pendingTranscriptMsg._transcriptEls && pendingTranscriptMsg._transcriptEls[0];
     if (el) {
         el.textContent = text;
         el.classList.remove('placeholder');
@@ -1795,10 +1799,10 @@ async function retryUserMessage(userMsgDiv) {
 
     if (files && files.length) {
         const urls = files.map((f) => URL.createObjectURL(f));
-        const msg = appendMessage('user', prompt, { audioUrls: urls, transcript: '' });
+        const msg = appendMessage('user', prompt, { audioUrls: urls, transcripts: files.map(() => '') });
         msg._files = files;
         pendingTranscriptMsg = msg;
-        requestUploadTranscript(files[0], msg);
+        requestUploadTranscripts(files, msg);
         uploadFile(files, prompt, { regenerate: true, dropPairs, userMsg: msg });
     } else {
         appendMessage('user', prompt);
@@ -1807,7 +1811,8 @@ async function retryUserMessage(userMsgDiv) {
 }
 
 function userPromptOf(msg) {
-    return (msg && msg.text && msg.text.trim()) || (msg && msg.transcript) || '';
+    const transcript = (msg && msg.transcripts && msg.transcripts.filter(Boolean).join(' ')) || (msg && msg.transcript);
+    return (msg && msg.text && msg.text.trim()) || transcript || '';
 }
 
 function regenerateMessage(assistantMsgDiv) {
@@ -2357,15 +2362,15 @@ function sendMessage() {
         const userMsg = appendMessage(
             'user',
             text || '',
-            { audioUrls: blobUrls, transcript: '' },
+            { audioUrls: blobUrls, transcripts: files.map(() => '') },
         );
         // Les fichiers eux-mêmes, gardés sur la bulle : c'est ce qui permet à Retry de renvoyer
         // la requête sans redemander de sélectionner les fichiers.
         userMsg._files = files;
         pendingTranscriptMsg = userMsg;
-        // Un seul transcript par tour, sur le PREMIER audio — comparer 2 clips ou combiner
-        // upload+micro n'a pas de « la » question à transcrire de façon évidente.
-        requestUploadTranscript(files[0], userMsg);
+        // Un transcript par audio (comparer 2 clips, ou combiner upload+micro) : chacun se
+        // remplit indépendamment dès que sa transcription revient.
+        requestUploadTranscripts(files, userMsg);
         uploadFile(files, text, { userMsg });
         clearStagedFiles();
         audioInput.value = '';
@@ -2438,7 +2443,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
     }
 }
 
-async function requestUploadTranscript(file, userMsg) {
+// Transcrit UN audio du tour (à l'index `index` dans `urls`/`_transcriptEls`, le même ordre
+// que les fichiers envoyés à /upload) et écrit le résultat dans SA case du dropdown, sans
+// toucher aux autres — elles se remplissent indépendamment, à leur propre rythme.
+async function requestUploadTranscript(file, userMsg, index) {
     let failureLabel = '(transcription unavailable)';
     try {
         const fd = new FormData();
@@ -2447,12 +2455,12 @@ async function requestUploadTranscript(file, userMsg) {
         if (!res.ok) throw new Error('transcribe failed (' + res.status + ')');
         const data = await res.json();
         const text = (data && data.text) ? data.text : '';
-        if (userMsg && userMsg._transcriptEl) {
-            userMsg._transcriptEl.textContent = text || '(no speech detected)';
-            userMsg._transcriptEl.classList.remove('placeholder');
+        if (userMsg && userMsg._transcriptEls && userMsg._transcriptEls[index]) {
+            userMsg._transcriptEls[index].textContent = text || '(no speech detected)';
+            userMsg._transcriptEls[index].classList.remove('placeholder');
         }
-        if (userMsg && userMsg._messageData) {
-            userMsg._messageData.transcript = text;
+        if (userMsg && userMsg._messageData && userMsg._messageData.transcripts) {
+            userMsg._messageData.transcripts[index] = text;
             saveCurrentChat();
         }
         return;
@@ -2461,14 +2469,20 @@ async function requestUploadTranscript(file, userMsg) {
         console.warn('Transcript fetch failed:', e);
     }
     // Always settle the placeholder — never leave it spinning forever.
-    if (userMsg && userMsg._transcriptEl) {
-        userMsg._transcriptEl.textContent = failureLabel;
-        userMsg._transcriptEl.classList.remove('placeholder');
+    if (userMsg && userMsg._transcriptEls && userMsg._transcriptEls[index]) {
+        userMsg._transcriptEls[index].textContent = failureLabel;
+        userMsg._transcriptEls[index].classList.remove('placeholder');
     }
-    if (userMsg && userMsg._messageData) {
-        userMsg._messageData.transcript = '';
+    if (userMsg && userMsg._messageData && userMsg._messageData.transcripts) {
+        userMsg._messageData.transcripts[index] = '';
         saveCurrentChat();
     }
+}
+
+// Lance la transcription de TOUS les audios du tour, en parallèle et indépendamment les uns
+// des autres (une erreur ou une lenteur sur l'un n'affecte pas l'affichage des autres).
+function requestUploadTranscripts(files, userMsg) {
+    files.forEach((file, index) => requestUploadTranscript(file, userMsg, index));
 }
 
 // Rend une réponse d'assistant là où elle doit aller : à l'écran si la conversation d'origine
@@ -2614,9 +2628,11 @@ function ensureEmptyStateRemoved() {
     if (empty) empty.remove();
 }
 
-// `transcript`: pass `null` to omit the dropdown entirely, `''` to render the
-// "Transcribing…" placeholder, or any non-empty string to render the text.
-function appendMessage(role, text, { silent = false, audioUrl = null, audioUrls = null, transcript = null, model = null, turn = null, stats = null } = {}) {
+// `transcripts`: pass `null` to omit the dropdown entirely, or an array aligned with
+// `audioUrls`/`urls` — one entry per audio, `''` rendering as "Transcribing…" and any
+// non-empty string as the text. `transcript` (singulier) reste lu pour les tours
+// enregistrés avant le support multi-audio (un seul audio, donc un seul texte).
+function appendMessage(role, text, { silent = false, audioUrl = null, audioUrls = null, transcript = null, transcripts = null, model = null, turn = null, stats = null } = {}) {
     // audioUrls (pluriel, plusieurs audios dans un même tour) est la forme courante ;
     // audioUrl (singulier) reste lu pour les tours d'historique enregistrés avant ce
     // changement — les deux ne coexistent jamais dans un appel neuf.
@@ -2714,23 +2730,43 @@ function appendMessage(role, text, { silent = false, audioUrl = null, audioUrls 
             msgDiv._audioUrls = urls;
         }
 
-        if (transcript !== null) {
+        // Tableau normalisé, quelle que soit la forme reçue (nouvelle `transcripts`, ou
+        // `transcript` singulier d'un tour pré-multi-audio).
+        const transcriptList = transcripts !== null ? transcripts : (transcript !== null ? [transcript] : null);
+        if (transcriptList !== null) {
             const details = document.createElement('details');
             details.className = 'transcript-box';
             const summary = document.createElement('summary');
-            summary.textContent = 'Transcript';
-            const body = document.createElement('div');
-            body.className = 'transcript-content';
-            if (transcript) {
-                body.textContent = transcript;
-            } else {
-                body.textContent = 'Transcribing…';
-                body.classList.add('placeholder');
-            }
+            summary.textContent = transcriptList.length > 1 ? 'Transcripts' : 'Transcript';
+            const list = document.createElement('div');
+            list.className = 'transcript-list';
+            const bodyEls = [];
+            transcriptList.forEach((t, i) => {
+                const item = document.createElement('div');
+                item.className = 'transcript-content';
+                if (transcriptList.length > 1) {
+                    const label = document.createElement('div');
+                    label.className = 'transcript-label';
+                    label.textContent = `Audio ${i + 1}`;
+                    item.appendChild(label);
+                }
+                const body = document.createElement('span');
+                if (t) {
+                    body.textContent = t;
+                } else {
+                    body.textContent = 'Transcribing…';
+                    body.classList.add('placeholder');
+                }
+                item.appendChild(body);
+                list.appendChild(item);
+                bodyEls.push(body);
+            });
             details.appendChild(summary);
-            details.appendChild(body);
+            details.appendChild(list);
             contentDiv.appendChild(details);
-            msgDiv._transcriptEl = body;
+            // Index-aligné avec `urls` : requestUploadTranscript() écrit dans l'élément de
+            // l'audio qu'il vient de transcrire, pas dans le premier venu.
+            msgDiv._transcriptEls = bodyEls;
         }
 
         wrapper.appendChild(contentDiv);
@@ -2744,7 +2780,8 @@ function appendMessage(role, text, { silent = false, audioUrl = null, audioUrls 
 
     if (!silent && (currentMessages.length > 0 || role === 'user')) {
         const data = { role, text };
-        if (transcript !== null) data.transcript = transcript;
+        if (transcripts !== null) data.transcripts = transcripts;
+        else if (transcript !== null) data.transcript = transcript;
         if (urls.length) data.audioUrls = urls;
         if (model) data.model = model;
         // Persisté pour que rouvrir la conversation retrouve les colonnes : sans la clé de
