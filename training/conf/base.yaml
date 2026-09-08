@@ -105,12 +105,7 @@ data:
     num_workers: 4
     seed: 42
     shuffle: true
-    # "trng" = fresh shard order from OS entropy on every restart. Required because
-    # nothing restores dataloader position on resume, so a constant seed would replay
-    # the same prefix forever. Beware "randomized": despite the name it varies only
-    # across workers/ranks, not across runs. slurm_launcher.py pins a fixed seed on
-    # --qos dev so short comparison runs stay reproducible.
-    shard_seed: "trng"
+    shard_seed: 42
     text_field: "answer"
     lang_field: target_lang
     use_lhotse: true
@@ -123,6 +118,24 @@ data:
     max_duration: 1200
     use_bucketing: true
     bucket_buffer_size: 20000
+    # Background bucketing would advance the source iterator outside the
+    # checkpointed main-thread state and silently desync resume.
+    concurrent_bucketing: false
+
+    # Indexed + resumable dataloader (see NeMo's migrate-to-resumable-dataloader
+    # skill for the full rationale and pre-flight checklist).
+    # `indexed` routes JSONL/tar sources through .idx-sidecar-backed random
+    # access instead of streaming; `use_stateful_dataloader` makes the
+    # iterator position part of the Lightning checkpoint so resume continues
+    # from the exact next batch instead of restarting the epoch.
+    indexed: true
+    use_stateful_dataloader: true
+    # .idx sidecars are mirrored here (mirroring the source path layout) rather
+    # than written next to the data, since the training data under
+    # $ALL_CCFRSCRATCH/audio is shared/group-owned and not meant for ad-hoc
+    # writes. Build with scripts/dataloading/build_indexes.py before launch
+    # (see migrate-resumable/base/build-indexes-cmd.sh).
+    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx/base
 
     input_cfg: null   # overridden by slurm_launcher.py / runtime
 
@@ -144,6 +157,12 @@ data:
     use_lhotse: true
     use_multimodal_sampling: true
     measure_total_length: true
+
+    # Same sidecar mirror as train_ds -- validation reads the same indexed
+    # sources. use_stateful_dataloader stays off: validation always runs to
+    # completion rather than resuming mid-loop.
+    indexed: true
+    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx/base
 
     datasets: {}   # filled by conf/data/val/*.yaml via defaults
 

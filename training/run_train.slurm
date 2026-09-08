@@ -95,10 +95,10 @@ module purge
 # which brings CUDA 13.2 + torch 2.12). It must stay CUDA-compatible with
 # CONDA_ENV below: nemo/2.4.0 is CUDA 12.8, so pairing it with an env built
 # from the 2.7.3 stack (or vice versa) will fail confusingly.
-module load arch/h100 "${NEMO_MODULE:-nemo/2.4.0}"
+module load arch/h100 "${NEMO_MODULE:-nemo/2.7.3}"
 # Conda env is overridable (Automodel runs use a dedicated env, e.g. salm_automodel).
 # Default keeps the SALM env so existing DDP/HF runs are unchanged.
-CONDA_ENV="${CONDA_ENV:-$SCRATCH/speechlm/envs/nemo24-salm}"
+CONDA_ENV="${CONDA_ENV:-$SCRATCH/speechlm/envs/nemo27-salm_automodel_3}"
 echo "Conda env: $CONDA_ENV"
 conda activate "$CONDA_ENV"
 
