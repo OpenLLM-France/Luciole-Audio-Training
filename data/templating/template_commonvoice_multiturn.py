@@ -310,6 +310,17 @@ COMPOUND_FRAMES_TWO = {
     "en": ["Do two things with this {src} clip: {tasks}",
            "Two things on this {src} audio: {tasks}"],
 }
+# Same job, once a merge ("transcris les deux audios") is in `tasks`: the frames
+# above say "cet extrait"/"this clip" (singular) and name ONE clip's language, both
+# wrong once the ask is about two clips that need not even share a language.
+# No count in these on purpose: with a rare third clip in the room, "these two
+# clips" would be wrong as often as the singular frames it replaces.
+COMPOUND_FRAMES_DUAL = {
+    "fr": ["Sur ces extraits : {tasks}", "Pour ces audios : {tasks}",
+           "À partir de ces enregistrements : {tasks}"],
+    "en": ["On these clips: {tasks}", "For these audios: {tasks}",
+           "From these recordings: {tasks}"],
+}
 
 # Bare task fragments used to build a compound instruction.
 TASK_FRAGMENT_TRANSCRIBE = {
@@ -443,6 +454,43 @@ def oxford_join(parts, ilang):
 
 # Three answer shapes, so no single separator is learned as "the" format.
 ANSWER_STYLES = ("labelled", "prose", "numbered")
+ANSWER_STYLES_NO_NUMBER = ("labelled", "prose")
+# Once several audios share one answer with one line per clip, "numbered" is the
+# format that disambiguates for free (the position IS the clip), so it is picked
+# more often than the other two -- labelled/prose still show up, just not as the
+# plurality.
+_DUAL_ANSWER_STYLE_WEIGHTS = (0.25, 0.25, 0.5)
+
+
+def numbered_style_mode(has_transcript, translations, dual_text, extra_duals):
+    """How safe a bare '1. / 2. / 3.' rendering is for this answer, and how it
+    should be weighted if used.
+
+    With exactly ONE audio, "2" can only mean "answer to the 2nd question" --
+    nothing else in the conversation for it to refer to, so it is unambiguous and
+    gets no special weighting ("uniform"). With SEVERAL audios it is only safe
+    when the mapping really is one line per clip ("clip", weighted toward
+    numbered, since position alone then tells the clips apart) -- a merged clause
+    padded with a second fact about a clip that already has one (`extra_duals`
+    idx 0, or a clip1 translation alongside its own transcript) puts more lines
+    than clips, which is genuinely ambiguous between "2nd question" and "2nd
+    audio" and is excluded ("excluded").
+    """
+    total_items = ((1 if has_transcript else 0) + len(translations)
+                   + (1 if dual_text is not None else 0) + len(extra_duals))
+    distinct_clips = (1 + (1 if dual_text is not None else 0)
+                      + (1 if any(idx == 1 for idx, _, _ in extra_duals) else 0))
+    if distinct_clips == 1:
+        return "uniform"
+    return "clip" if total_items == distinct_clips else "excluded"
+
+
+def pick_answer_style(mode="uniform"):
+    if mode == "excluded":
+        return random.choice(ANSWER_STYLES_NO_NUMBER)
+    if mode == "clip":
+        return random.choices(ANSWER_STYLES, weights=_DUAL_ANSWER_STYLE_WEIGHTS)[0]
+    return random.choice(ANSWER_STYLES)
 
 LABELS = {
     "fr": {"transcription": "Transcription", "translation": "Traduction ({lang})"},
@@ -456,6 +504,22 @@ PROSE_TRANSCRIPTION = {
 PROSE_TRANSLATION = {
     "fr": ["En {lang}, cela donne : « {text} ».", "Sa version {adj} : « {text} »."],
     "en": ["In {lang}, that is: \"{text}\".", "Its {lang} version: \"{text}\"."],
+}
+# Same job as PROSE_TRANSCRIPTION/PROSE_TRANSLATION, but naming the clip -- used for
+# the FIRST clip's own transcript/translation once a dual item also has content in
+# the same prose answer, so "What is said is..." doesn't read as ownerless the moment
+# a second clip's sentence follows it.
+PROSE_FIRST_TRANSCRIBE = {
+    "fr": ["Le premier extrait dit : « {text} ».",
+           "Sur le premier extrait, on entend : « {text} »."],
+    "en": ["The first clip says: \"{text}\".",
+           "On the first clip, what is said is: \"{text}\"."],
+}
+PROSE_FIRST_TRANSLATE = {
+    "fr": ["Sur le premier extrait, en {lang}, cela donne : « {text} ».",
+           "Sa version {adj} (premier extrait) : « {text} »."],
+    "en": ["On the first clip, in {lang}, that is: \"{text}\".",
+           "Its {lang} version (first clip): \"{text}\"."],
 }
 
 
@@ -653,19 +717,30 @@ def draw_compound_position(n_turns):
     return random.choices(range(n_turns), weights=weights, k=1)[0]
 
 
-def conversation_items(transcript, targets, first_key=_MISSING):
+def conversation_items(transcript, targets, first_key=_MISSING, first_start=0):
     """Ordered pool of things a conversation can ask for.
 
     The transcript sits first only 60% of the time, so "turn 1 is the transcription"
-    never becomes a rule. `first_key` pins one item to the front (None for the
+    never becomes a rule. `first_key` pins one item near the front (None for the
     transcript): that is how an elliptic continuation asks the task it inherited.
+    A LIST of keys pins each in order starting at `first_start` (0, 1, ... from
+    there) -- how a dual and a rare triple item get guaranteed a spot ahead of
+    everything else. `first_start` defaults to 0 (literally the front, what the
+    elliptic case above needs -- the carried task MUST be turn 1's own ask) but the
+    dual feature draws it randomly: forcing the second clip to position 0 every
+    time it is active would make "what does the FIRST clip say" never the opening
+    question of a dual conversation. `first_start=1` leaves position 0 to whatever
+    item would have landed there naturally (often the transcript) and only
+    guarantees the dual item(s) a spot from turn 2 on.
     """
     items = list(targets)
     if transcript:
         idx = 0 if random.random() < 0.6 else random.randrange(1, len(items) + 1)
         items.insert(idx, (None, transcript))
     if first_key is not _MISSING:
-        place_key(items, 0, first_key)
+        keys = first_key if isinstance(first_key, (list, tuple)) else [first_key]
+        for i, key in enumerate(keys):
+            place_key(items, first_start + i, key)
     return items
 
 
@@ -744,35 +819,448 @@ def assistant(value):
     return {"from": "Assistant", "value": value, "type": "text"}
 
 
-def render_compound_answer(ilang, transcript, translations, style):
+def render_compound_answer(ilang, transcript, translations, style, dual_task=None, dual_text=None,
+                           extra_duals=()):
     """Compose one answer covering several requested tasks.
 
-    `translations` is an ordered list of (target_code, text). `transcript` may
-    be None when the compound only chains translations.
+    `translations` is an ordered list of (target_code, text), never containing the
+    dual item -- callers pull that out into `dual_text` first (`dual_task` says
+    whether it is the second clip's transcript, None, or one of its translations, a
+    language code). `transcript` may be None when the compound only chains
+    translations (and/or the dual item). `extra_duals` -- `(idx, task, text)` triples
+    -- adds a second fact about the second clip and/or the rare third clip.
     """
     sep = " : " if ilang == "fr" else ": "
+    dual_active = dual_text is not None or bool(extra_duals)
     parts = []
     if style == "labelled":
         if transcript:
-            parts.append(f"{LABELS[ilang]['transcription']}{sep}{transcript}")
+            # Once a dual item is also being labelled, "Transcription" next to
+            # "Second extrait" reads as a mismatched pair (task label vs clip label)
+            # -- "Premier extrait" keeps both blocks naming the same kind of thing.
+            label = first_clip_label(ilang, None) if dual_active else LABELS[ilang]["transcription"]
+            parts.append(f"{label}{sep}{transcript}")
         for tgt, text in translations:
-            label = fmt(LABELS[ilang]["translation"], tgt, ilang)
+            label = first_clip_label(ilang, tgt) if dual_active else fmt(LABELS[ilang]["translation"], tgt, ilang)
             parts.append(f"{label}{sep}{text}")
+        if dual_text is not None:
+            parts.append(f"{dual_label(ilang, 0, dual_task)}{sep}{dual_text}")
+        for idx, task, text in extra_duals:
+            parts.append(f"{dual_label(ilang, idx, task)}{sep}{text}")
         return "\n".join(parts)
 
     if style == "prose":
         if transcript:
-            parts.append(random.choice(PROSE_TRANSCRIPTION[ilang]).format(
-                text=quotable(transcript)))
+            pool = PROSE_FIRST_TRANSCRIBE[ilang] if dual_active else PROSE_TRANSCRIPTION[ilang]
+            parts.append(random.choice(pool).format(text=quotable(transcript)))
         for tgt, text in translations:
-            parts.append(fmt(random.choice(PROSE_TRANSLATION[ilang]), tgt, ilang,
-                             text=quotable(text)))
+            pool = PROSE_FIRST_TRANSLATE[ilang] if dual_active else PROSE_TRANSLATION[ilang]
+            parts.append(fmt(random.choice(pool), tgt, ilang, text=quotable(text)))
+        if dual_text is not None:
+            parts.append(prose_dual(ilang, 0, dual_task, dual_text))
+        for idx, task, text in extra_duals:
+            parts.append(prose_dual(ilang, idx, task, text))
         return " ".join(parts)
 
-    # numbered
-    items = ([transcript] if transcript else []) + [t for _, t in translations]
-    return "\n".join(f"{i}. {item}" for i, item in enumerate(items, 1))
+    # numbered -- the position already disambiguates which clip an item belongs to
+    # (no "first/second clip" wording needed, unlike labelled/prose), but a
+    # translation still needs its language named or "1. blabla" / "2. blabla" would
+    # leave the reader guessing which of several languages each number is in.
+    entries = ([(None, transcript)] if transcript else []) + list(translations)
+    if dual_text is not None:
+        entries.append((dual_task, dual_text))
+    entries.extend((task, text) for _, task, text in extra_duals)
+    return "\n".join(
+        f"{i}{fmt(' ({lang})', tgt, ilang) if tgt is not None else ''}{sep}{text}"
+        for i, (tgt, text) in enumerate(entries, 1)
+    )
 
+
+# ── Dual-clip transcription ─────────────────────────────────────────────────
+# A second clip, glued into segment 0's turn 1 alongside the first: not a shape of
+# its own, but one more ASKABLE ITEM (key `DUAL_KEY`) sitting in the same `targets`
+# pool as the real translations. That is what lets it flow through
+# sequential/compound/hybrid unmodified: drawn as an opener, folded into a bundle,
+# recapped, chained -- whatever the pool item it stands in for would get.
+#
+# `dual_task` says what the item actually IS -- None for the second clip's own
+# transcript, a language code for one of ITS OWN translations -- drawn from the
+# second clip's real pool (`build_conversation`), never invented: asking to
+# "translate the second clip into English" when it already IS English audio reads
+# as a non-sequitur, and only a real target on that clip avoids it. Every phrasing
+# function below branches on it the same way `fmt` branches a translation target.
+#
+# Two clips in the same turn also means every question that used to say "it" /
+# "en anglais ?" about the FIRST clip is now ambiguous -- `qualify_first_clip`
+# below is what `render_compound_answer`'s dual-aware callers use to keep the
+# first clip's own follow-ups pointed unambiguously at it, the same way
+# `qualify_voice_question` already does for voice follow-ups.
+DUAL_KEY = "__dual__"
+# A rare THIRD clip, glued in the same way. It never merges with anything (that
+# would need a three-way "transcris les trois audios" grammar this file doesn't
+# have) -- always its own explicitly-numbered clause or turn.
+DUAL_KEY2 = "__dual2__"
+# Every dual-phrasing function below takes an explicit ordinal INDEX (0 = the
+# second clip, 1 = the third) rather than inferring it from which sentinel key
+# is involved, so the SAME functions also serve `dual_extra_task`/`dual_extra_text`
+# in `build_compound` -- a second fact about the second clip (idx 0), never routed
+# through the pool at all, used only to keep the padding clause of a merged ask
+# from always being about the first clip.
+DUAL_ORDINAL_WORD = {"fr": ("second", "troisième"), "en": ("second", "third")}
+DUAL_LABEL_TRANSCRIBE = {"fr": "{ord} extrait", "en": "{ord} clip"}
+DUAL_LABEL_TRANSLATE = {"fr": "{ord} extrait ({lang})", "en": "{ord} clip ({lang})"}
+# Same, for the FIRST clip's own items -- used only once a dual item is also being
+# labelled, so "Transcription" next to "Second extrait" doesn't read as one being
+# the task and the other the clip.
+FIRST_LABEL_TRANSCRIBE = {"fr": "Premier extrait", "en": "First clip"}
+FIRST_LABEL_TRANSLATE = {"fr": "Premier extrait ({lang})", "en": "First clip ({lang})"}
+# Standalone questions, for when the dual item is drawn on its own (sequential, or
+# a non-bundled hybrid turn) -- opener vs follow-up, same split as FOLLOWUP_TRANSCRIBE.
+# Openers are always about idx 0: `first_key` puts DUAL_KEY at position 0 and
+# DUAL_KEY2 at position 1, so DUAL_KEY2's task is never the FIRST thing asked.
+DUAL_QUESTION_TRANSCRIBE = {
+    "fr": ["Transcris le second extrait.", "Qu'est-ce que dit le second extrait ?",
+           "Peux-tu transcrire le deuxième audio ?"],
+    "en": ["Transcribe the second clip.", "What does the second clip say?",
+           "Can you transcribe the second audio?"],
+}
+DUAL_QUESTION_TRANSLATE = {
+    "fr": ["Traduis le second extrait en {lang}.",
+           "Le second extrait, en {lang}, ça donne quoi ?",
+           "Donne-moi la version {adj} du second extrait."],
+    "en": ["Translate the second clip into {lang}.",
+           "The second clip, in {lang} -- what does it say?",
+           "Give me the {lang} version of the second clip."],
+}
+# Same openers, but committing to "two clips" in the wording -- only correct when
+# there really are just two (a third, DUAL_KEY2, sitting in the same targets pool
+# would make "Voici deux extraits" false the moment it lands in the same turn).
+DUAL_QUESTION_TRANSCRIBE_PAIR = {
+    "fr": ["Voici deux extraits : donne-moi la transcription du second."],
+    "en": ["Here are two clips: give me the transcript of the second one."],
+}
+DUAL_QUESTION_TRANSLATE_PAIR = {
+    "fr": ["Voici deux extraits : traduis le second en {lang}."],
+    "en": ["Here are two clips: translate the second one into {lang}."],
+}
+DUAL_FOLLOWUP_QUESTION_TRANSCRIBE = {
+    "fr": ["Et le {ord} extrait ?", "Et sur le {ord} audio ?",
+           "Pareil, mais sur le {ord} extrait."],
+    "en": ["And the {ord} clip?", "What about the {ord} audio?",
+           "Same thing, for the {ord} clip."],
+}
+DUAL_FOLLOWUP_QUESTION_TRANSLATE = {
+    "fr": ["Et le {ord} extrait, en {lang} ?", "Pareil, mais le {ord} extrait en {lang}."],
+    "en": ["And the {ord} clip, in {lang}?", "Same thing, the {ord} clip in {lang}."],
+}
+# Bare clauses, for when the dual item is bundled with other asks in one turn --
+# joined by COORDINATORS exactly like TASK_FRAGMENT_TRANSCRIBE/TRANSLATE. The
+# "_FIRST" pair says the same thing about the FIRST clip's own transcript/translation,
+# used only once a dual item is also in the sentence, to keep "-le" from being read
+# as pointing at whichever clip was mentioned last.
+TASK_FRAGMENT_TRANSCRIBE_DUAL = {
+    "fr": ["transcris aussi le {ord} extrait", "donne la transcription du {ord} extrait",
+           "écris ce qui est dit dans le {ord} extrait"],
+    "en": ["also transcribe the {ord} clip", "give the transcription of the {ord} clip",
+           "write down what is said in the {ord} clip"],
+}
+TASK_FRAGMENT_TRANSLATE_DUAL = {
+    "fr": ["traduis aussi le {ord} extrait en {lang}",
+           "donne la version {adj} du {ord} extrait"],
+    "en": ["also translate the {ord} clip into {lang}",
+           "give the {lang} version of the {ord} clip"],
+}
+TASK_FRAGMENT_TRANSCRIBE_FIRST = {
+    "fr": ["transcris le premier extrait", "donne la transcription du premier extrait"],
+    "en": ["transcribe the first clip", "give the transcription of the first clip"],
+}
+TASK_FRAGMENT_TRANSLATE_FIRST = {
+    "fr": ["traduis le premier extrait en {lang}", "donne la version {adj} du premier extrait"],
+    "en": ["translate the first clip into {lang}", "give the {lang} version of the first clip"],
+}
+# One clause covering BOTH clips, used instead of two separate ones whenever they
+# happen to share the same task -- "transcris les deux audios" rather than
+# "transcris-le et transcris aussi le second extrait". Only ever the FIRST clip and
+# DUAL_KEY (idx 0): DUAL_KEY2 never merges.
+TASK_FRAGMENT_TRANSCRIBE_BOTH = {
+    "fr": ["transcris les deux extraits", "transcris les deux audios",
+           "donne la transcription des deux audios"],
+    "en": ["transcribe both clips", "transcribe both audios",
+           "give the transcription of both audios"],
+}
+# Same clause, but worded for when a THIRD clip (an `extra_duals` fact) is also
+# riding along in the same turn -- "les deux audios"/"both audios" would be
+# ambiguous once a third one is in the room, so this names the first two
+# explicitly instead of claiming to be the whole set.
+TASK_FRAGMENT_TRANSCRIBE_BOTH_QUALIFIED = {
+    "fr": ["transcris les deux premiers extraits", "transcris les deux premiers audios",
+           "donne la transcription des deux premiers audios"],
+    "en": ["transcribe the first two clips", "transcribe the first two audios",
+           "give the transcription of the first two audios"],
+}
+# Tacked onto a "transcribe/translate both clips" clause (never a standalone ask
+# of its own) to ask for ONE continuous text instead of two separate answers --
+# for consecutive audios that are really one thing split in two (a recording cut
+# into parts), where the user wants them read back as a single block, not two
+# labelled ones. Only offered when the merge would otherwise stand ALONE (see
+# DUAL_GLUE_RATE): gluing alongside another, unrelated ask in the same turn has
+# no sensible single-text answer.
+TASK_FRAGMENT_TRANSCRIBE_GLUE_SUFFIX = {
+    "fr": [" (et fais-en une seule transcription)", ", en une seule transcription",
+           " et regroupe les deux transcriptions en une seule",
+           " et mets les deux transcriptions à la suite"],
+    "en": [" (and make it a single transcription)", ", as a single transcription",
+           " and merge the two transcriptions into one",
+           " and put the two transcriptions one after another"],
+}
+TASK_FRAGMENT_TRANSLATE_GLUE_SUFFIX = {
+    "fr": [" (et fais-en une seule traduction)", ", en une seule traduction",
+           " et regroupe les deux traductions en une seule",
+           " et mets les deux traductions à la suite"],
+    "en": [" (and make it a single translation)", ", as a single translation",
+           " and merge the two translations into one",
+           " and put the two translations one after another"],
+}
+# Share of an otherwise-standalone "transcribe/translate both clips" merge that
+# gets this suffix (and therefore a glued answer) instead of the plain merge
+# clause.
+DUAL_GLUE_RATE = 0.2
+TASK_FRAGMENT_TRANSLATE_BOTH = {
+    "fr": ["traduis les deux extraits en {lang}", "traduis les deux audios en {lang}",
+           "donne la version {adj} des deux audios"],
+    "en": ["translate both clips into {lang}", "translate both audios into {lang}",
+           "give the {lang} version of both audios"],
+}
+# Same disambiguation as TASK_FRAGMENT_TRANSCRIBE_BOTH_QUALIFIED, for the
+# translate-merge clause.
+TASK_FRAGMENT_TRANSLATE_BOTH_QUALIFIED = {
+    "fr": ["traduis les deux premiers extraits en {lang}", "traduis les deux premiers audios en {lang}",
+           "donne la version {adj} des deux premiers audios"],
+    "en": ["translate the first two clips into {lang}", "translate the first two audios into {lang}",
+           "give the {lang} version of the first two audios"],
+}
+# When the transcribe-merge (clip1+dual) and EVERY extra_duals fact are all a
+# plain transcription with nothing else asked for (no translation anywhere),
+# "transcribe both audios, then the third clip" is a clunky way to say the
+# same thing for every clip in the turn -- collapse to one "transcribe them
+# all" clause instead of merge-both + a separate clause per extra clip.
+TASK_FRAGMENT_TRANSCRIBE_ALL = {
+    "fr": ["transcris tous les extraits", "transcris tous les audios",
+           "donne la transcription de tous les audios"],
+    "en": ["transcribe all the clips", "transcribe all the audios",
+           "give the transcription of all the audios"],
+}
+# Same job as COMPOUND_FOLLOWUP_FRAMES/_WITH_TRANSCRIPT, but wrapping a joined clause
+# list (`{tasks}`) rather than a language list: those two assume every non-transcript
+# item is a translation, which the dual item is not.
+COMPOUND_FOLLOWUP_WITH_DUAL = {
+    "fr": ["Ensuite : {tasks}", "Continue avec ceci : {tasks}", "Fais aussi ceci : {tasks}"],
+    "en": ["Next: {tasks}", "Also do this: {tasks}", "Continue with this: {tasks}"],
+}
+PROSE_DUAL_TRANSCRIBE = {
+    "fr": ["Le {ord} extrait dit : « {text} ».",
+           "Sur le {ord} extrait, on entend : « {text} »."],
+    "en": ["The {ord} clip says: \"{text}\".",
+           "On the {ord} clip, what is said is: \"{text}\"."],
+}
+PROSE_DUAL_TRANSLATE = {
+    "fr": ["Sa version {adj} : « {text} ».",
+           "En {lang}, le {ord} extrait donne : « {text} »."],
+    "en": ["Its {lang} translation: \"{text}\".",
+           "In {lang}, the {ord} clip gives: \"{text}\"."],
+}
+# Same idiom as `qualify_voice_question`/`VOICE_QUALIFIER`, but pointing at the
+# FIRST clip instead of the most recent one -- needed once a dual item has put a
+# second clip in the room, so a bare "et en anglais ?" no longer reads as being
+# about whichever clip was mentioned last.
+FIRST_CLIP_QUALIFIER = {
+    "fr": ["Sur le premier extrait : {q}", "Pour le tout premier audio : {q}"],
+    "en": ["About the first clip: {q}", "For the very first audio: {q}"],
+}
+
+
+def dual_label(ilang, idx, dual_task):
+    ord_word = DUAL_ORDINAL_WORD[ilang][idx]
+    ord_cap = ord_word[0].upper() + ord_word[1:]
+    if dual_task is None:
+        return DUAL_LABEL_TRANSCRIBE[ilang].format(ord=ord_cap)
+    return DUAL_LABEL_TRANSLATE[ilang].format(ord=ord_cap, lang=LANG_NAMES[ilang][dual_task])
+
+
+def first_clip_label(ilang, tgt):
+    if tgt is None:
+        return FIRST_LABEL_TRANSCRIBE[ilang]
+    return fmt(FIRST_LABEL_TRANSLATE[ilang], tgt, ilang)
+
+
+def dual_question(ilang, idx, dual_task, first, has_third=False):
+    # Openers are hard-coded to "second": only idx 0 (DUAL_KEY) is ever first.
+    # `has_third` says whether a DUAL_KEY2 is ALSO in play for this conversation --
+    # the "Voici deux extraits"/"Here are two clips" phrasings commit to an exact
+    # clip count, so they are only offered when that count is really two.
+    if first:
+        base = DUAL_QUESTION_TRANSCRIBE if dual_task is None else DUAL_QUESTION_TRANSLATE
+        pair = DUAL_QUESTION_TRANSCRIBE_PAIR if dual_task is None else DUAL_QUESTION_TRANSLATE_PAIR
+        pool = list(base[ilang]) + ([] if has_third else list(pair[ilang]))
+        return (random.choice(pool) if dual_task is None
+                else fmt(random.choice(pool), dual_task, ilang))
+    ord_word = DUAL_ORDINAL_WORD[ilang][idx]
+    if dual_task is None:
+        return random.choice(DUAL_FOLLOWUP_QUESTION_TRANSCRIBE[ilang]).format(ord=ord_word)
+    return fmt(random.choice(DUAL_FOLLOWUP_QUESTION_TRANSLATE[ilang]), dual_task, ilang,
+              ord=ord_word)
+
+
+def dual_fragment(ilang, idx, dual_task):
+    ord_word = DUAL_ORDINAL_WORD[ilang][idx]
+    if dual_task is None:
+        return random.choice(TASK_FRAGMENT_TRANSCRIBE_DUAL[ilang]).format(ord=ord_word)
+    return fmt(random.choice(TASK_FRAGMENT_TRANSLATE_DUAL[ilang]), dual_task, ilang, ord=ord_word)
+
+
+def prose_dual(ilang, idx, dual_task, text):
+    ord_word = DUAL_ORDINAL_WORD[ilang][idx]
+    if dual_task is None:
+        return random.choice(PROSE_DUAL_TRANSCRIBE[ilang]).format(text=quotable(text), ord=ord_word)
+    return fmt(random.choice(PROSE_DUAL_TRANSLATE[ilang]), dual_task, ilang,
+              text=quotable(text), ord=ord_word)
+
+
+_LEADING_AND = {"fr": "et ", "en": "and "}
+
+
+def qualify_first_clip(question, ilang):
+    """Point a question at the FIRST clip, once a dual item has put a second one
+    in the room.
+
+    Half of FOLLOWUP_TRANSLATE/FOLLOWUP_TRANSCRIBE opens on "Et"/"And" -- a
+    connector doing the same job the qualifier prefix is about to do ("Sur le
+    premier extrait : et en anglais ?" doubles up), so it is dropped first.
+    """
+    body = question[0].lower() + question[1:]
+    prefix = _LEADING_AND[ilang]
+    if body.startswith(prefix):
+        body = body[len(prefix):]
+    return random.choice(FIRST_CLIP_QUALIFIER[ilang]).format(q=body)
+
+
+def build_task_fragments(ilang, include_transcript, translations, dual_task, dual_text, src=None,
+                         extra_duals=()):
+    """Bare clauses for a bundled ask: optional transcript, translations, optional
+    second-clip item -- shared by `compound_turns` and any later bundled turn that
+    also carries the dual item, so both phrase it the same way.
+
+    When the first clip's transcript (or one of its translations) and the dual item
+    happen to be the SAME task, they are merged into one "both clips" clause instead
+    of two separate ones; otherwise each names its own clip explicitly. `extra_duals`
+    -- `(idx, task, text)` triples -- are always their OWN clause, never merged: a
+    second fact about the second clip, and/or the rare third clip.
+
+    Returns `(fragments, merged, glued)` -- `merged` is what lets a caller treat a
+    LONE "transcribe both clips" clause as already a complete two-clip
+    instruction, rather than requiring a second, unrelated clause just to pass a
+    "compound needs 2+ asks" gate that was written for two asks about the SAME
+    clip. `glued` says the transcribe-merge clause asks for ONE continuous text
+    (see `TASK_FRAGMENT_TRANSCRIBE_GLUE_SUFFIX`) rather than two separate answers
+    -- only possible when the merge stands ALONE (no translation, no third clip
+    fact riding along in the same turn), since there is no sensible single-text
+    answer once something else is also being asked for.
+    """
+    has_dual = dual_text is not None
+    merge_transcribe = has_dual and dual_task is None and include_transcript
+    merge_lang = (dual_task if has_dual and dual_task is not None
+                 and any(tgt == dual_task for tgt, _ in translations) else None)
+    # clip1, the dual item, AND every extra clip are all being asked for a plain
+    # transcription (clip1 may ALSO have separate translations on top -- those
+    # still get their own clause below) -- fold the transcribe asks into one
+    # "transcribe them all" clause instead of a merge clause plus a clause per
+    # extra clip, since splitting out the extra clip(s) would just repeat the
+    # same instruction the merge clause already gives.
+    collapse_all_transcribe = (merge_transcribe and extra_duals
+                               and all(task is None for _, task, _ in extra_duals))
+
+    fragments = []
+    glued = False
+    if collapse_all_transcribe:
+        fragments.append(random.choice(TASK_FRAGMENT_TRANSCRIBE_ALL[ilang]))
+    elif merge_transcribe:
+        pool = (TASK_FRAGMENT_TRANSCRIBE_BOTH_QUALIFIED if extra_duals
+                else TASK_FRAGMENT_TRANSCRIBE_BOTH)
+        fragment = random.choice(pool[ilang])
+        if not translations and not extra_duals and random.random() < DUAL_GLUE_RATE:
+            fragment += random.choice(TASK_FRAGMENT_TRANSCRIBE_GLUE_SUFFIX[ilang])
+            glued = True
+        fragments.append(fragment)
+    elif include_transcript:
+        if has_dual:
+            fragments.append(random.choice(TASK_FRAGMENT_TRANSCRIBE_FIRST[ilang]))
+        elif src is not None and src != ilang:
+            fragments.append(fmt(random.choice(TASK_FRAGMENT_TRANSCRIBE_NAMED[ilang]),
+                                 src, ilang))
+        else:
+            fragments.append(random.choice(TASK_FRAGMENT_TRANSCRIBE[ilang]))
+
+    if merge_lang is not None:
+        pool = (TASK_FRAGMENT_TRANSLATE_BOTH_QUALIFIED if extra_duals
+                else TASK_FRAGMENT_TRANSLATE_BOTH)
+        fragment = fmt(random.choice(pool[ilang]), merge_lang, ilang)
+        # Alone the same way the transcribe merge is: no OTHER translation, no
+        # separate transcript ask for clip 1, no third-clip fact riding along.
+        if (not include_transcript and len(translations) == 1 and not extra_duals
+                and random.random() < DUAL_GLUE_RATE):
+            fragment += random.choice(TASK_FRAGMENT_TRANSLATE_GLUE_SUFFIX[ilang])
+            glued = True
+        fragments.append(fragment)
+    for tgt, _ in translations:
+        if tgt == merge_lang:
+            continue
+        pool = TASK_FRAGMENT_TRANSLATE_FIRST if has_dual else TASK_FRAGMENT_TRANSLATE
+        fragments.append(fmt(random.choice(pool[ilang]), tgt, ilang))
+
+    if has_dual and not merge_transcribe and merge_lang is None:
+        fragments.append(dual_fragment(ilang, 0, dual_task))
+    if not collapse_all_transcribe:
+        for idx, task, _text in extra_duals:
+            fragments.append(dual_fragment(ilang, idx, task))
+    return fragments, (merge_transcribe or merge_lang is not None), glued
+
+
+def join_fragments(ilang, fragments):
+    tasks = fragments[0]
+    for frag in fragments[1:]:
+        tasks += random.choice(COORDINATORS[ilang]) + frag
+    if not tasks.endswith("."):
+        tasks += "."
+    return tasks
+
+
+# Share of mergeable compound turns ("transcris les deux audios") left to stand
+# alone, rather than padded with one more clause about the first clip only. Kept
+# high: a shared instruction on its own ("transcribe both clips") should be the
+# COMMONEST shape a dual conversation takes, ahead of two separate per-clip asks,
+# which in turn should be ahead of a shared instruction padded with a specific one.
+DUAL_MERGE_ALONE_RATE = 0.85
+# Of the padded ones, the share where the padding names the SECOND clip (a real
+# second fact about it) instead of defaulting to the first.
+DUAL_EXTRA_ON_SECOND_RATE = 0.5
+# Share of dual draws where `dual_task` is biased toward a task the FIRST clip can
+# also answer (always includes the transcript, since every clip has one -- see
+# `build_conversation`), rather than drawn uniformly from the second clip's own
+# pool. This is what makes a shared instruction ("transcribe/translate both
+# clips") POSSIBLE often enough to be the commonest shape, rather than an
+# incidental coincidence that only fires when two independently-drawn tasks
+# happen to match.
+DUAL_MERGE_BIAS_RATE = 1.0
+# `build_compound` re-rolls a merge opportunity `pick_compound_selection` did not
+# happen to take (see there): this is how often it does.
+DUAL_FORCE_MERGE_RATE = 1.0
+# Share of dual `sequential`/`hybrid` conversations where the dual item(s) are
+# guaranteed a front slot starting at position 0 (so the opening question is about
+# the SECOND clip) rather than position 1 (so a natural clip-1 item leads instead,
+# and the dual item is guaranteed a slot from turn 2 on). Without this, the dual
+# item's guaranteed-inclusion mechanism (`first_key`) would make the opening
+# question about the second clip every single time one is active.
+DUAL_LEAD_RATE = 0.5
 
 MAX_VOICE_FOLLOWUPS = 2
 
@@ -880,15 +1368,41 @@ def append_recap(turns, ilang, delivered, n_content_turns, rate):
     if n_content_turns < RECAP_MIN_TURNS or random.random() >= rate:
         return False
 
-    # A bare numbered list is fine under one clip, where position carries the meaning.
-    # Across clips it is not: "1." under "Clip 2" says nothing about whether the line is
-    # the transcript or one of the translations, so the labels have to be there.
-    style = "labelled" if len(delivered) > 1 else random.choice(RECAP_STYLES)
+    # A bare numbered list is fine when position maps one line to one clip. Across
+    # `delivered` entries it does not (a recap block is one clip, "1." under "Clip 2"
+    # says nothing about transcript vs. translation) -- forced "labelled". Within a
+    # single entry, numbering is unambiguous UNLESS that entry itself carries a dual
+    # item whose lines don't map one-to-one to its clips -- see `numbered_style_mode`.
+    if len(delivered) > 1:
+        style = "labelled"
+    else:
+        _rec0, _items0 = delivered[0]
+        _transcript0 = next((text for key, text in _items0 if key is None), None)
+        _dual_text0 = next((text for key, text in _items0 if key == DUAL_KEY), None)
+        _dual2_text0 = next((text for key, text in _items0 if key == DUAL_KEY2), None)
+        _extra_duals0 = ([(1, _rec0.get("dual2_task"), _dual2_text0)]
+                         if _dual2_text0 is not None else [])
+        _translations0 = [(key, text) for key, text in _items0
+                          if key is not None and key not in (DUAL_KEY, DUAL_KEY2)]
+        _mode0 = numbered_style_mode(_transcript0 is not None, _translations0,
+                                     _dual_text0, _extra_duals0)
+        if _mode0 != "excluded":
+            style = random.choice(RECAP_STYLES)
+        else:
+            style = "labelled"
     blocks = []
     for index, (rec, items) in enumerate(delivered, 1):
         transcript = next((text for key, text in items if key is None), None)
-        translations = [(key, text) for key, text in items if key is not None]
-        block = render_compound_answer(ilang, transcript, translations, style)
+        dual_text = next((text for key, text in items if key == DUAL_KEY), None)
+        dual_task = rec.get("dual_task") if dual_text is not None else None
+        dual2_text = next((text for key, text in items if key == DUAL_KEY2), None)
+        extra_duals = ([(1, rec.get("dual2_task"), dual2_text)]
+                       if dual2_text is not None else [])
+        translations = [(key, text) for key, text in items
+                        if key is not None and key not in (DUAL_KEY, DUAL_KEY2)]
+        block = render_compound_answer(ilang, transcript, translations, style,
+                                       dual_task=dual_task, dual_text=dual_text,
+                                       extra_duals=extra_duals)
         if len(delivered) > 1:
             label = RECAP_CLIP_LABEL[ilang].format(
                 n=index, lang=LANG_NAMES[ilang][rec["meta"]["lang"]])
@@ -919,7 +1433,9 @@ def pick_compound_selection(targets, max_asks):
     return include_transcript, chosen
 
 
-def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None):
+def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None,
+                   dual_clip=None, dual_task=None, dual_text=None, dual_clip2=None,
+                   extra_duals=()):
     """Render one compound user turn plus its composed answer, or None.
 
     Every shape is assembled from fragments. data/contexts has no combined
@@ -927,72 +1443,158 @@ def compound_turns(clip, transcript, chosen, ilang, include_transcript, src=None
     narrow "transcript plus exactly one translation" case is gone; the fragments
     already handled everything wider and name the audio language when it differs
     from the instruction language, so there is nothing the bank was adding.
+
+    `dual_clip`/`dual_task`/`dual_text` fold a second clip's task into the same
+    turn: its audio right after the first, its clause joined in with the others
+    (merged into one "both clips" clause when it matches the first clip's own task).
+    `dual_clip2` is a rare third clip's audio. `extra_duals` -- `(idx, task, text)`
+    triples -- are extra facts that never merge: a second fact about the second
+    clip (its audio already covered by `dual_clip`) and/or the third clip's task.
     """
-    fragments = []
-    if include_transcript:
-        # The frame already names the audio language; the fragment repeats it only when
-        # the instruction language differs.
-        if src is not None and src != ilang:
-            fragments.append(fmt(random.choice(TASK_FRAGMENT_TRANSCRIBE_NAMED[ilang]),
-                                 src, ilang))
-        else:
-            fragments.append(random.choice(TASK_FRAGMENT_TRANSCRIBE[ilang]))
-    for tgt, _ in chosen:
-        fragments.append(fmt(random.choice(TASK_FRAGMENT_TRANSLATE[ilang]), tgt, ilang))
-    if len(fragments) < 2:
+    fragments, merged, glued = build_task_fragments(ilang, include_transcript, chosen, dual_task,
+                                                    dual_text, src, extra_duals=extra_duals)
+    # A merged "both clips" clause is already a complete two-clip instruction on its
+    # own; the 2-clause floor only exists so a single ordinary ask (one clip, one
+    # task) never gets sold as "compound".
+    if len(fragments) < (1 if merged else 2):
         return None
+    tasks = join_fragments(ilang, fragments)
+    # COMPOUND_FRAMES_ANY/TWO say "cet extrait"/"this clip" (singular, ONE clip's
+    # language): wrong the moment any dual item -- merged or not -- is also being
+    # named in `tasks`.
+    has_dual = dual_text is not None or bool(extra_duals)
 
-    tasks = fragments[0]
-    for frag in fragments[1:]:
-        tasks += random.choice(COORDINATORS[ilang]) + frag
-    if not tasks.endswith("."):
-        tasks += "."
+    if merged and len(fragments) == 1:
+        # A lone merged clause ("transcris les deux audios") is already a full
+        # instruction; a frame naming the clips again ("Pour ces audios : transcris
+        # les deux audios.") would just repeat itself.
+        instruction = tasks[0].upper() + tasks[1:]
+    elif has_dual:
+        instruction = random.choice(COMPOUND_FRAMES_DUAL[ilang]).format(tasks=tasks)
+    else:
+        # Counted frames only when the count matches.
+        pool = list(COMPOUND_FRAMES_ANY[ilang])
+        if len(fragments) == 2:
+            pool += COMPOUND_FRAMES_TWO[ilang]
+        instruction = random.choice(pool).format(tasks=tasks, src=LANG_NAMES[ilang][src])
 
-    # Counted frames only when the count matches.
-    pool = list(COMPOUND_FRAMES_ANY[ilang])
-    if len(fragments) == 2:
-        pool += COMPOUND_FRAMES_TWO[ilang]
-    instruction = random.choice(pool).format(tasks=tasks, src=LANG_NAMES[ilang][src])
-
-    answer = render_compound_answer(
-        ilang, transcript if include_transcript else None, chosen,
-        random.choice(ANSWER_STYLES),
-    )
-    return [
-        user_text(instruction),
-        user_audio(clip["audio"], clip["duration"]),
-        assistant(answer),
-    ]
+    if glued:
+        first_text = transcript if dual_task is None else chosen[0][1]
+        answer = f"{first_text.strip()} {dual_text.strip()}"
+    else:
+        answer = render_compound_answer(
+            ilang, transcript if include_transcript else None, chosen,
+            pick_answer_style(numbered_style_mode(include_transcript and transcript is not None,
+                                                  chosen, dual_text, extra_duals)),
+            dual_task=dual_task, dual_text=dual_text, extra_duals=extra_duals,
+        )
+    turns = [user_text(instruction), user_audio(clip["audio"], clip["duration"])]
+    if dual_clip is not None:
+        turns.append(user_audio(dual_clip["audio"], dual_clip["duration"]))
+    if dual_clip2 is not None:
+        turns.append(user_audio(dual_clip2["audio"], dual_clip2["duration"]))
+    turns.append(assistant(answer))
+    return turns
 
 
 def build_compound(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
-                   *, first_key=_MISSING, last_key=_MISSING, turn_dist=None, min_turns=1,
-                   voice=True, trace=None, continuation=False):
+                   *, first_key=_MISSING, first_start=0, last_key=_MISSING, turn_dist=None,
+                   min_turns=1, voice=True, trace=None, continuation=False, dual_clip=None,
+                   dual_task=None, dual_clip2=None, dual2_task=None,
+                   dual_extra_task=None, dual_extra_text=None):
     """A single compound turn and nothing else.
 
+    `first_start` is unused here (accepted only so every builder shares one call
+    signature) -- a lone turn has no "which turn asks it first" to randomize; the
+    dual item's guaranteed spot comes from `targets` itself already carrying it up
+    front (see `build_conversation`), which `pick_compound_selection` always keeps.
+
     The keyword arguments exist so every builder shares one call signature; a
-    single turn has no length to draw and nothing to pin to the front.
+    single turn has no length to draw and nothing to pin to the front. `dual_clip`
+    is honoured only through `targets` carrying a `DUAL_KEY` entry -- `first_key`
+    puts it at position 0, which `pick_compound_selection` always keeps. Likewise
+    `dual_clip2`/`DUAL_KEY2` for the rare third clip, at position 1.
+
+    `dual_extra_task`/`dual_extra_text` are a SECOND fact about the second clip,
+    never routed through `targets` at all (no new audio to guarantee) -- just an
+    alternative source for the padding clause below, so it is not always the first
+    clip's.
     """
     include_transcript, chosen = pick_compound_selection(targets, max_asks)
+    dual_text = next((text for tgt, text in chosen if tgt == DUAL_KEY), None)
+    dual2_text = next((text for tgt, text in chosen if tgt == DUAL_KEY2), None)
+    chosen = [(tgt, text) for tgt, text in chosen if tgt not in (DUAL_KEY, DUAL_KEY2)]
+    extra_duals = [(1, dual2_task, dual2_text)] if dual2_text is not None else []
+
+    would_merge = dual_text is not None and (
+        (dual_task is None and include_transcript)
+        or any(tgt == dual_task for tgt, _ in chosen))
+    # `dual_task` was already biased (in `build_conversation`) toward a task the
+    # first clip can ALSO answer, but `pick_compound_selection` draws
+    # `include_transcript`/`chosen` independently of that, so half the time the
+    # coincidence goes to waste (transcript matches, but this turn happens not to
+    # be asking for the transcript). Forced back in here, so the earlier bias
+    # actually turns into a merged instruction most of the time it is available,
+    # rather than being diluted by an unrelated draw.
+    if dual_text is not None and not would_merge and random.random() < DUAL_FORCE_MERGE_RATE:
+        if dual_task is None:
+            include_transcript = True
+            would_merge = True
+        else:
+            match = next((t for t in targets
+                         if t[0] == dual_task and t not in chosen), None)
+            if match is not None:
+                chosen = [match] + chosen[:max(0, max_asks - 2)]
+                would_merge = True
+    # `pick_compound_selection` always reserves a second slot alongside the dual item,
+    # so a merge ("transcris les deux audios") would otherwise ALWAYS come padded with
+    # one more clause -- and that clause was always about the first clip, since the
+    # second clip only ever had the one task the merge just consumed. A real second
+    # fact about it (`dual_extra_*`) lets the padding name the second clip instead;
+    # failing that, dropping the padding entirely lets the merged ask stand alone.
+    if would_merge and chosen:
+        # Checked FIRST, over the whole mergeable pool: a shared instruction is
+        # meant to be the commonest dual shape, so `DUAL_MERGE_ALONE_RATE` must
+        # apply before any padding decision spends part of that mass.
+        if random.random() < DUAL_MERGE_ALONE_RATE:
+            chosen = []
+        elif dual_extra_text is not None and random.random() < DUAL_EXTRA_ON_SECOND_RATE:
+            extra_duals.append((0, dual_extra_task, dual_extra_text))
+            chosen = []
+
     turns = compound_turns(clip, transcript, chosen, ilang, include_transcript,
-                           meta["lang"])
+                           meta["lang"], dual_clip=dual_clip if dual_text else None,
+                           dual_task=dual_task, dual_text=dual_text,
+                           dual_clip2=dual_clip2 if dual2_text else None,
+                           extra_duals=extra_duals)
     if turns is not None and trace is not None:
-        trace.append(([None] if include_transcript else []) + [t for t, _ in chosen])
+        trace.append(([None] if include_transcript else [])
+                     + ([DUAL_KEY] if dual_text is not None else [])
+                     + ([DUAL_KEY2] if dual2_text is not None else [])
+                     + [t for t, _ in chosen])
     return turns
 
 
 def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
-                 *, first_key=_MISSING, last_key=_MISSING, turn_dist=TURN_DIST,
-                 min_turns=2, voice=True, trace=None, continuation=False):
+                 *, first_key=_MISSING, first_start=0, last_key=_MISSING, turn_dist=TURN_DIST,
+                 min_turns=2, voice=True, trace=None, continuation=False, dual_clip=None,
+                 dual_task=None, dual_clip2=None, dual2_task=None,
+                 dual_extra_task=None, dual_extra_text=None):
     """Several user turns, exactly one of which bundles 2-3 instructions.
 
     The bundled turn is positioned over ALL turns, so "several instructions" is never
-    learned as meaning "first turn".
+    learned as meaning "first turn". `targets` carrying a `DUAL_KEY`/`DUAL_KEY2` entry
+    (forced to a front slot, in that order, starting at `first_start` -- see
+    `conversation_items`) flows through the same item pool as everything else, so
+    each can land in a single turn or inside the bundle, wherever the draw puts it.
+    `dual_extra_task`/`dual_extra_text` (a second fact about the second clip, no
+    `targets` entry of its own) is only honoured in the bundled turn, same as in
+    `build_compound`.
     """
     src = meta["lang"]
     # A one-turn hybrid is just a compound.
     min_turns = max(2, min_turns)
-    items = conversation_items(transcript, targets, first_key)
+    items = conversation_items(transcript, targets, first_key, first_start)
     bundle_size = random.choice(BUNDLE_SIZES)
     # A hybrid of T turns consumes (T-1) single asks plus the bundle.
     n_turns = draw_turns(len(items) - bundle_size + 1, turn_dist)
@@ -1026,7 +1628,10 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
         trace.extend([tgt for tgt, _ in group] for group in groups)
     for i, group in enumerate(groups):
         tr_text = next((text for tgt, text in group if tgt is None), None)
-        translations = [(tgt, text) for tgt, text in group if tgt is not None]
+        dual_text = next((text for tgt, text in group if tgt == DUAL_KEY), None)
+        dual2_text = next((text for tgt, text in group if tgt == DUAL_KEY2), None)
+        translations = [(tgt, text) for tgt, text in group
+                        if tgt is not None and tgt not in (DUAL_KEY, DUAL_KEY2)]
         first = i == 0
 
         if len(group) == 1:
@@ -1034,13 +1639,29 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
             if tgt is None:
                 question = (bank_prompt("transcription", ilang, src) if first
                             else followup_transcribe(ilang, src, asked))
+                if dual_clip is not None:
+                    question = qualify_first_clip(question, ilang)
+            elif tgt == DUAL_KEY:
+                question = dual_question(ilang, 0, dual_task, first, has_third=dual_clip2 is not None)
+            elif tgt == DUAL_KEY2:
+                question = dual_question(ilang, 1, dual2_task, first)
             else:
                 question = (bank_prompt("translation", ilang, src, tgt) if first
                             else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
+                if dual_clip is not None:
+                    question = qualify_first_clip(question, ilang)
             answer = text
         elif first:
+            extra_duals = [(1, dual2_task, dual2_text)] if dual2_text is not None else []
+            if dual_extra_text is not None and not extra_duals \
+                    and random.random() < DUAL_EXTRA_ON_SECOND_RATE:
+                extra_duals.append((0, dual_extra_task, dual_extra_text))
             block = compound_turns(clip, tr_text, translations, ilang,
-                                   tr_text is not None, src)
+                                   tr_text is not None, src,
+                                   dual_clip=dual_clip if dual_text else None,
+                                   dual_task=dual_task, dual_text=dual_text,
+                                   dual_clip2=dual_clip2 if dual2_text else None,
+                                   extra_duals=extra_duals)
             if block is None:
                 return None
             turns.extend(block)
@@ -1048,20 +1669,62 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
                 asked.extend(t["value"] for t in block
                              if t["from"] == "User" and t["type"] == "text")
             continue
+        elif dual_text is not None or dual2_text is not None:
+            # The langs/adjs frames below assume every non-transcript item is a
+            # translation, which the dual item is not -- phrase this bundle as a
+            # joined clause list instead, same machinery as `compound_turns`. Only
+            # DUAL_KEY (idx 0) is merge-eligible; DUAL_KEY2 is always its own clause.
+            extra_duals = [(1, dual2_task, dual2_text)] if dual2_text is not None else []
+            fragments, _merged, glued = build_task_fragments(ilang, tr_text is not None, translations,
+                                                              dual_task, dual_text, src,
+                                                              extra_duals=extra_duals)
+            question = random.choice(COMPOUND_FOLLOWUP_WITH_DUAL[ilang]).format(
+                tasks=join_fragments(ilang, fragments))
+            if glued:
+                first_text = tr_text if dual_task is None else translations[0][1]
+                answer = f"{first_text.strip()} {dual_text.strip()}"
+            else:
+                answer = render_compound_answer(ilang, tr_text, translations,
+                                                pick_answer_style(numbered_style_mode(
+                                                    tr_text is not None, translations,
+                                                    dual_text, extra_duals)),
+                                                dual_task=dual_task, dual_text=dual_text,
+                                                extra_duals=extra_duals)
         else:
             langs = oxford_join([LANG_NAMES[ilang][t] for t, _ in translations], ilang)
             adjs = oxford_join([LANG_ADJ[ilang][t] for t, _ in translations], ilang)
             frame_pool = (COMPOUND_FOLLOWUP_WITH_TRANSCRIPT if tr_text
                           else COMPOUND_FOLLOWUP_FRAMES)[ilang]
             question = random.choice(frame_pool).format(langs=langs, adjs=adjs)
+            # This bundle is clip-1-only, but a dual item asked elsewhere in the
+            # segment still put a second clip in the room.
+            if dual_clip is not None:
+                question = qualify_first_clip(question, ilang)
+            # Clip-1-only content: always a single audio, so numbering is
+            # unambiguous ("uniform") regardless of a dual item elsewhere in
+            # the segment.
             answer = render_compound_answer(ilang, tr_text, translations,
-                                            random.choice(ANSWER_STYLES))
+                                            pick_answer_style("uniform"))
 
         turns.append(user_text(question))
         if not (first and continuation):
             asked.append(question)
         if first:
             turns.append(user_audio(clip["audio"], clip["duration"]))
+            # Reached only through the single-item branch (the `elif first:` bundle
+            # inserts its own audio inside `compound_turns`); `first_key` forces
+            # DUAL_KEY to position 0, so a lone item 0 is always it, and dual_clip is
+            # therefore always set here. dual_clip2 is inserted here TOO, even though
+            # DUAL_KEY2 (forced to position 1) is not necessarily this turn's own
+            # item -- `compound_at` can put it several turns later, in its own single
+            # ask or a later bundle, and by then its audio must already have been
+            # heard. Delivering both extra clips at turn 1 unconditionally (like
+            # `build_sequential` does) is what guarantees that regardless of where
+            # DUAL_KEY2 actually lands.
+            if dual_clip is not None:
+                turns.append(user_audio(dual_clip["audio"], dual_clip["duration"]))
+            if dual_clip2 is not None:
+                turns.append(user_audio(dual_clip2["audio"], dual_clip2["duration"]))
         turns.append(assistant(answer))
 
     if voice:
@@ -1076,6 +1739,17 @@ MIXED_HYBRID_SHARE = dict(MIXED_SHAPES)["hybrid"]
 # fixed ratio keeps the global mix on 40/40/20 even where hybrids are impossible.
 MIXED_COMPOUND_OF_REST = dict(MIXED_SHAPES)["compound"] / (
     dict(MIXED_SHAPES)["compound"] + dict(MIXED_SHAPES)["sequential"])
+# `sequential` asks every item its own turn, so a dual/triple item glued into segment
+# 0 can NEVER merge with the first clip's own task there -- only a bundled turn
+# (`compound`, or `hybrid`'s bundled one) can produce a shared instruction
+# ("transcribe both clips"). Once a dual item is active, `sequential`'s share of the
+# draw is cut down and handed to `compound` instead, so a shared instruction is
+# structurally reachable often enough to become the commonest dual shape (the
+# DUAL_MERGE_BIAS_RATE/DUAL_MERGE_ALONE_RATE knobs then decide whether it actually
+# fires and stands alone) rather than being capped by the ordinary 20% compound share.
+DUAL_MIXED_SHAPES = (("sequential", 0.0), ("compound", 0.65), ("hybrid", 0.35))
+DUAL_COMPOUND_OF_REST = dict(DUAL_MIXED_SHAPES)["compound"] / (
+    dict(DUAL_MIXED_SHAPES)["compound"] + dict(DUAL_MIXED_SHAPES)["sequential"])
 
 
 def build_mixed(stem, clip, transcript, targets, ilang, meta, probs, max_asks, **kw):
@@ -1089,10 +1763,14 @@ def build_mixed(stem, clip, transcript, targets, ilang, meta, probs, max_asks, *
     # Only on clips that can carry a bundle plus another turn; elsewhere the draw would
     # fail and fall back to sequential, halving the compound share.
     p_hybrid = probs.get("hybrid", MIXED_HYBRID_SHARE) if len(targets) >= 2 else 0.0
+    compound_of_rest = MIXED_COMPOUND_OF_REST
+    if kw.get("dual_clip") is not None:
+        p_hybrid = max(p_hybrid, dict(DUAL_MIXED_SHAPES)["hybrid"])
+        compound_of_rest = DUAL_COMPOUND_OF_REST
     if random.random() < p_hybrid:
         shape = "hybrid"
     else:
-        shape = "compound" if random.random() < MIXED_COMPOUND_OF_REST else "sequential"
+        shape = "compound" if random.random() < compound_of_rest else "sequential"
     builder = {"sequential": build_sequential, "compound": build_compound,
                "hybrid": build_hybrid}[shape]
     turns = builder(stem, clip, transcript, targets, ilang, meta, probs, max_asks, **kw)
@@ -1104,16 +1782,24 @@ def build_mixed(stem, clip, transcript, targets, ilang, meta, probs, max_asks, *
 
 
 def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_asks=None,
-                     *, first_key=_MISSING, last_key=_MISSING, turn_dist=TURN_DIST,
-                     min_turns=2, voice=True, trace=None, continuation=False):
+                     *, first_key=_MISSING, first_start=0, last_key=_MISSING,
+                     turn_dist=TURN_DIST, min_turns=2, voice=True, trace=None,
+                     continuation=False, dual_clip=None, dual_task=None, dual_clip2=None,
+                     dual2_task=None, dual_extra_task=None, dual_extra_text=None):
     """Audio in turn 1 only; every later user turn is text-only and elliptical.
 
     The turn count is drawn from TURN_DIST and then that many items are taken,
     so the length distribution is a parameter rather than a by-product of how
-    many translations the clip happens to have.
+    many translations the clip happens to have. `targets` carrying a `DUAL_KEY`/
+    `DUAL_KEY2` entry (forced to a front slot, in that order, starting at
+    `first_start` -- see `conversation_items`) is just one more item drawn from
+    the same pool, asked like any other -- only the extra clips' audio needs its
+    own line, since they have to be heard before being asked about. The first
+    clip's OWN turns are qualified ("Sur le premier extrait : ...") once a dual
+    item is active, since a bare "et en anglais ?" no longer says which clip.
     """
     src = meta["lang"]
-    items = conversation_items(transcript, targets, first_key)
+    items = conversation_items(transcript, targets, first_key, first_start)
     n_turns = draw_turns(len(items), turn_dist)
     if n_turns < min_turns:
         return None
@@ -1129,14 +1815,26 @@ def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_as
         if tgt is None:
             question = (bank_prompt("transcription", ilang, src) if first
                         else followup_transcribe(ilang, src, asked))
+            if dual_clip is not None:
+                question = qualify_first_clip(question, ilang)
+        elif tgt == DUAL_KEY:
+            question = dual_question(ilang, 0, dual_task, first, has_third=dual_clip2 is not None)
+        elif tgt == DUAL_KEY2:
+            question = dual_question(ilang, 1, dual2_task, first)
         else:
             question = (bank_prompt("translation", ilang, src, tgt) if first
                         else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
+            if dual_clip is not None:
+                question = qualify_first_clip(question, ilang)
         turns.append(user_text(question))
         if not (first and continuation):
             asked.append(question)
         if first:
             turns.append(user_audio(clip["audio"], clip["duration"]))
+            if dual_clip is not None:
+                turns.append(user_audio(dual_clip["audio"], dual_clip["duration"]))
+            if dual_clip2 is not None:
+                turns.append(user_audio(dual_clip2["audio"], dual_clip2["duration"]))
         turns.append(assistant(text))
 
     if voice:
@@ -1181,11 +1879,22 @@ def elliptic_lead(carried, ilang, src, prev_src, rate):
     return random.choice(CONTINUATION_ELLIPTIC[ilang])
 
 
-def build_conversation(records, mode, probs, args):
+def build_conversation(records, mode, probs, args, dual_rec=None, dual_rec2=None):
     """Chain one segment per clip into a single conversation.
 
     A segment is a normal conversation on one clip; only its opening changes. The
     instruction language is drawn once for the whole conversation.
+
+    `dual_rec`, when given, glues a SECOND clip into segment 0's turn 1: both audios,
+    one turn, its transcript folded into segment 0's `targets` as one more item
+    (`DUAL_KEY`) alongside the real translations, forced to the front so whichever
+    shape segment 0 draws (sequential/compound/hybrid) is guaranteed to ask it --
+    same mechanism `last_key` already uses to steer where an item lands. `dual_rec2`
+    (only ever set alongside `dual_rec`) does the same for a rare THIRD clip
+    (`DUAL_KEY2`, forced to position 1). A second, distinct fact about `dual_rec`
+    itself is also drawn here and passed down as `dual_extra_task`/`dual_extra_text`
+    -- not routed through the pool (no new audio to guarantee), only ever picked up
+    by `build_compound`'s padding decision.
 
     Returns (turns, n_clips_used) or None. A later segment whose builder declines just
     ends the conversation early instead of discarding what is already built.
@@ -1223,7 +1932,71 @@ def build_conversation(records, mode, probs, args):
                 pool = sorted(shared - {None}, key=str) or [None]
                 kwargs["last_key"] = random.choice(pool)
 
-        segment = builder(rec["stem"], rec["clip"], rec["transcript"], rec["targets"],
+        targets = rec["targets"]
+        if index == 0 and dual_rec is not None:
+            # Drawn from the second clip's OWN pool -- its transcript, or (as often)
+            # one of its real translations -- so a translate-the-dual-item ask has a
+            # genuine, distinct-language answer instead of always repeating the same
+            # transcript under a translation-shaped question.
+            dual_pool = conversation_items(dual_rec["transcript"], dual_rec["targets"])
+            # Biased toward a task the first clip can ALSO answer (the transcript
+            # always qualifies -- every clip has one -- a shared translation
+            # target sometimes does too), so the two clips coincide on the same
+            # ask often enough for `build_compound`'s merge ("transcris les deux
+            # audios") to be the rule rather than a rare coincidence. The
+            # unbiased draw is kept as the rest of the mass, so the dual item
+            # still lands on a genuinely distinct-language answer sometimes.
+            shared_pool = [item for item in dual_pool if item[0] in rec["keys"]]
+            if shared_pool and random.random() < DUAL_MERGE_BIAS_RATE:
+                # The transcript is the one shared task `pick_compound_selection`
+                # includes most reliably (65% of compound turns, vs. a translation
+                # target that has to also be among the few "chosen" ones) --
+                # preferred within the shared pool so the bias actually lands on
+                # a mergeable draw most of the time, not just a theoretically
+                # shared one.
+                transcript_shared = [item for item in shared_pool if item[0] is None]
+                pool = (transcript_shared if transcript_shared and random.random() < 0.7
+                        else shared_pool)
+                dual_task, dual_text = random.choice(pool)
+            else:
+                dual_task, dual_text = random.choice(dual_pool)
+            keys = [DUAL_KEY]
+            # A new list: `targets` is the pool's own, reused (and reshuffled) across
+            # later draws of this clip, and must not carry the dual item into those.
+            targets = [(DUAL_KEY, dual_text)] + list(targets)
+            kwargs["dual_clip"] = dual_rec["clip"]
+            kwargs["dual_task"] = dual_task
+            new_keys = rec["keys"] | {DUAL_KEY}
+
+            # A second, DIFFERENT fact about the same second clip -- not a pool item,
+            # only ever used by `build_compound` to keep a merged ask's padding clause
+            # from always being about the first clip.
+            other = [item for item in dual_pool if item[0] != dual_task]
+            if other and random.random() < args.dual_extra_rate:
+                kwargs["dual_extra_task"], kwargs["dual_extra_text"] = random.choice(other)
+
+            dual2_task = None
+            if dual_rec2 is not None:
+                dual2_task, dual2_text = random.choice(
+                    conversation_items(dual_rec2["transcript"], dual_rec2["targets"]))
+                targets = [(DUAL_KEY2, dual2_text)] + targets
+                keys.append(DUAL_KEY2)
+                kwargs["dual_clip2"] = dual_rec2["clip"]
+                kwargs["dual2_task"] = dual2_task
+                new_keys = new_keys | {DUAL_KEY2}
+
+            kwargs["first_key"] = keys
+            # Forcing the dual item(s) to position 0 every time would make "what
+            # does the FIRST clip say" never the opening question of a dual
+            # conversation -- half the time they are guaranteed a spot from turn 2
+            # on instead, leaving position 0 to whatever the pool would have put
+            # there anyway (only `build_sequential`/`build_hybrid` read this;
+            # `build_compound` bundles everything into one turn regardless).
+            kwargs["first_start"] = 0 if random.random() < DUAL_LEAD_RATE else 1
+            rec = {**rec, "targets": targets, "keys": new_keys, "dual_task": dual_task,
+                  "dual2_task": dual2_task}
+
+        segment = builder(rec["stem"], rec["clip"], rec["transcript"], targets,
                           ilang, rec["meta"], probs, args.max_compound_asks, **kwargs)
         if segment is None:
             if index == 0:
@@ -1255,8 +2028,16 @@ def build_conversation(records, mode, probs, args):
     # that skipped them while sitting under them would read as an omission.
     append_recap(turns, ilang, delivered, n_content_turns, args.recap_rate)
     if not (content_texts == 1 and n_audios == 1):
-        append_voice_followups(turns, ilang, records[used - 1]["meta"], probs,
-                               qualify=n_audios > 1)
+        # The dual clip, when it is what segment 0 answered with, is the most
+        # recently heard audio -- voice questions should point at it, not at the
+        # first clip whose audio came before it in the same turn.
+        if used == 1 and dual_rec2 is not None:
+            voice_meta = dual_rec2["meta"]
+        elif used == 1 and dual_rec is not None:
+            voice_meta = dual_rec["meta"]
+        else:
+            voice_meta = records[used - 1]["meta"]
+        append_voice_followups(turns, ilang, voice_meta, probs, qualify=n_audios > 1)
     return turns, used
 
 
@@ -1577,10 +2358,33 @@ def generate(args):
                     group.append(take(lang))
             groups += 1
 
+            # Drawn once per group, not per mode, like `group` itself: every mode builds
+            # off the same clips. Independent of the multi-audio chain above -- this one
+            # glues into segment 0's OWN turn rather than opening a new segment.
+            dual_rec = dual_rec2 = None
+            if random.random() < args.dual_transcription_rate:
+                lang = None
+                if random.random() < args.cross_lang_rate:
+                    lang = pick_lang(exclude=group[0]["meta"]["lang"])
+                if lang is None:
+                    lang = pick_lang()
+                if lang is not None:
+                    dual_rec = take(lang)
+                    # A rare THIRD clip, only ever alongside a second one.
+                    if random.random() < args.dual_triple_rate:
+                        lang2 = None
+                        if random.random() < args.cross_lang_rate:
+                            lang2 = pick_lang(exclude=dual_rec["meta"]["lang"])
+                        if lang2 is None:
+                            lang2 = pick_lang()
+                        if lang2 is not None:
+                            dual_rec2 = take(lang2)
+
             for mode in modes:
                 if counters[mode] >= args.max_samples:
                     continue
-                built = build_conversation(group, mode, probs, args)
+                built = build_conversation(group, mode, probs, args, dual_rec=dual_rec,
+                                           dual_rec2=dual_rec2)
                 if built is None:
                     continue
                 turns, used = built
@@ -1596,6 +2400,13 @@ def generate(args):
                 open_lang[mode][group[0]["meta"]["lang"]] += 1
                 for rec in group[:used]:
                     lang_counts[mode][rec["meta"]["lang"]] += 1
+                # The dual item(s) are forced into segment 0, so they are used whenever
+                # build_conversation returned at all (a decline there returns None for
+                # the whole conversation).
+                if dual_rec is not None:
+                    lang_counts[mode][dual_rec["meta"]["lang"]] += 1
+                if dual_rec2 is not None:
+                    lang_counts[mode][dual_rec2["meta"]["lang"]] += 1
 
                 content, leads = [], []
                 for turn in turns:
@@ -1714,6 +2525,23 @@ def parse_args():
                    help="Share of conversations that change audio part-way through. Composes "
                         "with the three shapes rather than replacing them: each segment is "
                         "still sequential, compound or hybrid.")
+    p.add_argument("--dual-transcription-rate", type=float, default=0.0,
+                   help="Share of conversations where a second clip is glued into segment "
+                        "1's own turn 1 (both audios, no assistant reply between them), its "
+                        "transcript folded into the normal ask pool as one more item. Composes "
+                        "with sequential/compound/hybrid: whichever shape segment 1 draws, that "
+                        "item is guaranteed to be asked -- alone, bundled with translations, "
+                        "chained, recapped. 0 disables it.")
+    p.add_argument("--dual-triple-rate", type=float, default=0.0,
+                   help="Of the conversations already carrying a dual clip, the share that get "
+                        "a THIRD clip glued into the same turn instead. Never merges into a "
+                        "single 'both clips' clause (only the second clip does): always its own "
+                        "explicitly-numbered ask. 0 disables it.")
+    p.add_argument("--dual-extra-rate", type=float, default=0.0,
+                   help="Share of dual conversations where the second clip's OWN pool also "
+                        "supplies a second, distinct fact (its transcript plus one translation, "
+                        "say) -- used only by the compound shape, to name the second clip in a "
+                        "merged ask's padding clause instead of always the first. 0 disables it.")
     p.add_argument("--reuse-rate", type=float, default=0.05,
                    help="Hard cap on the share of clip draws reusing an already-used clip, "
                         "with its asks permuted. Only triggered by an exhausted pool: fr "
