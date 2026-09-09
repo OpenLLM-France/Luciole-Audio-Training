@@ -150,6 +150,23 @@ export TRANSFORMERS_OFFLINE=1
 export NEMO_MODELS_CACHE="$TMP_CACHE"
 
 # =====================================================
+# Resolve CHECKPOINT from CHECKPOINT_DIR (curriculum warm-start)
+# =====================================================
+# Lets slurm_launcher.py submit a later stage with --dependency=afterok before the
+# earlier stage's checkpoint exists: CHECKPOINT_DIR is a literal path known at
+# submission time, CHECKPOINT (the actual *-last.ckpt file) is only resolved here,
+# once the dependency has been satisfied and the file is guaranteed to exist.
+if [[ -z "${CHECKPOINT:-}" && -n "${CHECKPOINT_DIR:-}" ]]; then
+    CHECKPOINT="$(ls -t "${CHECKPOINT_DIR}"/*-last.ckpt 2>/dev/null | head -1)"
+    if [[ -z "$CHECKPOINT" ]]; then
+        echo "❌ No *-last.ckpt found in CHECKPOINT_DIR=${CHECKPOINT_DIR}" >&2
+        exit 1
+    fi
+    export CHECKPOINT
+    echo "Resolved CHECKPOINT from CHECKPOINT_DIR: $CHECKPOINT"
+fi
+
+# =====================================================
 # SLURM array: tasks after the first auto-resume
 # =====================================================
 # The first task starts the run and honors OVERWRITE/RESUME as usual; every later one

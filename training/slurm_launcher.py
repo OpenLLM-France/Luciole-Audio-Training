@@ -136,8 +136,8 @@ def inject_exports(lines, env):
     last_sbatch = max(i for i, l in enumerate(lines) if l.startswith("#SBATCH"))
     block = ["\n# ---- Overrides injected by slurm_launcher.py ----\n",
              "# To rerun this exact job: `sbatch <this-file>`\n",
-             "# (NOTE: env vars NOT injected here, e.g. CHECKPOINT for curriculum\n",
-             "#  warm-starts, must be re-exported in the shell before re-running.)\n"]
+             "# (NOTE: a literal CHECKPOINT, if used instead of --checkpoint-dir, is NOT\n",
+             "#  injected here and must be re-exported in the shell before re-running.)\n"]
     for k, v in env.items():
         block.append(f"export {k}={shlex.quote(v)}\n")
     block.append("# ---- End overrides ----\n")
@@ -270,6 +270,11 @@ def main():
                               "bypassing the model-family derivation "
                               f"(default: {DEFAULT_LOGS_ROOT}/<model-family>/"
                               "[<subdir>/]<job_name>)")
+    g_train.add_argument("--checkpoint-dir", default=None,
+                         help="Directory to resolve CHECKPOINT from at job RUNTIME via "
+                              "`ls -t <dir>/*-last.ckpt` (e.g. the previous curriculum "
+                              "stage's .../checkpoints/ dir). Use with --after so stage2 "
+                              "can be submitted before stage1's checkpoint file exists.")
 
     g_slurm = parser.add_argument_group("SLURM directives")
     g_slurm.add_argument("--gpus", type=int, default=None,
@@ -285,6 +290,10 @@ def main():
                               "one at a time). The first task starts the run; each later task "
                               "auto-resumes from the last checkpoint. Use when training can't "
                               "finish within a single --time window.")
+    g_slurm.add_argument("--after", metavar="JOBID", default=None,
+                         help="Submit with --dependency=afterok:JOBID, so this job waits for "
+                              "JOBID to finish successfully before starting (e.g. chain a "
+                              "curriculum stage2 onto stage1 with --checkpoint-dir).")
 
     parser.add_argument("--dry-run", action="store_true",
                         help="Materialize the slurm file and copy the config + input_cfg "
@@ -353,6 +362,9 @@ def main():
                          f"default.")
             env_overrides[name] = value
 
+    if args.checkpoint_dir is not None:
+        env_overrides["CHECKPOINT_DIR"] = expand_or_die(args.checkpoint_dir, "--checkpoint-dir")
+
     overrides = list(args.overrides)
     for o in overrides:
         if "=" not in o:
@@ -408,6 +420,8 @@ def main():
         print("SBATCH overrides:")
         for k, v in sbatch_overrides.items():
             print(f"  --{k}={v}")
+    if args.after is not None:
+        print(f"Dependency:   --dependency=afterok:{args.after}")
 
     if args.dry_run:
         dryrun_path = save_dir_path / f"{job_name}_dryrun.slurm"
@@ -419,16 +433,25 @@ def main():
             print(f"  config: {dst}")
         return
 
-    if config_needs_checkpoint(args.config) and not os.environ.get("CHECKPOINT"):
+    if (config_needs_checkpoint(args.config)
+            and not os.environ.get("CHECKPOINT")
+            and not args.checkpoint_dir):
         submitted.unlink(missing_ok=True)
         sys.exit(
-            f"Config '{args.config}' warm-starts from ${{oc.env:CHECKPOINT}} but "
-            f"CHECKPOINT is not set in the environment.\n"
-            f"Export it before launching, e.g.:\n"
-            f'  export CHECKPOINT="$(ls -t "$EXP"/<stage>/checkpoints/*-last.ckpt | head -1)"'
+            f"Config '{args.config}' warm-starts from ${{oc.env:CHECKPOINT}} but neither "
+            f"CHECKPOINT nor --checkpoint-dir is set.\n"
+            f"Either export a literal checkpoint path, e.g.:\n"
+            f'  export CHECKPOINT="$(ls -t "$EXP"/<stage>/checkpoints/*-last.ckpt | head -1)"\n'
+            f"or, if the checkpoint doesn't exist yet (chaining onto a running stage), pass\n"
+            f"  --checkpoint-dir <stage1-exp-dir>/checkpoints --after <stage1-jobid>\n"
+            f"and it will be resolved once the job actually starts."
         )
 
-    result = subprocess.run(["sbatch", "--export=ALL", str(submitted)], capture_output=True, text=True)
+    sbatch_cmd = ["sbatch", "--export=ALL"]
+    if args.after is not None:
+        sbatch_cmd.append(f"--dependency=afterok:{args.after}")
+    sbatch_cmd.append(str(submitted))
+    result = subprocess.run(sbatch_cmd, capture_output=True, text=True)
     print(result.stdout.strip())
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)
