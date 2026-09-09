@@ -1,21 +1,50 @@
 #!/bin/bash
 # ============================================================================
-# Construit de bout en bout l'env conda des runs SALMAutomodel (Luciole 8B/23B).
-# Fusionne l'ancien speechLM/tools/install.slurm (base) et install_automodel.sh
-# (paquets + patches), qui vivaient dans deux depots differents.
+# Installs the conda env for SALM automodel training (branch
+# luciole_speech.3.1.0-rc0, NeMo fork under $HOME/NeMo), based on the
+# nemo/2.7.3 module (torch 2.12.1 : needed for
+# torch.distributed.pipelining.microbatch.BlockMask, imported by
+# nemo_automodel and required as soon as create_device_mesh() runs, so for
+# every 8B/23B run in FSDP2 even without pipeline parallelism active).
 #
-#   sbatch training/xp_commands/install_env.slurm
+# Pinned versions:
+#   - AUTOMODEL_COMMIT: pinned to the ACTUAL commit from NeMo/pyproject.toml
+#     (uv sources). This is the commit that exposes
+#     DistributedSetup/FSDP2Config/ParallelismSizes used by
+#     nemo/collections/speechlm2/parts/parallel.py::create_device_mesh.
+#   - LHOTSE_VERSION: NeMo/nemo/collections/speechlm2/data/*_dataset.py calls
+#     AudioSamples(..., ais_force_individual=...), a kwarg absent from
+#     lhotse<2.0 -> TypeError (blocking for every model size). Pinned to
+#     2.0.0a3 like NeMo/pyproject.toml.
+#   - TRANSFORMERS_VERSION: pinned to 5.12.1 like NeMo/pyproject.toml. Patch
+#     (2) below auto-skips as soon as the built-in nemotron_h already has
+#     '"-": "mlp"' (checked at runtime).
 #
-# Phases, desactivables individuellement :
-#   SKIP_BASE=1     ne pas recopier l'env de base (reprise sur un DST existant)
-#   SKIP_PIP=1      ne pas (re)installer les paquets
-#   SKIP_PATCHES=1  ne pas reappliquer les patches (ils sont idempotents)
+# Why --no-deps for nemo_automodel (do NOT remove): a full `pip install`
+# (without --no-deps) of this commit pulls in quack-kernels ->
+# nvidia-cutlass-dsl -> cuda-python/nvidia-cuda-nvdisasm (CUDA 13 "nvidia-*"
+# packages), which turns the `nvidia` namespace package (previously absent
+# from the env) into a BROKEN one (nvidia/cu13/ with no __init__.py ->
+# nvidia.__file__ is None) and crashes
+# transformer_engine._nvidia_cudart_include_dir (TypeError on Path(None)).
+# The same chain also installs torchao 0.18.0, incompatible with torch<2.9
+# (torch.nn.functional.ScalingType absent). --no-deps + explicit pins below
+# avoids all of this.
 #
-# La phase pip a besoin du proxy IDRIS ; il vient du profil de login et Slurm
-# le propage (--export=ALL par defaut). Repris en dur plus bas au cas ou.
+# Prerequisite: NeMo (~137 MB, no .git) already pushed under $HOME (rsync
+# from this workstation, checkout luciole_speech.3.1.0-rc0).
+#
+# Phases, individually disableable:
+#   SKIP_BASE=1     don't re-copy the base env (resume on an existing DST)
+#   SKIP_PIP=1      don't (re)install packages
+#   SKIP_PATCHES=1  don't reapply patches (they're idempotent)
+#
+# The pip phase needs the IDRIS proxy; it comes from the login profile and
+# Slurm propagates it (--export=ALL by default). Hardcoded fallback below
+# just in case.
 # ============================================================================
 
-#SBATCH --job-name=install_salm_automodel
+#SBATCH --job-name=install_salm_automodel_3.1.0rc0
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --ntasks=1
@@ -30,79 +59,89 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-NEMO_MODULE=${NEMO_MODULE:-nemo/2.4.0}
-DST=${DST:-$SCRATCH/speechlm/envs/nemo24-salm_automodel}
-# SRC (env de base) n'est pas ecrit en dur : il est deduit du module, apres son
-# chargement. Surchargeable si besoin.
+NEMO_MODULE=${NEMO_MODULE:-nemo/2.7.3}
+DST=${DST:-$SCRATCH/speechlm/envs/nemo27-salm_automodel_3}
+# SRC (base env) is not hardcoded: it's derived from the module, after it's
+# loaded. Overridable if needed.
 
-# Fork NeMo : epingle au commit, contrairement a l'ancien `pip install -e $HOME/NeMo`
-# qui installait un dossier non versionne au contenu indetermine.
+# NeMo fork: $HOME/NeMo, a snapshot rsynced from this workstation (checkout
+# luciole_speech.3.1.0-rc0 WITHOUT .git). NEMO_FORK_BRANCH/NEMO_FORK_COMMIT
+# only apply to an alternative NEMO_FORK pointed at a real clone.
 NEMO_FORK=${NEMO_FORK:-$HOME/NeMo}
 NEMO_FORK_REPO=${NEMO_FORK_REPO:-https://github.com/linagora-labs/NeMo.git}
-NEMO_FORK_BRANCH=${NEMO_FORK_BRANCH:-luciole_speech.2.8.0-rc0}
-NEMO_FORK_COMMIT=${NEMO_FORK_COMMIT:-e7e44dc92}
+NEMO_FORK_BRANCH=${NEMO_FORK_BRANCH:-luciole_speech.3.1.0-rc0}
+NEMO_FORK_COMMIT=${NEMO_FORK_COMMIT:-}
 
-AUTOMODEL_COMMIT=9eccbb6102a260efd7cbdffa890fc57b94f94528   # nemo_automodel 0.4.0
+# Commit actually pinned in luciole_speech.3.1.0-rc0's pyproject.toml. This is
+# the commit that exposes DistributedSetup / FSDP2Config / ParallelismSizes
+# used by nemo/collections/speechlm2/parts/parallel.py::create_device_mesh.
+AUTOMODEL_COMMIT=${AUTOMODEL_COMMIT:-7b15c9bfbc620bec4dd3b819fce2e48726a7ddeb}
 
-# 5.5.0 = la version reellement presente dans l'env qui a produit les checkpoints
-# du 8B. L'ancien install_automodel.sh epinglait 5.6.0, jamais teste sur ces runs.
-# A 5.5.0 le patch (2) plus bas est NECESSAIRE ; a partir de 5.6.0 il se saute seul.
-TRANSFORMERS_VERSION=${TRANSFORMERS_VERSION:-5.5.0}
+# Pinned to the actual pin in NeMo/pyproject.toml.
+TRANSFORMERS_VERSION=${TRANSFORMERS_VERSION:-5.12.1}
 
-# Figes sur les versions observees dans l'env de production (avant : non epinglees,
-# donc un reinstall les faisait deriver).
 PEFT_VERSION=0.19.1
 MLFLOW_VERSION=3.14.0
 LATEX2SYMPY2_VERSION=1.9.1
-LHOTSE_VERSION=1.33.0
+# Pinned to the actual pin in NeMo/pyproject.toml: AudioSamples there is
+# missing the ais_force_individual kwarg called by
+# nemo/collections/speechlm2/data/*_dataset.py on lhotse<2.0 -> TypeError.
+LHOTSE_VERSION=${LHOTSE_VERSION:-2.0.0a3}
 
-# Le proxy vient du profil de login et Slurm le propage. On ne le code pas en dur :
-# sans lui les pip echoueraient de toute facon, autant le dire tout de suite.
+# The proxy comes from the login profile and Slurm propagates it. Not
+# hardcoded here: without it the pips would fail anyway, so fail fast.
 if [ "${SKIP_PIP:-0}" != "1" ] && [ -z "${https_proxy:-}" ]; then
-    echo "https_proxy absent : les pip n'auront pas de reseau. Soumettre depuis un" >&2
-    echo "shell de login (le job herite de son environnement) ou l'exporter." >&2
+    echo "https_proxy absent: pip won't have network access. Submit from a" >&2
+    echo "login shell (the job inherits its environment) or export it." >&2
     exit 1
 fi
 
 module purge
 module load arch/h100 "$NEMO_MODULE"
 
-# Env de base = celui que le module vient de selectionner. conda le designe d'un '*'
-# dans `conda env list` ; a defaut on le retrouve sous la racine conda a partir du
-# nom du module (nemo/2.4.0 -> envs/nemo-2.4.0+py*). Aucun chemin absolu ecrit ici.
+# Base env = the one the module just selected. conda flags it with a '*' in
+# `conda env list`; failing that, we derive it from the module name under the
+# conda root (nemo/2.7.3 -> envs/nemo-2.7.3+py*). No absolute path hardcoded
+# here.
 if [ -z "${SRC:-}" ]; then
-    SRC=$(conda env list 2>/dev/null | awk '$2 == "*" {print $3}')
+    # $2 == "*" alone also matches the legend line "# *  -> active" that this
+    # conda (miniforge 25.9.1) always prints -> SRC ended up corrupted
+    # ("-> /path..."). We exclude comment lines and stop at the first real
+    # match.
+    SRC=$(conda env list 2>/dev/null | awk '$1 !~ /^#/ && $2 == "*" {print $3; exit}')
     [ -n "$SRC" ] || SRC=$(ls -d "$(conda info --base)/envs/nemo-${NEMO_MODULE#nemo/}"+py* 2>/dev/null | head -1)
 fi
 [ -n "${SRC:-}" ] && [ -x "$SRC/bin/python" ] || {
-    echo "env de base introuvable pour $NEMO_MODULE (SRC='${SRC:-}')" >&2; exit 1; }
+    echo "base env not found for $NEMO_MODULE (SRC='${SRC:-}')" >&2; exit 1; }
 
 echo "=== module   : $NEMO_MODULE"
 echo "=== base     : $SRC"
-echo "=== cible    : $DST"
-echo "=== fork NeMo: $NEMO_FORK @ $NEMO_FORK_COMMIT"
+echo "=== target   : $DST"
+echo "=== NeMo fork: $NEMO_FORK"
 
 # ---------------------------------------------------------------------------
-# 1. Env de base : copie du module partage
+# 1. Base env: copy of the shared module
 # ---------------------------------------------------------------------------
-# `conda create --clone` echoue sur cet env : tout y est en pypi_0 (le clone ne
-# sait pas les reproduire) et il tente d'ecrire dans la source en lecture seule.
-# La copie directe le reproduit exactement.
+# `conda create --clone` fails on this env: everything is pypi_0 (the clone
+# can't reproduce them) and it tries to write into the read-only source. A
+# direct copy reproduces it exactly.
 if [ "${SKIP_BASE:-0}" = "1" ]; then
-    echo "--- [1/4] base : saute (SKIP_BASE=1)"
+    echo "--- [1/4] base: skipped (SKIP_BASE=1)"
 else
-    echo "--- [1/4] base : copie de 12 Go, compter ~15 min sur Lustre"
-    # Si DST existe, cp -a copierait SRC *dedans*. Echouer plutot qu'abimer l'env vivant.
-    [ -e "$DST" ] && { echo "DST existe deja, le supprimer ou passer SKIP_BASE=1 : $DST" >&2; exit 1; }
+    echo "--- [1/4] base: copying 12 GB, expect ~15 min on Lustre"
+    # If DST exists, cp -a would copy SRC *into* it. Fail instead of damaging
+    # a live env.
+    [ -e "$DST" ] && { echo "DST already exists, remove it or pass SKIP_BASE=1: $DST" >&2; exit 1; }
     mkdir -p "$(dirname "$DST")"
     cp -a "$SRC" "$DST"
 
-    # Reecrire le prefixe source code en dur dans les console scripts.
+    # Rewrite the hardcoded source prefix in the console scripts.
     grep -rIl "$SRC" "$DST/bin" 2>/dev/null | xargs -r sed -i "s|$SRC|$DST|g"
 
-    # Idem dans les .pth. Ils contiennent des chemins auto-referents (setuptools.pth)
-    # qui, non reecrits, reinjectent le site-packages de l'env partage en lecture seule
-    # dans sys.path et masquent celui-ci — notamment le fork NeMo installe en editable.
+    # Same for the .pth files. They contain self-referencing paths
+    # (setuptools.pth) that, left unrewritten, re-inject the read-only shared
+    # env's site-packages into sys.path and shadow this one — notably the
+    # NeMo fork installed in editable mode.
     grep -rIl "$SRC" "$DST"/lib/python*/site-packages/*.pth 2>/dev/null \
         | xargs -r sed -i "s|$SRC|$DST|g"
 fi
@@ -111,12 +150,17 @@ conda activate "$DST"
 echo "--- python   : $(python -V 2>&1) ($(which python))"
 
 # ---------------------------------------------------------------------------
-# 2. Paquets
+# 2. Packages
 # ---------------------------------------------------------------------------
 if [ "${SKIP_PIP:-0}" = "1" ]; then
-    echo "--- [2/4] paquets : saute (SKIP_PIP=1)"
+    echo "--- [2/4] packages: skipped (SKIP_PIP=1)"
 else
-    echo "--- [2/4] paquets"
+    echo "--- [2/4] packages"
+    # --no-deps: see banner at the top. Without it, this commit pulls in
+    # quack-kernels -> nvidia-cutlass-dsl -> cuda-python (CUDA 13 "nvidia-*"
+    # packages), which breaks the `nvidia` namespace package
+    # (transformer_engine._nvidia_cudart_include_dir crashes on Path(None))
+    # and installs torchao 0.18.0 (incompatible with torch<2.9).
     pip install --no-deps \
         "nemo_automodel @ git+https://github.com/NVIDIA-NeMo/Automodel.git@${AUTOMODEL_COMMIT}"
     pip install "transformers==${TRANSFORMERS_VERSION}"
@@ -129,68 +173,83 @@ else
     pip install "nv-one-logger-core==2.3.1" \
                 "nv-one-logger-pytorch-lightning-integration==2.3.1" \
                 "nv-one-logger-training-telemetry==2.3.1"
-
-    # Fork NeMo au commit epingle.
-    if [ ! -d "$NEMO_FORK/.git" ]; then
-        if [ -e "$NEMO_FORK" ]; then
-            echo "$NEMO_FORK existe mais n'est pas un depot git — le deplacer ou fixer NEMO_FORK" >&2
-            exit 1
+    pip install torchdata
+    # NeMo fork. Two cases:
+    #   - NEMO_FORK is already a snapshot without .git (the default case,
+    #     rsynced from this workstation — see banner at the top): install it
+    #     as-is, no git operation is possible on it (NEMO_FORK_BRANCH/COMMIT
+    #     ignored).
+    #   - NEMO_FORK is (or should become) a real git clone: original
+    #     behavior, clone if absent then fetch + checkout at the desired
+    #     commit (latest on the branch by default, see NEMO_FORK_COMMIT
+    #     above).
+    if [ -e "$NEMO_FORK" ] && [ ! -d "$NEMO_FORK/.git" ]; then
+        echo "--- NeMo fork: $NEMO_FORK (snapshot without .git — no git checkout, NEMO_FORK_BRANCH/COMMIT ignored)"
+    else
+        if [ ! -d "$NEMO_FORK/.git" ]; then
+            git clone --branch "$NEMO_FORK_BRANCH" "$NEMO_FORK_REPO" "$NEMO_FORK"
         fi
-        git clone --branch "$NEMO_FORK_BRANCH" "$NEMO_FORK_REPO" "$NEMO_FORK"
+        git -C "$NEMO_FORK" fetch --quiet origin "$NEMO_FORK_BRANCH"
+        # NEMO_FORK_COMMIT empty (default) -> latest commit fetched on the branch.
+        [ -n "$NEMO_FORK_COMMIT" ] || NEMO_FORK_COMMIT=$(git -C "$NEMO_FORK" rev-parse FETCH_HEAD)
+        git -C "$NEMO_FORK" checkout --quiet "$NEMO_FORK_COMMIT"
+        echo "--- NeMo fork: $(git -C "$NEMO_FORK" log --oneline -1)"
     fi
-    git -C "$NEMO_FORK" fetch --quiet origin "$NEMO_FORK_BRANCH"
-    git -C "$NEMO_FORK" checkout --quiet "$NEMO_FORK_COMMIT"
-    echo "--- fork NeMo: $(git -C "$NEMO_FORK" log --oneline -1)"
     pip install --no-deps -e "$NEMO_FORK"
 fi
 
 # ===========================================================================
-# 3. Patches post-install — necessaires pour charger le Nemotron-H dense
-#    (Luciole-8B) sous transformers 5.x avec le modeling INTEGRE
-#    (trust_remote_code off ; cf. conf/base_automodel.yaml). Tous idempotents.
-#    (3) et (4) sont ce qui rend le modeling integre utilisable en multi-GPU.
+# 3. Post-install patches — needed to load the dense Nemotron-H (Luciole-8B)
+#    under transformers 5.x with the BUILT-IN modeling (trust_remote_code
+#    off; cf. conf/base_automodel.yaml). All idempotent, self-detecting
+#    (silently skip if already satisfied).
 # ===========================================================================
 if [ "${SKIP_PATCHES:-0}" = "1" ]; then
-    echo "--- [3/4] patches : saute (SKIP_PATCHES=1)"
+    echo "--- [3/4] patches: skipped (SKIP_PATCHES=1)"
 else
 echo "--- [3/4] patches"
 
-# (1) ESSENTIEL. mamba-ssm 2.2.5 importe en dur GreedySearchDecoderOnlyOutput /
-#     SampleDecoderOnlyOutput depuis transformers.generation, supprimes en 5.x.
-#     Le modeling nemotron_h INTEGRE charge mamba_ssm (lazy_load_kernel ->
-#     ops.triton.*, ce qui execute mamba_ssm/__init__.py -> mixer_seq_simple ->
-#     utils.generation) et meurt sur l'ImportError. On alias les classes
-#     supprimees vers GenerateDecoderOnlyOutput ; elles ne servent qu'au decode()
-#     de mamba_ssm, que l'entrainement Nemotron-H n'appelle jamais.
+# (1) ESSENTIAL. mamba-ssm hardcodes an import of GreedySearchDecoderOnlyOutput
+#     / SampleDecoderOnlyOutput from transformers.generation, removed in 5.x.
+#     The BUILT-IN nemotron_h modeling loads mamba_ssm (lazy_load_kernel ->
+#     ops.triton.*, which runs mamba_ssm/__init__.py -> mixer_seq_simple ->
+#     utils.generation) and dies on the ImportError. We alias the removed
+#     classes to GenerateDecoderOnlyOutput; they're only used by mamba_ssm's
+#     decode(), which Nemotron-H training never calls.
 python - <<'PY'
-import io, importlib.util
-path = importlib.util.find_spec("mamba_ssm.utils.generation").origin
-src = io.open(path, encoding="utf-8").read()
-old = "from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer"
-new = (
-    "from transformers.generation import TextStreamer\n"
-    "try:  # transformers<5\n"
-    "    from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput\n"
-    "except ImportError:  # transformers>=5 removed these legacy output classes\n"
-    "    try:\n"
-    "        from transformers.generation import GenerateDecoderOnlyOutput as _GenOut\n"
-    "    except Exception:\n"
-    "        _GenOut = dict\n"
-    "    GreedySearchDecoderOnlyOutput = SampleDecoderOnlyOutput = _GenOut"
-)
-if old in src:
-    io.open(path, "w", encoding="utf-8").write(src.replace(old, new))
-    print("patched mamba_ssm:", path)
+import io, os, sysconfig
+path = os.path.join(sysconfig.get_paths()["purelib"], "mamba_ssm", "utils", "generation.py")
+if not os.path.isfile(path):
+    print("mamba_ssm generation.py not found (layout changed?):", path)
 else:
-    print("mamba_ssm: nothing to patch (already patched or layout changed):", path)
+    src = io.open(path, encoding="utf-8").read()
+    old = "from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer"
+    new = (
+        "from transformers.generation import TextStreamer\n"
+        "try:  # transformers<5\n"
+        "    from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput\n"
+        "except ImportError:  # transformers>=5 removed these legacy output classes\n"
+        "    try:\n"
+        "        from transformers.generation import GenerateDecoderOnlyOutput as _GenOut\n"
+        "    except Exception:\n"
+        "        _GenOut = dict\n"
+        "    GreedySearchDecoderOnlyOutput = SampleDecoderOnlyOutput = _GenOut"
+    )
+    if old in src:
+        io.open(path, "w", encoding="utf-8").write(src.replace(old, new))
+        print("patched mamba_ssm:", path)
+    else:
+        print("mamba_ssm: nothing to patch (already patched or layout changed):", path)
 PY
 
-# (2) Auto-detectant. transformers 5.3-5.5 a perdu le token dense '-'=MLP dans le
-#     parseur de pattern du nemotron_h integre (KeyError: '-'). Comme
-#     trust_remote_code est OFF, c'est l'integre qui est charge : a 5.5.0 ce patch
-#     est REQUIS. A partir de 5.6.0 le test ci-dessous echoue et le patch se saute.
+# (2) Self-detecting. transformers 5.3-5.5 lost the dense '-'=MLP token in the
+#     built-in nemotron_h's pattern parser (KeyError: '-'). Since
+#     trust_remote_code is OFF, it's the built-in that's loaded. On 5.12.1
+#     this is normally already fixed upstream: the check below verifies it at
+#     runtime rather than assuming it, and the overlay only triggers if
+#     needed.
 if ! python -c "import io,importlib.util; p=importlib.util.find_spec('transformers.models.nemotron_h.configuration_nemotron_h').origin; import sys; sys.exit(0 if '\"-\": \"mlp\"' in io.open(p).read() else 3)"; then
-  echo "Overlay du nemotron_h de transformers 5.6.0 (l'integre n'a pas '-'=mlp)…"
+  echo "Overlaying nemotron_h from transformers 5.6.0 (built-in is missing '-'=mlp)…"
   TMP=$(mktemp -d)
   pip download --no-deps -q "transformers==5.6.0" -d "$TMP"
   ( cd "$TMP" && unzip -oq transformers-*.whl 'transformers/models/nemotron_h/*' )
@@ -200,21 +259,22 @@ if ! python -c "import io,importlib.util; p=importlib.util.find_spec('transforme
   echo "overlaid nemotron_h into $DEST"
 fi
 
-# (3) ESSENTIEL en multi-GPU. Le parallelizer de nemo_automodel code en dur le nom
-#     de tronc BUNDLED `backbone` a deux endroits, alors que le NemotronHForCausalLM
-#     integre nomme le sien `model` (modeling_nemotron_h.py: self.model = NemotronHModel).
-#     Les deux dispatchent sur le nom de classe, commun aux deux implementations :
-#     avec trust_remote_code off, l'integre atteint ce code et casse sur le
-#     `.backbone` manquant. On fait accepter les DEUX noms (no-op sur le bundled) :
-#       - LLM_MODEL_CLS_TO_LAYERS (wrapping FSDP) : ajouter "model.layers" a cote de
-#         "backbone.layers" ; _reduce_attrs ignore silencieusement le chemin absent.
-#       - NemotronHParallelizationStrategy (chemin TP, seulement si tp_size>1) :
-#         resoudre le tronc en backbone-ou-model avant de lire `.layers`.
+# (3) ESSENTIAL in multi-GPU. nemo_automodel's parallelizer hardcodes the
+#     BUNDLED trunk name `backbone` in two places, whereas the built-in
+#     NemotronHForCausalLM names its own `model`
+#     (modeling_nemotron_h.py: self.model = NemotronHModel). Both dispatch on
+#     the class name, common to both implementations: with trust_remote_code
+#     off, the built-in hits this code and breaks on the missing `.backbone`.
+#     We make it accept BOTH names (no-op on the bundled impl):
+#       - LLM_MODEL_CLS_TO_LAYERS (FSDP wrapping): add "model.layers" next to
+#         "backbone.layers"; _reduce_attrs silently ignores the absent path.
+#       - NemotronHParallelizationStrategy (TP path, only if tp_size>1):
+#         resolve the trunk as backbone-or-model before reading `.layers`.
 python - <<'PY'
 import io, os, sysconfig
-# Localiser le fichier SANS importer nemo_automodel : son __init__ distribue importe
-# torch de facon eager, ce qui exige des MKL/module-loads qu'un shell nu peut ne pas
-# avoir. Un patch purement textuel ne doit pas en dependre.
+# Locate the file WITHOUT importing nemo_automodel: its __init__ eagerly
+# imports torch, which requires MKL/module-loads a bare shell may not have.
+# A purely textual patch shouldn't depend on that.
 path = os.path.join(sysconfig.get_paths()["purelib"],
                     "nemo_automodel", "components", "distributed", "parallelizer.py")
 if not os.path.isfile(path):
@@ -237,22 +297,24 @@ else:
         print("nemo_automodel parallelizer: nothing to patch (already patched or layout changed):", path)
 PY
 
-# (4) ESSENTIEL en multi-GPU. Le checkpointer de nemo_automodel saute le
-#     initialize_weights() de transformers pour Nemotron-H HF, parce que
-#     HF _init_weights reinitialise les A_log/dt_bias Mamba via un copy_() in-place
-#     qui casse sur des DTensors. Mais sa detection a un trou qui touche exactement
-#     un Nemotron-H DENSE charge avec le code integre (trust_remote_code off) :
-#       - is_nemotron_v2 exige `not n_routed_experts`, or la config dense porte un
-#         n_routed_experts=8 parasite (truthy) -> le rate.
-#       - is_nemotron_v3_hf exige hasattr(model, "backbone"), or le tronc integre
-#         est `.model` -> le rate.
-#     -> initialize_weights() s'execute et casse. On ajoute is_nemotron_hf : sauter
-#     pour TOUT NemotronHForCausalLM adosse a transformers (`.model` integre OU
-#     `.backbone` remote-code), mais PAS l'implementation native automodel (module
-#     sous nemo_automodel.*, qui surcharge initialize_weights sans risque). Le
-#     checkpoint de base est charge ensuite (le remap backbone.*->model.* vient
-#     gratuitement du conversion_mapping nemotron_h de transformers), donc sauter
-#     l'init from-scratch est correct.
+# (4) ESSENTIAL in multi-GPU. nemo_automodel's checkpointer skips
+#     transformers' initialize_weights() for Nemotron-H HF, because HF
+#     _init_weights re-initializes the Mamba A_log/dt_bias via an in-place
+#     copy_() that breaks on DTensors. But its detection has a gap that hits
+#     exactly a DENSE Nemotron-H loaded with the built-in code
+#     (trust_remote_code off):
+#       - is_nemotron_v2 requires `not n_routed_experts`, but the dense
+#         config carries a stray n_routed_experts=8 (truthy) -> misses it.
+#       - is_nemotron_v3_hf requires hasattr(model, "backbone"), but the
+#         built-in trunk is `.model` -> misses it.
+#     -> initialize_weights() runs and breaks. We add is_nemotron_hf: skip
+#     for ANY NemotronHForCausalLM backed by transformers (built-in `.model`
+#     OR remote-code `.backbone`), but NOT the native automodel
+#     implementation (module under nemo_automodel.*, which overrides
+#     initialize_weights safely). The base checkpoint is loaded afterwards
+#     (the backbone.*->model.* remap comes for free from transformers'
+#     nemotron_h conversion_mapping), so skipping the from-scratch init is
+#     correct.
 python - <<'PY'
 import io, os, sysconfig
 path = os.path.join(sysconfig.get_paths()["purelib"],
@@ -307,13 +369,13 @@ fi
 # 4. Verification
 # ---------------------------------------------------------------------------
 echo "--- [4/4] verification"
-python - <<'PY'
+python - <<PY
 import importlib.metadata as md, importlib.util, io, os, sysconfig, sys
 
-expected = {"nemo_automodel": "0.4.0+9eccbb61", "transformers": "5.5.0",
-            "torchcodec": "0.7.0", "kaldialign": "0.9.1", "lhotse": "1.33.0",
-            "peft": "0.19.1", "mlflow": "3.14.0", "latex2sympy2": "1.9.1",
-            "nv-one-logger-core": "2.3.1"}
+expected = {"transformers": "${TRANSFORMERS_VERSION}",
+            "torchcodec": "0.7.0", "kaldialign": "0.9.1", "lhotse": "${LHOTSE_VERSION}",
+            "peft": "${PEFT_VERSION}", "mlflow": "${MLFLOW_VERSION}",
+            "latex2sympy2": "${LATEX2SYMPY2_VERSION}", "nv-one-logger-core": "2.3.1"}
 bad = []
 for pkg, want in expected.items():
     try:
@@ -323,7 +385,40 @@ for pkg, want in expected.items():
     flag = "ok " if got == want else "!! "
     if got != want:
         bad.append(pkg)
-    print(f"  {flag}{pkg:<28} {got}  (attendu {want})")
+    print(f"  {flag}{pkg:<28} {got}  (expected {want})")
+
+try:
+    automodel_got = md.version("nemo_automodel")
+    print(f"  -   {'nemo_automodel':<28} {automodel_got}  (expected commit ${AUTOMODEL_COMMIT})")
+except md.PackageNotFoundError:
+    print("  !! nemo_automodel ABSENT")
+    bad.append("nemo_automodel")
+
+import torch
+torch_ok = tuple(int(p) for p in torch.__version__.split("+")[0].split(".")[:2]) >= (2, 7)
+print(f"  {'ok ' if torch_ok else '!! '}{'torch':<28} {torch.__version__}  (expected >=2.7.0)")
+if not torch_ok:
+    bad.append("torch")
+
+blockmask_ok = importlib.util.find_spec("torch.distributed.pipelining.microbatch") is not None
+if blockmask_ok:
+    try:
+        from torch.distributed.pipelining.microbatch import BlockMask  # noqa: F401
+    except ImportError:
+        blockmask_ok = False
+print(f"  {'ok ' if blockmask_ok else '!! '}{'torch pipelining.BlockMask':<28} {'present' if blockmask_ok else 'ABSENT'}  (expected present, required by nemo_automodel autopipeline.py)")
+if not blockmask_ok:
+    bad.append("torch.distributed.pipelining.BlockMask")
+
+nvidia_ok = True
+try:
+    import nvidia
+    nvidia_ok = getattr(nvidia, "__file__", None) is not None
+except ModuleNotFoundError:
+    pass  # absent = ok, the expected state without quack-kernels/cuda-python
+print(f"  {'ok ' if nvidia_ok else '!! '}{'nvidia namespace package':<28} {'ok (absent or regular)' if nvidia_ok else 'BROKEN (namespace without __file__)'}")
+if not nvidia_ok:
+    bad.append("nvidia namespace package")
 
 purelib = sysconfig.get_paths()["purelib"]
 checks = [
@@ -345,8 +440,8 @@ for name, path, needle in checks:
         bad.append(name)
     print(f"  {'ok ' if ok else '!! '}{name}")
 
-print("\nENV INCOMPLET: " + ", ".join(bad) if bad else "\nENV CONFORME")
+print("\nENV INCOMPLETE: " + ", ".join(bad) if bad else "\nENV CONFORMANT")
 sys.exit(1 if bad else 0)
 PY
 
-echo "=== termine : $DST"
+echo "=== done: $DST"
