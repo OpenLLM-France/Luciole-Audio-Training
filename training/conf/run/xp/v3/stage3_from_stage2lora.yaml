@@ -1,0 +1,84 @@
+# @package _global_
+# ============================================================
+# STAGE 3 — "voir le reste des données", warm-started from stage2_from_lora_v2.
+#
+# WHAT THIS FIXES. stage2 (encoder UNFROZEN) had to shrink the batch to fit the
+# trainable encoder: max_tokens 2048, max_duration 150. That filter structurally
+# excluded long-form data — of the 8561-example summary pool (median ~700s) only
+# 5.3% cleared 150s, so the model has effectively never seen summarization — and
+# starved ASR/QA of ~6x their single-phase volume per step.
+#
+# THE LEVER IS MEMORY, NOT STEPS. Re-freezing the encoder in its NEW stage2 state
+# frees the activation budget for the single-phase batch shape (max_tokens 16384,
+# max_duration 1200), which recovers 95.1% of the summary pool, restores the ASR/QA
+# volume, and locks stage2's encoder gains (sound 1.94->1.69, arabic 0.85->0.56).
+# 1200 is the hard ceiling, and also the elbow of the summary duration distribution.
+#
+# So this IS the single-phase regime, just warm-started from stage2/200k and short.
+# It inherits the recipe's data block verbatim, hence it cannot OOM.
+#
+# Trainable: adapter + LoRA only (encoder RE-FROZEN, LLM base frozen; LoRA cannot be
+# frozen from config — see the stage2 yaml header).
+#
+# Launch: see run/xp/launch_stage3_from_stage2lora.sh.
+# ============================================================
+defaults:
+  - /base
+  # Same recipe as the warm-start line (LOCAL attention + ROTE + LoRA r=64), so the
+  # architecture matches bit-for-bit — expect 1052/1052 tensors on load. It also
+  # supplies the data shape we want back, so do NOT add a data block below.
+  - /recipe: luciole
+  - _self_
+
+model:
+  # stage2_from_lora_v2 at 200k (final = best, val_loss 0.7559). Pinned, not a glob.
+  init_from_checkpoint: ${oc.env:CHECKPOINT}
+
+  # ROTE — redundant with recipe/luciole, kept explicit as a guard so a recipe
+  # edit can't silently change the geometry vs the checkpoint.
+  perception:
+    rote:
+      _target_: nemo.collections.speechlm2.modules.rote.RotaryTimeEmbedding
+      dim: 1024
+      rotary_fraction: 0.2
+      theta: 1200.0
+
+  # Must match the checkpoint. A different r would drop the LoRA tensors WITHOUT
+  # ERROR (set_model_dict_for_partial_init keeps only matching-shape keys).
+  lora:
+    r: 64
+    lora_alpha: 64
+
+  # ENCODER RE-FROZEN — the one line that separates stage3 from stage2, which
+  # dropped this pattern. The encoder is fixed in its stage2 state.
+  freeze_params:
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+    - "^perception\\.encoder\\..+$"
+
+  # 1e-4. stage2's "2e-4 is destructive" result does NOT carry over — that was a
+  # small-batch (2048) effect, and single-phase proved 2e-4 stable at exactly this
+  # ~6x bigger shape. What remains is that stage2/200k is fully converged and so
+  # more easily bumped, hence half the proven ceiling. 2e-4 is defensible if you
+  # want faster absorption of the never-seen summary data; watch val_loss over the
+  # first 2-5k steps for a jump above the ~0.75 warm-start baseline.
+  optimizer:
+    lr: 1e-4
+  lr_scheduler:
+    min_lr: 1e-6
+
+trainer:
+  # Also the cosine horizon (lr_scheduler.max_steps = ${trainer.max_steps}).
+  # 20k, NOT 10k: this phase must TEACH summarization, not just refine it. At the
+  # single-phase shape and the summary pool's 0.369% effective weight, 10k is only
+  # 1.22 epochs of the 8142 usable examples (2.4h) vs 2.44 at 20k (4.8h) — 1.2 is
+  # marginal for a cold task, 2.4 is healthy without memorising an 8k pool.
+  max_steps: 20_000
+
+exp_manager:
+  # 4 intermediate checkpoints. No validation set covers summarization (val is
+  # asr/ast/qa/sound/music), so the best summary checkpoint is invisible to
+  # val_loss and has to be picked later on AudioBench — keep candidates.
+  checkpoint_callback_params:
+    every_n_train_steps: 5000

@@ -19,7 +19,8 @@
 # prevent_freeze_params, which wins over freeze_params in `freeze_and_subset`).
 #
 # Launch (from training/):
-#   EXP=${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}
+#   # runs of the 1B are filed under <root>/Luciole-1B by the launcher
+#   EXP=${EXPERIMENT_ROOT:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}/Luciole-1B
 #   export CHECKPOINT="$EXP/luciole_v3_singlephase/checkpoints/step=020000.ckpt"
 #   python slurm_launcher.py \
 #     --config run/xp/stage2_from_lora \
