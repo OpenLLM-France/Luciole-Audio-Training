@@ -135,7 +135,7 @@ data:
     # $ALL_CCFRSCRATCH/audio is shared/group-owned and not meant for ad-hoc
     # writes. Build with scripts/dataloading/build_indexes.py before launch
     # (see migrate-resumable/base/build-indexes-cmd.sh).
-    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx/base
+    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx
 
     input_cfg: null   # overridden by slurm_launcher.py / runtime
 
@@ -162,7 +162,7 @@ data:
     # sources. use_stateful_dataloader stays off: validation always runs to
     # completion rather than resuming mid-loop.
     indexed: true
-    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx/base
+    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/idx
 
     datasets: {}   # filled by conf/data/val/*.yaml via defaults
 

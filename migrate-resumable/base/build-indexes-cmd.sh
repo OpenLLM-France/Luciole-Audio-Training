@@ -22,8 +22,8 @@ set -euo pipefail
 # only exists on $HOME/NeMo3 (luciole_speech.3.1.0-rc0), confirmed present on
 # JZ. Do not default this to $HOME/NeMo, it will fail with "No such file".
 NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
-CONF="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../training/conf" && pwd)"
-INDEXES_ROOT="${ALL_CCFRSCRATCH}/audio/idx/base"
+CONF="$(cd "$HOME/speechlm/Luciole-Audio-Training/training/conf" && pwd)"
+INDEXES_ROOT="${ALL_CCFRSCRATCH}/audio/idx"
 
 # Required: the input_cfg YAMLs interpolate ${oc.env:DATA_FOLDER} for every
 # manifest_filepath. OmegaConf resolves that lazily as build_indexes.py reads

@@ -2,12 +2,13 @@
 #SBATCH --job-name=build_indexes
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
-#SBATCH --time=10:00:00
-#SBATCH --output=logs/%x_%j.out
+#SBATCH --cpus-per-task=8
+#SBATCH --time=02:00:00
+#SBATCH --output=logs/%x.out
 #SBATCH --hint=nomultithread
 #SBATCH --account=qgz@cpu
 #SBATCH --partition=cpu_p1
+#SBATCH --qos=qos_cpu-dev
 #
 # ============================================================
 # Build .idx sidecars for the v4 curriculum blends (CPU-only, no GPU
@@ -46,4 +47,4 @@ EOF
 
 export TMPDIR="${JOBSCRATCH:-/tmp}"
 
-bash "$(dirname "${BASH_SOURCE[0]}")/build-indexes-cmd.sh"
+bash "$HOME/speechlm/Luciole-Audio-Training/migrate-resumable/base/build-indexes-cmd.sh"
