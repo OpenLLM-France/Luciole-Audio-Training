@@ -17,8 +17,9 @@
 # Environment Setup
 # =====================================================
 module purge
-module load arch/h100 nemo/2.4.0
-# conda activate happens below, once $XP is known (the env depends on the experiment).
+module load arch/h100 nemo/2.7.3
+# conda activate happens below (its default no longer depends on $XP, but CONDA_ENV
+# can still override it per-call -- see the comment there).
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
@@ -42,18 +43,14 @@ XP="${1:?Usage: sbatch run_export_experiment.slurm <model-family>/[<subdir>/]<ru
 EVERY="${2:-50000}"
 
 # Conda env to export in. Pass an env NAME (under $SCRATCH/speechlm/envs) to force it:
-#   sbatch --export=ALL,CONDA_ENV=nemo24-salm_automodel run_export_experiment.slurm ...
-# Unset -> auto-detect from the experiment's exp_config.yaml: an automodel experiment
-# (model.use_nemo_automodel) needs nemo24-salm_automodel, the only env with the
-# nemo_automodel package; anything else runs in nemo24-salm.
-if [ -z "${CONDA_ENV:-}" ]; then
-    if grep -qE '^[[:space:]]*use_nemo_automodel:[[:space:]]*(true|True|yes|1)[[:space:]]*$' \
-        "$EXPERIMENT_FOLDER/$XP/exp_config.yaml" 2>/dev/null; then
-        CONDA_ENV=nemo24-salm_automodel
-    else
-        CONDA_ENV=nemo24-salm
-    fi
-fi
+#   sbatch --export=ALL,CONDA_ENV=nemo27-salm run_export_experiment.slurm ...
+# Unset -> nemo27-salm_automodel_3, the training default since the nemo/2.7.3 migration.
+# It has everything nemo27-salm has plus nemo_automodel (SALM itself never imports
+# nemo_automodel, so it's a strict superset for a plain-SALM export too) -- one env
+# covers both classes now, so there is no more automodel-vs-plain detection to do.
+# Force CONDA_ENV to nemo24-salm(_automodel) when re-exporting a pre-nemo27 experiment
+# (exp_config.yaml records no NeMo-version marker, so this can't be auto-detected).
+CONDA_ENV="${CONDA_ENV:-nemo27-salm_automodel_3}"
 echo "Conda env: $CONDA_ENV"
 conda activate "$SCRATCH/speechlm/envs/$CONDA_ENV"
 

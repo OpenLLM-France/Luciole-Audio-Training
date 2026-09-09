@@ -15,8 +15,8 @@
 # Environment Setup
 # =====================================================
 module purge
-module load arch/h100 nemo/2.4.0
-conda activate $SCRATCH/speechlm/envs/nemo24-salm
+module load arch/h100 nemo/2.7.3
+conda activate $SCRATCH/speechlm/envs/nemo27-salm_automodel_3
 
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
