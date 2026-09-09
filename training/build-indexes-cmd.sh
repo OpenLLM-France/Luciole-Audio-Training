@@ -16,11 +16,8 @@
 # curriculum blends), see build-indexes.slurm next to this file.
 set -euo pipefail
 
-# NEMO_FORK must be the indexed-data-capable fork: $HOME/NeMo (the branch
-# training normally runs against, luciole_speech.2.8.0-rc0) does NOT carry
-# scripts/dataloading/ or the indexed/indexes_root plumbing at all -- that
-# only exists on $HOME/NeMo3 (luciole_speech.3.1.0-rc0), confirmed present on
-# JZ. Do not default this to $HOME/NeMo, it will fail with "No such file".
+# NEMO_FORK must carry scripts/dataloading/ (the indexed/indexes_root plumbing).
+# $HOME/NeMo now has it (NeMo3 stays around as a backup checkout only).
 NEMO_FORK="${NEMO_FORK:-$HOME/NeMo}"
 CONF="$(cd "$HOME/speechlm/Luciole-Audio-Training/training/conf" && pwd)"
 INDEXES_ROOT="${ALL_CCFRSCRATCH}/audio/idx"

@@ -247,11 +247,12 @@ def main():
     g_train.add_argument("--nemo-fork", default=None, help="Override NEMO_FORK path")
     g_train.add_argument("--conda-env", default=None,
                          help="Override CONDA_ENV, the conda env activated by the job "
-                              "(default: $SCRATCH/speechlm/envs/nemo24-salm). Automodel "
-                              "runs need a dedicated env, e.g. .../envs/salm_automodel")
+                              "(default: $SCRATCH/speechlm/envs/nemo27-salm_automodel_3, "
+                              "run_train.slurm's own default -- covers both SALM and "
+                              "SALMAutomodel, SALM never imports nemo_automodel)")
     g_train.add_argument("--nemo-module", default=None,
                          help="Override NEMO_MODULE, the module loaded by the job "
-                              "(default: nemo/2.4.0). Must be CUDA-compatible with "
+                              "(default: nemo/2.7.3). Must be CUDA-compatible with "
                               "--conda-env: nemo/2.4.0 is CUDA 12.8, nemo/2.7.3 is 13.2")
     g_train.add_argument("--set", dest="overrides", action="append", default=[],
                          metavar="KEY=VAL",
