@@ -1,0 +1,260 @@
+---
+license: apache-2.0
+language:
+- fr
+- en
+pipeline_tag: audio-text-to-text
+tags:
+- openllm-france
+- audio-language-model
+- speech-llm
+- salm
+- nemo
+base_model:
+- OpenLLM-France/Luciole-1B-Instruct-1.1
+- nvidia/parakeet-tdt-0.6b-v3
+---
+
+<!-- TODO: add luciole_logo.png to this folder, or drop this line -->
+![luciole_logo.png](luciole_logo.png)
+
+# Model Card for Luciole-Audio-1B
+
+<!-- TODO: pick the final name (Luciole-1B-Audio? Luciole-1B-SALM? Luciole-1B-Instruct-Audio?) and use it consistently below -->
+
+* [Model Description](#model-description)
+  * [Bias, Risks, and Limitations](#bias-risks-and-limitations)
+  * [Recommendations](#recommendations)
+* [Training Details](#training-details)
+  * [Training Data](#training-data)
+  * [Instruction template](#instruction-template)
+  * [Training Procedure](#training-procedure)
+* [Evaluation](#evaluation)
+* [Testing the model](#testing-the-model)
+* [Citation](#citation)
+* [Acknowledgements](#acknowledgements)
+* [Contact](#contact)
+
+## Model Description
+
+**Luciole-Audio-1B** is a version capable of understanding audio of [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1).
+The model was developed by [LINAGORA](https://linagora.com) and
+[OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
+[BPI France](https://www.bpifrance.fr/) under the France 2030 program.
+
+The training of Luciole-Audio-1B was conducted on Jean Zay supercomputer, using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech). The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning)and more.
+
+<!-- It is a Speech-Augmented Language Model (SALM, built with
+[NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech)): a speech encoder turns an audio segment into a
+sequence of embeddings, which are substituted in place of an `<|audio|>` placeholder token in the
+prompt before it reaches the language model. The LLM then answers using the exact same chat format it
+already uses for text, so audio understanding is just another instruction in the conversation —
+transcribe this, translate it, answer this question about it, describe this sound. -->
+
+
+
+<!-- **Architecture**
+
+| Component | Details |
+|---|---|
+| Language model | [OpenLLM-France/Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1) — Nemotron-style decoder, 24 layers, hidden size 2048, ~1.3B params. Frozen, adapted with **LoRA** (r=64, α=64, on `q_proj`/`v_proj` of every layer). |
+| Audio encoder | The Conformer encoder of [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) — 24 layers, d_model 1024, local relative-position attention (±128 frames), 8× striding subsampling, 128-band mel front-end. Entirely **frozen** (preprocessor and encoder weights are not updated). |
+| Connector | An identity modality adapter plus a rotary time embedding (`RotaryTimeEmbedding`, dim 1024, rotary_fraction 0.2, θ=1200) that anchors the audio embeddings in time before they are merged into the LLM's input sequence. |
+| Trainable parameters | **12.3M** (the LoRA adapters) out of **~1.9B** total — everything else (LLM backbone, token embeddings, audio preprocessor, audio encoder) is frozen. |
+
+> ⚠️ Draft note: `exp_config.yaml` / the exported `config.json` for this checkpoint record
+> `pretrained_asr: nvidia/parakeet-tdt-0.6b-v3`, not Canary-1B-v2 — double check which encoder the
+> release you're documenting actually used before publishing. -->
+
+### Bias, Risks, and Limitations
+
+- Inherits the limitations of the base [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1)
+  language model: it can struggle with math word problems, is susceptible to hallucination, and its
+  context window is limited to 16,384 tokens.
+- The audio encoder and its front-end are entirely frozen, so audio understanding is bounded by what
+  Parakeet-TDT-0.6B-v3 already hears — the model cannot learn to compensate for acoustic conditions the
+  encoder itself handles poorly.
+- Training data was concentrated on French and English (ASR, AST, spoken QA). Expect the strongest performance on fr/en tasks and treat other
+  languages, and the music/sound captioning tasks (validated on AudioCaps/MusicCaps only), as less tested.
+- LoRA fine-tuning only touches attention projections in the LLM; no additional audio-specific safety or
+  refusal tuning was performed beyond what the base LLM already has.
+
+### Recommendations
+
+- Use for French/English speech transcription, translation, spoken question answering, and audio/music/
+  sound description in a conversational setting. Verify quality yourself before relying on it for other
+  languages or for dedicated ASR/AST pipelines, where a specialized model may still do better.
+- As with the base LLM, pairing it with a RAG pipeline helps when up-to-date or domain knowledge is
+  needed.
+
+## Training details
+
+### Training data
+
+Trained on the [OpenLLM-France/Luciole-Audio-Training-Dataset](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset),
+a large multilingual, multi-task collection of audio–text conversations comprising : ASR (Automatic Speech Recognition),
+AST (Automatic Speech Translation), spoken question answering, summarization, diarization, temporal localization,
+speaker/gender/age/emotion/language recognition, and music/sound captioning and QA.
+
+### Instruction template
+
+Same chat template as the base LLM (inspired by Qwen3), extended with an `<|audio|>` locator tag:
+wherever `<|audio|>` appears in a turn, the corresponding audio segment is encoded and its embeddings
+replace the tag before the sequence reaches the LLM. Conversations can carry several audio clips and mix
+audio-only, text-only, and audio+text turns within the same dialogue — see the
+[dataset card](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset) for example
+conversations.
+
+### Training Procedure
+
+| | |
+|---|---|
+| Base LLM | Luciole-1B-Instruct-1.1, frozen, LoRA (r=64, α=64, dropout 0) on `q_proj`/`v_proj` |
+| Audio encoder | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen (incl. preprocessor) |
+| Trainable params | 12.3M / ~1.9B (0.6%) |
+| Optimizer | AdamW (β=(0.9, 0.98), weight decay 0.001) |
+| LR schedule | Cosine annealing — max LR 2e-4, min LR 1e-6, 500 warmup steps |
+| Precision | bf16 |
+| Strategy | DDP, 1 node × 4 GPUs |
+| Batching | Dynamic, bucketed by audio duration (27 buckets) |
+| Steps | 100,000 (checkpoints saved every 10,000 steps) |
+| Gradient clipping | 1.0 |
+| Compute | [Jean Zay](http://www.idris.fr/jean-zay/) supercomputer (IDRIS / GENCI) |
+
+The model was trained for Xk steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
+bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
+matching dynamic batch size per bucket (238 down to 1). Validation covered CommonVoice ASR (fr/en/ar),
+Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
+captioning (AudioCaps, MusicCaps).
+
+## Evaluation
+
+<!-- TODO: fill in once eval/ results for this checkpoint are available -->
+
+## Testing the model
+
+### Test with vLLM
+
+The exported checkpoint's `config.json` declares `"model_type": "nemo_speechlm"` and
+`"architectures": ["NeMoSpeechLMForConditionalGeneration"]`. Both are registered with vLLM by the SALM
+plugin that ships inside `nemo-toolkit`
+([`nemo.collections.speechlm2.vllm.salm`](https://github.com/NVIDIA-NeMo/Speech/tree/main/nemo/collections/speechlm2/vllm/salm))
+via the `vllm.general_plugins` entry point:
+
+```toml
+[project.entry-points."vllm.general_plugins"]
+nemo_speechlm = "nemo.collections.speechlm2.vllm.salm:register"
+```
+
+vLLM auto-discovers this plugin at startup as soon as `nemo-toolkit` and `vllm` are installed in the same
+environment — no `--trust-remote-code` and no custom `--model-impl` flag needed. The plugin merges the
+LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder + connector to turn each
+`<|audio|>` tag into the right number of audio-embedding slots before generation.
+
+**Install**
+
+```bash
+pip install "nemo-toolkit[asr]" vllm
+```
+
+**Serve**
+
+```bash
+vllm serve /path/to/Luciole-1B-Audio \
+    --max-model-len 16384
+```
+
+**Query** (OpenAI-compatible chat API — audio sent as base64):
+
+```python
+import base64
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+
+with open("sample.wav", "rb") as f:            # 16 kHz mono
+    audio_b64 = base64.b64encode(f.read()).decode()
+
+response = client.chat.completions.create(
+    model="Luciole-1B-Audio",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Transcris cet audio en français : <|audio|>"},
+                {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}},
+            ],
+        }
+    ],
+)
+print(response.choices[0].message.content)
+```
+
+The `<|audio|>` placeholder is the same `audio_locator_tag` used during training — put it in the text
+wherever the audio should be attended to; the plugin expands it automatically. Audio must be 16 kHz mono;
+the encoder supports chunked processing for long-form audio (well beyond the durations seen in training).
+
+<!-- TODO: this section is written from the plugin's source (registration + audio pipeline) but not from
+a verified end-to-end run — confirm the exact vLLM CLI flags and the request content-type field
+("input_audio" vs "audio_url") against a real deployment of this checkpoint before publishing. -->
+
+### Test with NeMo (no vLLM)
+
+The checkpoint can also be loaded directly with NeMo's `SALM` class
+([`nemo.collections.speechlm2.models.salm`](https://github.com/NVIDIA-NeMo/Speech/blob/main/nemo/collections/speechlm2/models/salm.py)),
+which is the class this model was trained and exported with. `SALM` implements a Hugging Face Hub mixin,
+so `.from_pretrained(...)` accepts a local checkpoint directory (e.g. one of the `hf_checkpoints/step_*`
+folders) or a Hub repo id directly.
+
+**Install** — this needs the `speechlm2` collection from the Luciole NeMo fork, not (yet) the stock
+`nemo-toolkit` PyPI release:
+
+```bash
+pip install "nemo-toolkit[asr] @ git+https://github.com/linagora-labs/NeMo.git@luciole_speech.2.8.0-rc0"
+```
+
+**Load and generate:**
+
+```python
+import torch
+from nemo.collections.speechlm2 import SALM
+
+model = SALM.from_pretrained("OpenLLM-France/Luciole-1B-Audio")  # or a local checkpoint directory
+model = model.eval().to(torch.bfloat16).to("cuda")
+
+# High-level API: pass the audio file path(s) directly in the prompt, next to the
+# `<|audio|>` placeholder — SALM loads and resamples the audio for you.
+answer_ids = model.generate(
+    prompts=[
+        [
+            {
+                "role": "user",
+                "content": f"Transcris cet audio en français : {model.audio_locator_tag}",
+                "audio": ["sample.wav"],
+            }
+        ]
+    ],
+    max_new_tokens=256,
+)
+print(model.tokenizer.ids_to_text(answer_ids[0].tolist()))
+```
+
+A prompt can carry several turns and several audio clips (one `<|audio|>` tag per clip, in order); see the
+docstring of `SALM.generate` for the lower-level API that takes pre-loaded `audios`/`audio_lens` tensors
+instead of file paths (useful for batching many examples, as done in this repo's own
+[`eval/salm_eval.py`](../../eval/salm_eval.py)).
+
+## Citation
+
+✍ Paper coming soon!
+
+## Acknowledgements
+
+This work was granted access to the HPC resources of IDRIS under the allocation made by GENCI, and was
+funded by BPI France as part of the France 2030 program.
+
+<!-- TODO: contributor list, à la Luciole-1B-Instruct-1.1's Acknowledgements section -->
+
+## Contact
+
+contact@openllm-france.fr
