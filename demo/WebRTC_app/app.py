@@ -347,18 +347,44 @@ def _safe_send(channel, payload: dict) -> bool:
         return False
 
 
-def _effort_overrides(effort_mode: str, max_tokens: int) -> dict:
+def _effort_overrides(effort_mode: str, max_tokens: int, temperature=None, repetition_penalty=None,
+                       top_p=None) -> dict:
     """Map a client-supplied effort label to concrete generate kwargs.
-    'max' forces the Thinking model to spend its full budget on reasoning;
-    anything else (incl. 'normal' or unset) keeps the user's settings.
+    'max' forces the Thinking model to spend its full budget on reasoning
+    (and pins temperature to 0.3, overriding whatever the user set); anything
+    else (incl. 'normal' or unset) keeps the user's settings, `temperature`,
+    `repetition_penalty` and `top_p` included.
     """
     if (effort_mode or "").lower() == "max":
         return {
             "max_new_tokens": max(int(max_tokens), 1024),
             "min_new_tokens": 128,
             "temperature": 0.3,
+            "repetition_penalty": repetition_penalty,
+            "top_p": top_p,
         }
-    return {"max_new_tokens": int(max_tokens)}
+    return {
+        "max_new_tokens": int(max_tokens),
+        "temperature": temperature,
+        "repetition_penalty": repetition_penalty,
+        "top_p": top_p,
+    }
+
+
+def _parse_float(value, default, lo, hi):
+    """Best-effort float from client input, clamped to [lo, hi].
+
+    Client input (JSON number or form-field string) is never trusted as-is:
+    a missing/garbled value falls back to `default` rather than reaching
+    vLLM's SamplingParams with something out of range or the wrong type.
+    """
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return default
+    if n != n:  # NaN
+        return default
+    return min(hi, max(lo, n))
 
 
 def _strip_chatml_assistant(text: str) -> str:
@@ -557,6 +583,11 @@ async def _handle_text_only(channel, state, data):
     generation_id = data.get("generationId", 0)
     max_tokens = int(data.get("maxTokens", MAX_NEW_TOKENS))
     effort_mode = data.get("effortMode", "normal")
+    # None si absent/invalide : remote_model retombe alors sur ses propres défauts
+    # (temperature=0.0, repetition_penalty=_REPETITION_PENALTY).
+    temperature = _parse_float(data.get("temperature"), None, 0.0, 1.5)
+    repetition_penalty = _parse_float(data.get("repetitionPenalty"), None, 1.0, 2.0)
+    top_p = _parse_float(data.get("topP"), None, 0.0, 1.0)
     regenerate = bool(data.get("regenerate", False))
     # Le client envoie sa conversation courante à CHAQUE message : il n'y a plus de session_id
     # figé au /offer pour s'y replier (la connexion, elle, est identifiée par connectionId — pas
@@ -612,7 +643,7 @@ async def _handle_text_only(channel, state, data):
                         text_input=prompt,
                         history=current_history,
                         stop_callback=stop_check,
-                        **_effort_overrides(effort_mode, max_tokens),
+                        **_effort_overrides(effort_mode, max_tokens, temperature, repetition_penalty, top_p),
                     ):
                         if _is_cancelled(session_id, generation_id):
                             logger.info(f"Stale during stream; aborting text gen {generation_id}")
@@ -789,6 +820,9 @@ async def upload_audio(request):
     max_tokens = MAX_NEW_TOKENS
     custom_instruction = None
     effort_mode = "normal"
+    temperature = None
+    repetition_penalty = None
+    top_p = None
     model_choice = None
     compare = False
     compare_models = None
@@ -832,6 +866,12 @@ async def upload_audio(request):
             custom_instruction = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'effortMode':
             effort_mode = (await field.read(decode=True)).decode('utf-8')
+        elif field.name == 'temperature':
+            temperature = _parse_float((await field.read(decode=True)).decode('utf-8'), None, 0.0, 1.5)
+        elif field.name == 'repetitionPenalty':
+            repetition_penalty = _parse_float((await field.read(decode=True)).decode('utf-8'), None, 1.0, 2.0)
+        elif field.name == 'topP':
+            top_p = _parse_float((await field.read(decode=True)).decode('utf-8'), None, 0.0, 1.0)
         elif field.name == 'model':
             model_choice = (await field.read(decode=True)).decode('utf-8')
         elif field.name == 'compare':
@@ -925,7 +965,7 @@ async def upload_audio(request):
                             text_input=text_prompt or custom_instruction,
                             history=current_history,
                             stop_callback=stop_check,
-                            **_effort_overrides(effort_mode, max_tokens),
+                            **_effort_overrides(effort_mode, max_tokens, temperature, repetition_penalty, top_p),
                         ):
                             full_response += token
                             token_count += 1

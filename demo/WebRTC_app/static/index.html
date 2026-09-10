@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SALeM</title>
-    <link rel="stylesheet" href="/static/styles.css?v=41">
+    <link rel="stylesheet" href="/static/styles.css?v=42">
     <link rel="stylesheet" href="/static/vendor/github.min.css" id="hljs-theme-light">
     <link rel="stylesheet" href="/static/vendor/github-dark.min.css" id="hljs-theme-dark" disabled>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -160,6 +160,21 @@
                         </span>
                     </button>
                     <span class="status-indicator" id="connection-status">Idle</span>
+                    <button id="tuning-toggle" class="icon-btn" type="button" aria-label="Open sampling panel"
+                        title="Sampling (temperature, repetition penalty, top-p)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="4" y1="21" x2="4" y2="14"></line>
+                            <line x1="4" y1="10" x2="4" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12" y2="3"></line>
+                            <line x1="20" y1="21" x2="20" y2="16"></line>
+                            <line x1="20" y1="12" x2="20" y2="3"></line>
+                            <line x1="1" y1="14" x2="7" y2="14"></line>
+                            <line x1="9" y1="8" x2="15" y2="8"></line>
+                            <line x1="17" y1="16" x2="23" y2="16"></line>
+                        </svg>
+                    </button>
                 </div>
             </header>
 
@@ -239,7 +254,57 @@
                 </div>
             </div>
         </main>
+
+        <aside class="tuning-sidebar" id="tuning-sidebar" aria-label="Sampling parameters">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <span>Sampling</span>
+                </div>
+                <div class="sidebar-header-actions">
+                    <button id="tuning-close" class="icon-btn" type="button" aria-label="Close sampling panel"
+                        title="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="tuning-body">
+                <div class="settings-row">
+                    <label class="settings-label" for="tune-temperature">
+                        <span class="tune-label-row">Temperature <span class="tune-value" id="tune-temperature-value">0.00</span></span>
+                        <span class="settings-hint">0 = greedy/deterministic. Ignored when Effort is Max
+                            thinking (pinned to 0.3).</span>
+                    </label>
+                    <input type="range" id="tune-temperature" class="tune-slider" min="0" max="1.5" step="0.05">
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="tune-repetition-penalty">
+                        <span class="tune-label-row">Repetition penalty <span class="tune-value" id="tune-repetition-penalty-value">1.15</span></span>
+                        <span class="settings-hint">Higher = less repeating. 1.0 disables it.</span>
+                    </label>
+                    <input type="range" id="tune-repetition-penalty" class="tune-slider" min="1" max="2" step="0.05">
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label" for="tune-top-p">
+                        <span class="tune-label-row">Top-p <span class="tune-value" id="tune-top-p-value">1.00</span></span>
+                        <span class="settings-hint">Nucleus sampling cutoff. 1.0 disables it (full
+                            distribution).</span>
+                    </label>
+                    <input type="range" id="tune-top-p" class="tune-slider" min="0.05" max="1" step="0.05">
+                </div>
+
+                <button id="tuning-reset" class="btn btn-secondary" type="button">Reset to defaults</button>
+            </div>
+        </aside>
     </div>
+
+    <div class="sidebar-backdrop" id="tuning-backdrop" aria-hidden="true"></div>
 
     <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true"
         aria-labelledby="modal-title">
@@ -310,6 +375,11 @@
                     <input type="number" id="set-max-tokens" class="settings-input" min="16" max="2048"
                         step="16">
                 </div>
+
+                <!-- Temperature / repetition penalty / top-p ont déménagé dans le panneau
+                     latéral droit (#tuning-sidebar) : ce sont des réglages qu'on ajuste en
+                     observant les réponses, pas des préférences qu'on pose une fois au fond
+                     d'une modale. -->
 
                 <div class="settings-row">
                     <label class="settings-label" for="set-instruction">Default audio instruction</label>
@@ -443,7 +513,7 @@
     <!-- Bumper ce v= à CHAQUE modification de client.js : sans ça le navigateur ressert sa
          copie en cache et l'app tourne avec un JS antérieur. C'est ce qui a rendu le sélecteur
          de modèle invisible — le JS caché ne le connaissait pas. -->
-    <script src="/static/client.js?v=43"></script>
+    <script src="/static/client.js?v=45"></script>
 </body>
 
 </html>

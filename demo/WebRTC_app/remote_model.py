@@ -18,9 +18,9 @@ l'API ne valide la config). Il expose l'API OpenAI : l'audio passe en
 DEUX DIFFÉRENCES DE COMPORTEMENT, assumées :
 
 1. `no_repeat_ngram_size` (=4 en local) n'existe pas dans les SamplingParams de
-   vLLM 0.14 — seule `repetition_penalty` est transmise. Les sorties bouclent un
-   peu plus qu'en local. Il faudrait un logits processor côté serveur pour
-   retrouver le comportement exact.
+   vLLM 0.14 — seule `repetition_penalty` est transmise. Les sorties bouclent un peu plus qu'en
+   local. Il faudrait un logits processor côté serveur pour retrouver le
+   comportement exact.
 
 2. Le nombre d'audios rejoués est plafonné (`MODEL_MAX_AUDIOS_PER_PROMPT`, 4 par
    défaut) et doit rester ≤ au `--limit-mm-per-prompt` du serveur. Au-delà, les
@@ -55,7 +55,8 @@ logger = logging.getLogger(__name__)
 AUDIO_LOCATOR_TAG = "<|audio|>"
 
 # Réglage anti-boucle de la démo, dans ce que l'API OpenAI de vLLM accepte.
-# Voir la note 1 de l'en-tête pour ce qui manque.
+# Voir la note 1 de l'en-tête pour ce qui manque. Valeur par défaut si l'appelant n'en
+# fournit pas (désormais réglable depuis l'UI, voir app.py::_handle_text_only / upload_audio).
 _REPETITION_PENALTY = 1.15
 
 # Plafond d'audios par requête. DOIT rester ≤ au `--limit-mm-per-prompt` du serveur
@@ -250,18 +251,20 @@ class RemoteSALMModel:
             ]
         return messages
 
-    def _payload(self, messages, max_new_tokens, min_new_tokens, temperature, stream):
+    def _payload(self, messages, max_new_tokens, min_new_tokens, temperature, repetition_penalty, top_p, stream):
         payload = {
             "model": self.served_model,
             "messages": messages,
             "max_tokens": int(max_new_tokens),
-            "repetition_penalty": _REPETITION_PENALTY,
+            "repetition_penalty": float(repetition_penalty) if repetition_penalty is not None else _REPETITION_PENALTY,
             "stream": stream,
         }
         if temperature is not None:
             payload["temperature"] = float(temperature)
         else:
             payload["temperature"] = 0.0
+        if top_p is not None:
+            payload["top_p"] = float(top_p)
         if min_new_tokens:
             # `min_tokens` est l'extension vLLM ; l'API OpenAI n'a pas d'équivalent.
             payload["min_tokens"] = int(min(int(min_new_tokens), int(max_new_tokens)))
@@ -273,7 +276,7 @@ class RemoteSALMModel:
         messages = self._build_messages(audio_paths, text_input, history)
         if messages is None:
             return "Please provide text or audio input."
-        payload = self._payload(messages, max_new_tokens, None, None, stream=False)
+        payload = self._payload(messages, max_new_tokens, None, None, None, None, stream=False)
         try:
             r = requests.post(
                 f"{self.base_url}/v1/chat/completions",
@@ -288,7 +291,8 @@ class RemoteSALMModel:
 
     def generate_stream(self, audio_paths=None, text_input=None, history=None,
                         max_new_tokens=360, stop_callback=None,
-                        min_new_tokens=None, temperature=None):
+                        min_new_tokens=None, temperature=None, repetition_penalty=None,
+                        top_p=None):
         """Rend les deltas de tokens, comme le TextIteratorStreamer local.
 
         `stop_callback` est consulté entre deux fragments ; on ferme alors la réponse,
@@ -298,7 +302,8 @@ class RemoteSALMModel:
         if messages is None:
             yield "Please provide text or audio input."
             return
-        payload = self._payload(messages, max_new_tokens, min_new_tokens, temperature, stream=True)
+        payload = self._payload(messages, max_new_tokens, min_new_tokens, temperature,
+                                 repetition_penalty, top_p, stream=True)
 
         try:
             with requests.post(

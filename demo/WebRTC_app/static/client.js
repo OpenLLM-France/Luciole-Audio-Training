@@ -38,6 +38,17 @@ const setModel = document.getElementById('set-model');
 const setCompare = document.getElementById('set-compare');
 const compareModelsBox = document.getElementById('compare-models');
 const setInstruction = document.getElementById('set-instruction');
+const tuningSidebar = document.getElementById('tuning-sidebar');
+const tuningToggle = document.getElementById('tuning-toggle');
+const tuningClose = document.getElementById('tuning-close');
+const tuningBackdrop = document.getElementById('tuning-backdrop');
+const tuningReset = document.getElementById('tuning-reset');
+const tuneTemperature = document.getElementById('tune-temperature');
+const tuneRepetitionPenalty = document.getElementById('tune-repetition-penalty');
+const tuneTopP = document.getElementById('tune-top-p');
+const tuneTemperatureValue = document.getElementById('tune-temperature-value');
+const tuneRepetitionPenaltyValue = document.getElementById('tune-repetition-penalty-value');
+const tuneTopPValue = document.getElementById('tune-top-p-value');
 const micMeter = document.getElementById('mic-meter');
 const micMeterBar = micMeter ? micMeter.querySelector('.mic-meter-bar') : null;
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
@@ -111,6 +122,9 @@ const DEFAULT_SETTINGS = {
     silenceMs: 1500,
     speechThreshold: 0.025,
     maxTokens: 1024,
+    temperature: 0.0,        // 0 = greedy. Overridden to 0.3 server-side when effortMode is 'max'.
+    repetitionPenalty: 1.15, // matches the demo's previous hardcoded default
+    topP: 1.0,               // 1.0 = disabled (nucleus sampling considers the full distribution)
     instruction: 'Listen to the audio and answer the question:',
     effortMode: 'normal',    // 'normal' | 'max' — server pins decoding params when 'max'
     model: '',               // '' = modèle par défaut du serveur
@@ -382,6 +396,7 @@ settingsReset.addEventListener('click', () => {
     settings = { ...DEFAULT_SETTINGS };
     saveSettings(settings);
     syncSettingsForm();
+    if (tuningSidebar.classList.contains('open')) syncTuningForm();
     applyMicModeUI();
     showToast('Settings reset');
 });
@@ -415,6 +430,58 @@ settingsOverlay.querySelectorAll('.settings-segmented').forEach((group) => {
         settings.instruction = setInstruction.value || DEFAULT_SETTINGS.instruction;
         saveSettings(settings);
     });
+});
+
+// =============================================================================
+// Tuning sidebar (temperature / repetition penalty / top-p)
+// =============================================================================
+// Séparé du panneau Settings : ce sont des réglages qu'on ajuste en observant les
+// réponses (donc doivent rester visibles à côté de la conversation), pas des
+// préférences qu'on pose une fois. Mêmes clés `settings.*` et même persistance
+// localStorage que le reste — seul l'endroit où on les édite change.
+function syncTuningForm() {
+    tuneTemperature.value = settings.temperature;
+    tuneRepetitionPenalty.value = settings.repetitionPenalty;
+    tuneTopP.value = settings.topP;
+    tuneTemperatureValue.textContent = Number(settings.temperature).toFixed(2);
+    tuneRepetitionPenaltyValue.textContent = Number(settings.repetitionPenalty).toFixed(2);
+    tuneTopPValue.textContent = Number(settings.topP).toFixed(2);
+}
+
+function openTuning() {
+    syncTuningForm();
+    tuningSidebar.classList.add('open');
+    tuningBackdrop.classList.add('open');
+}
+function closeTuning() {
+    tuningSidebar.classList.remove('open');
+    tuningBackdrop.classList.remove('open');
+}
+tuningToggle.addEventListener('click', () => {
+    if (tuningSidebar.classList.contains('open')) closeTuning(); else openTuning();
+});
+tuningClose.addEventListener('click', closeTuning);
+// Le backdrop n'existe (visuellement) qu'en mobile — cf. styles.css — donc ce
+// handler est inerte sur desktop, comme pour #sidebar-backdrop.
+tuningBackdrop.addEventListener('click', closeTuning);
+
+[[tuneTemperature, 'temperature', tuneTemperatureValue],
+ [tuneRepetitionPenalty, 'repetitionPenalty', tuneRepetitionPenaltyValue],
+ [tuneTopP, 'topP', tuneTopPValue]].forEach(([input, key, out]) => {
+    input.addEventListener('input', () => {
+        settings[key] = clampNumber(input.value, Number(input.min), Number(input.max), DEFAULT_SETTINGS[key]);
+        out.textContent = Number(settings[key]).toFixed(2);
+        saveSettings(settings);
+    });
+});
+
+tuningReset.addEventListener('click', () => {
+    settings.temperature = DEFAULT_SETTINGS.temperature;
+    settings.repetitionPenalty = DEFAULT_SETTINGS.repetitionPenalty;
+    settings.topP = DEFAULT_SETTINGS.topP;
+    saveSettings(settings);
+    syncTuningForm();
+    showToast('Sampling reset');
 });
 
 function clampNumber(v, min, max, fallback) {
@@ -2427,6 +2494,9 @@ async function sendTextOnly(text, { regenerate = false, dropPairs = 1, userMsg =
             dropPairs,
             maxTokens: settings.maxTokens,
             effortMode: settings.effortMode,
+            temperature: settings.temperature,
+            repetitionPenalty: settings.repetitionPenalty,
+            topP: settings.topP,
             ...modelPayload(),
         }));
         showThinkingMessage();
@@ -2529,6 +2599,9 @@ async function uploadFile(files, prompt, { regenerate = false, dropPairs = 1, us
     formData.append('maxTokens', String(settings.maxTokens));
     formData.append('instruction', settings.instruction);
     formData.append('effortMode', settings.effortMode);
+    formData.append('temperature', String(settings.temperature));
+    formData.append('repetitionPenalty', String(settings.repetitionPenalty));
+    formData.append('topP', String(settings.topP));
     if (settings.compare) {
         formData.append('compare', 'true');
         const names = comparedModels();

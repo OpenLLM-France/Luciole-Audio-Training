@@ -548,6 +548,51 @@ body::before {
 }
 
 /* ------------------------------------------------------------
+   Tuning sidebar (sampling params) — mirrors .sidebar, right side.
+   Collapsed by default (no .open), toggled by #tuning-toggle in the
+   chat header. On desktop it just takes flex space in .app-container;
+   on mobile it slides in as a fixed overlay (see responsive section).
+   ------------------------------------------------------------ */
+.tuning-sidebar {
+    display: none;
+    width: 280px;
+    flex-shrink: 0;
+    background: hsl(var(--card));
+    border-left: 1px solid hsl(var(--border));
+    flex-direction: column;
+}
+
+.tuning-sidebar.open {
+    display: flex;
+}
+
+.tuning-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow-y: auto;
+}
+
+.tune-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.tune-value {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+}
+
+.tune-slider {
+    width: 100%;
+    accent-color: hsl(var(--primary));
+}
+
+/* ------------------------------------------------------------
    Chat Area
    ------------------------------------------------------------ */
 .chat-area {
@@ -2394,6 +2439,16 @@ textarea::placeholder {
 
     .sidebar-backdrop.open {
         display: block;
+    }
+
+    .tuning-sidebar.open {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+        width: min(320px, 85%);
+        box-shadow: var(--shadow-lg);
     }
 
     .menu-toggle {
