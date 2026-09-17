@@ -44,28 +44,6 @@ The model was developed by [LINAGORA](https://linagora.com) and
 
 The training of Luciole-Audio-1B was conducted on Jean Zay supercomputer, using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech). The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning)and more.
 
-<!-- It is a Speech-Augmented Language Model (SALM, built with
-[NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech)): a speech encoder turns an audio segment into a
-sequence of embeddings, which are substituted in place of an `<|audio|>` placeholder token in the
-prompt before it reaches the language model. The LLM then answers using the exact same chat format it
-already uses for text, so audio understanding is just another instruction in the conversation —
-transcribe this, translate it, answer this question about it, describe this sound. -->
-
-
-
-<!-- **Architecture**
-
-| Component | Details |
-|---|---|
-| Language model | [OpenLLM-France/Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1) — Nemotron-style decoder, 24 layers, hidden size 2048, ~1.3B params. Frozen, adapted with **LoRA** (r=64, α=64, on `q_proj`/`v_proj` of every layer). |
-| Audio encoder | The Conformer encoder of [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) — 24 layers, d_model 1024, local relative-position attention (±128 frames), 8× striding subsampling, 128-band mel front-end. Entirely **frozen** (preprocessor and encoder weights are not updated). |
-| Connector | An identity modality adapter plus a rotary time embedding (`RotaryTimeEmbedding`, dim 1024, rotary_fraction 0.2, θ=1200) that anchors the audio embeddings in time before they are merged into the LLM's input sequence. |
-| Trainable parameters | **12.3M** (the LoRA adapters) out of **~1.9B** total — everything else (LLM backbone, token embeddings, audio preprocessor, audio encoder) is frozen. |
-
-> ⚠️ Draft note: `exp_config.yaml` / the exported `config.json` for this checkpoint record
-> `pretrained_asr: nvidia/parakeet-tdt-0.6b-v3`, not Canary-1B-v2 — double check which encoder the
-> release you're documenting actually used before publishing. -->
-
 ### Bias, Risks, and Limitations
 
 - Inherits the limitations of the base [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1)
@@ -121,7 +99,7 @@ conversations.
 | Gradient clipping | 1.0 |
 | Compute | [Jean Zay](http://www.idris.fr/jean-zay/) supercomputer (IDRIS / GENCI) |
 
-The model was trained for Xk steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
+The model was trained for 100k steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
 bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
 matching dynamic batch size per bucket (238 down to 1). Validation covered CommonVoice ASR (fr/en/ar),
 Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
@@ -151,18 +129,27 @@ environment — no `--trust-remote-code` and no custom `--model-impl` flag neede
 LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder + connector to turn each
 `<|audio|>` tag into the right number of audio-embedding slots before generation.
 
-**Install**
+**Install using uv**
 
 ```bash
-pip install "nemo-toolkit[asr]" vllm
+git clone --branch luciole_speech.3.1.0-rc0 https://github.com/linagora-labs/NeMo.git
+cd NeMo
+uv venv .venv --python 3.12
+source .venv/bin/activate
+
+uv sync --extra speechlm2 --extra tts
+uv pip install vllm==0.28.0
+uv pip install "numpy<=2.4"
 ```
 
 **Serve**
 
 ```bash
-vllm serve /path/to/Luciole-1B-Audio \
+uv run --no-sync vllm serve /path/to/Luciole-1B-Audio \
     --max-model-len 16384
 ```
+
+`--no-sync` because otherwise it changes the torchvision version.
 
 **Query** (OpenAI-compatible chat API — audio sent as base64):
 
@@ -194,23 +181,18 @@ The `<|audio|>` placeholder is the same `audio_locator_tag` used during training
 wherever the audio should be attended to; the plugin expands it automatically. Audio must be 16 kHz mono;
 the encoder supports chunked processing for long-form audio (well beyond the durations seen in training).
 
-<!-- TODO: this section is written from the plugin's source (registration + audio pipeline) but not from
-a verified end-to-end run — confirm the exact vLLM CLI flags and the request content-type field
-("input_audio" vs "audio_url") against a real deployment of this checkpoint before publishing. -->
-
 ### Test with NeMo (no vLLM)
 
 The checkpoint can also be loaded directly with NeMo's `SALM` class
-([`nemo.collections.speechlm2.models.salm`](https://github.com/NVIDIA-NeMo/Speech/blob/main/nemo/collections/speechlm2/models/salm.py)),
-which is the class this model was trained and exported with. `SALM` implements a Hugging Face Hub mixin,
-so `.from_pretrained(...)` accepts a local checkpoint directory (e.g. one of the `hf_checkpoints/step_*`
-folders) or a Hub repo id directly.
+([`nemo.collections.speechlm2.models.salm`](https://github.com/NVIDIA-NeMo/Speech/blob/main/nemo/collections/speechlm2/models/salm.py)).
 
-**Install** — this needs the `speechlm2` collection from the Luciole NeMo fork, not (yet) the stock
-`nemo-toolkit` PyPI release:
+**Install**
 
 ```bash
-pip install "nemo-toolkit[asr] @ git+https://github.com/linagora-labs/NeMo.git@luciole_speech.2.8.0-rc0"
+git clone --branch luciole_speech.3.1.0-rc0 https://github.com/linagora-labs/NeMo.git
+cd NeMo
+uv venv .venv --python 3.12
+uv sync --extra speechlm2 --extra tts
 ```
 
 **Load and generate:**
@@ -239,10 +221,7 @@ answer_ids = model.generate(
 print(model.tokenizer.ids_to_text(answer_ids[0].tolist()))
 ```
 
-A prompt can carry several turns and several audio clips (one `<|audio|>` tag per clip, in order); see the
-docstring of `SALM.generate` for the lower-level API that takes pre-loaded `audios`/`audio_lens` tensors
-instead of file paths (useful for batching many examples, as done in this repo's own
-[`eval/salm_eval.py`](../../eval/salm_eval.py)).
+A prompt can carry several turns and several audio clips (one `<|audio|>` tag per clip, in order).
 
 ## Citation
 
