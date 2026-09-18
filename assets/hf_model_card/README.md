@@ -18,9 +18,7 @@ base_model:
 <!-- TODO: add luciole_logo.png to this folder, or drop this line -->
 ![luciole_logo.png](luciole_logo.png)
 
-# Model Card for Luciole-Audio-1B
-
-<!-- TODO: pick the final name (Luciole-1B-Audio? Luciole-1B-SALM? Luciole-1B-Instruct-Audio?) and use it consistently below -->
+# Model Card for Luciole-1B-Audio-1.1
 
 * [Model Description](#model-description)
   * [Bias, Risks, and Limitations](#bias-risks-and-limitations)
@@ -37,25 +35,27 @@ base_model:
 
 ## Model Description
 
-**Luciole-Audio-1B** is a version capable of understanding audio of [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1).
+**Luciole-1B-Audio-1.1** is a version capable of understanding audio of [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1).
 The model was developed by [LINAGORA](https://linagora.com) and
 [OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
 [BPI France](https://www.bpifrance.fr/) under the France 2030 program.
 
-The training of Luciole-Audio-1B was conducted on Jean Zay supercomputer, using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech). The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning)and more.
+The training of Luciole-1B-Audio-1.1 was conducted on Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
+using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech).
+The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning) and more.
 
 ### Bias, Risks, and Limitations
 
 - Inherits the limitations of the base [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1)
   language model: it can struggle with math word problems, is susceptible to hallucination, and its
   context window is limited to 16,384 tokens.
-- The audio encoder and its front-end are entirely frozen, so audio understanding is bounded by what
+<!-- - The audio encoder and its front-end were entirely frozen during training, so audio understanding is bounded by what
   Parakeet-TDT-0.6B-v3 already hears — the model cannot learn to compensate for acoustic conditions the
-  encoder itself handles poorly.
+  encoder itself handles poorly. -->
 - Training data was concentrated on French and English (ASR, AST, spoken QA). Expect the strongest performance on fr/en tasks and treat other
-  languages, and the music/sound captioning tasks (validated on AudioCaps/MusicCaps only), as less tested.
-- LoRA fine-tuning only touches attention projections in the LLM; no additional audio-specific safety or
-  refusal tuning was performed beyond what the base LLM already has.
+  languages, and the music/sound captioning tasks, as less tested.
+<!-- - LoRA fine-tuning only touches attention projections in the LLM; no additional audio-specific safety or
+  refusal tuning was performed beyond what the base LLM already has. -->
 
 ### Recommendations
 
@@ -72,7 +72,7 @@ The training of Luciole-Audio-1B was conducted on Jean Zay supercomputer, using 
 Trained on the [OpenLLM-France/Luciole-Audio-Training-Dataset](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset),
 a large multilingual, multi-task collection of audio–text conversations comprising : ASR (Automatic Speech Recognition),
 AST (Automatic Speech Translation), spoken question answering, summarization, diarization, temporal localization,
-speaker/gender/age/emotion/language recognition, and music/sound captioning and QA.
+speaker/gender/age/emotion/language recognition, and music/sound captioning and QA (Question Answering).
 
 ### Instruction template
 
@@ -87,27 +87,28 @@ conversations.
 
 | | |
 |---|---|
-| Base LLM | Luciole-1B-Instruct-1.1, frozen, LoRA (r=64, α=64, dropout 0) on `q_proj`/`v_proj` |
-| Audio encoder | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen (incl. preprocessor) |
+| LLM | Luciole-1B-Instruct-1.1, adapted with LoRA (on `q_proj`/`v_proj`, r=64, α=64) |
+| Audio encoder | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen |
 | Trainable params | 12.3M / ~1.9B (0.6%) |
 | Optimizer | AdamW (β=(0.9, 0.98), weight decay 0.001) |
-| LR schedule | Cosine annealing — max LR 2e-4, min LR 1e-6, 500 warmup steps |
-| Precision | bf16 |
-| Strategy | DDP, 1 node × 4 GPUs |
+| LR schedule | Cosine annealing (max LR 2e-4, min LR 1e-6, 500 warmup steps) |
 | Batching | Dynamic, bucketed by audio duration (27 buckets) |
-| Steps | 100,000 (checkpoints saved every 10,000 steps) |
+| Steps | 100,000 |
 | Gradient clipping | 1.0 |
-| Compute | [Jean Zay](http://www.idris.fr/jean-zay/) supercomputer (IDRIS / GENCI) |
+| Strategy | DDP, 1 node × 4 GPUs |
+| Precision | bf16 |
 
 The model was trained for 100k steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
 bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
-matching dynamic batch size per bucket (238 down to 1). Validation covered CommonVoice ASR (fr/en/ar),
+matching dynamic batch size per bucket (238 down to 1).
+
+Validation covered CommonVoice ASR (fr/en/ar),
 Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
 captioning (AudioCaps, MusicCaps).
 
 ## Evaluation
 
-<!-- TODO: fill in once eval/ results for this checkpoint are available -->
+✍ Coming soon!
 
 ## Using the model
 
@@ -125,7 +126,7 @@ nemo_speechlm = "nemo.collections.speechlm2.vllm.salm:register"
 ```
 
 vLLM auto-discovers this plugin at startup as soon as `nemo-toolkit` and `vllm` are installed in the same
-environment — no `--trust-remote-code` and no custom `--model-impl` flag needed. The plugin merges the
+environment (no `--trust-remote-code` and no custom `--model-impl` flag needed). The plugin merges the
 LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder + connector to turn each
 `<|audio|>` tag into the right number of audio-embedding slots before generation.
 
@@ -155,7 +156,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
 
-with open("sample.wav", "rb") as f:            # 16 kHz mono
+with open("sample.wav", "rb") as f:   # 16 kHz mono
     audio_b64 = base64.b64encode(f.read()).decode()
 
 response = client.chat.completions.create(
@@ -221,12 +222,11 @@ A prompt can carry several turns and several audio clips (one `<|audio|>` tag pe
 
 ## Citation
 
-✍ Paper coming soon!
+✍ Coming soon!
 
 ## Acknowledgements
 
-This work was granted access to the HPC resources of IDRIS under the allocation made by GENCI, and was
-funded by BPI France as part of the France 2030 program.
+Training of Luciole-1B-Audio-1.1 was made possible by computing AI and storage resources by GENCI at IDRIS thanks to the grant 2025-AS011016445 on the supercomputer Jean Zay’s H100 partition. We gratefully acknowledge support from GENCI and IDRIS and from Stephane Requena (GENCI) and Pierre-François Lavallée (IDRIS) in particular.
 
 <!-- TODO: contributor list, à la Luciole-1B-Instruct-1.1's Acknowledgements section -->
 

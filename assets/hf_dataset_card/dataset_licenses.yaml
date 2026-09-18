@@ -2050,6 +2050,20 @@ datasets:
   audited: true
   notes: A multi-turn composite; because some turns reference copyrighted TV and YouTube-sourced audio (e.g. Friends, ACAV100M), it is not included here.
   license_discrepancy: The current registry labels both license_text and license_audio as 'Mixed (CC0 / permissive)', which is inaccurate for the audio layer. Significant fractions of the audio are YouTube-sourced (copyrighted by original video creators), from the Friends TV show (Warner Bros., copyrighted despite the MELD GPL-3.0 code label), and from proprietary sources (LINAGORA, LVL-Atril). The 'permissive' characterisation of audio is wrong. The redistribute=false decisions are correct. The final_license_audio is corrected to 'Mixed — Copyrighted portions (YouTube / TV / Proprietary)'.
+- name: Nemotron Post-Training v3
+  match: nemotron_posttraining
+  license_text: CC-BY-4.0 (predominantly; some subsets carry other terms)
+  license_audio: N/A (text-only, no audio)
+  redistribute_text: false
+  redistribute_audio: false
+  audio_source_url: https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset
+  sources:
+  - type: text
+    name: NVIDIA Nemotron post-training data (family reference; exact v3 chat/instruction subset to confirm)
+    license: CC-BY-4.0
+    url: https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset
+  audited: false
+  notes: NVIDIA Nemotron post-training text (chat and instruction-following, English). Text-only, with no audio. Used only as a training-time regularizer to preserve the model text/instruction-following abilities; it is NOT part of the published audio dataset. Predominantly CC-BY-4.0 (a small share of prompts carries other terms), which would be verified before any release.
 default:
   name: UNMATCHED
   license: Unknown
