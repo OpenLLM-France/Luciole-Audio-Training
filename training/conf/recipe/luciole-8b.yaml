@@ -7,7 +7,18 @@ model:
   # residual stream in fp32 — cheap stability hygiene for Mamba2 training (kernels stay on).
   llm_config_overrides:
     residual_in_fp32: true
-  
+
+  automodel_parallel:
+    # Full FSDP2 shard. dp_replicate_size=2 (v1/v2) is HSDP — half the model per GPU —
+    # and buys nothing here: 2.942 vs 2.929 s/step (n=300) for +3.85 GiB.
+    # See run/xp/automodel_8b.yaml for the context-parallel escape hatch.
+    # activation_checkpointing_llm defaults to False in code (no fallback anywhere
+    # else in the compose chain) — every run/xp config built on this recipe needs
+    # it on, or it silently OOMs at this bucket layout (see stage1_adapter_lora_8b
+    # postmortem, job 1947081).
+    dp_replicate_size: 1
+    activation_checkpointing_llm: true
+
   optimizer:
     lr: 2e-4
   lora:

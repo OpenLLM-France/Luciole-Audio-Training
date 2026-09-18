@@ -1,0 +1,52 @@
+# @package _global_
+# ============================================================
+# Luciole-8B — CURRICULUM STAGE 1 of 3 — ALIGNMENT (adapter + LoRA).
+# Variant of stage1_adapter_8b.yaml that also lets the LLM's LoRA train from
+# step 0, instead of waiting for stage 3. Same freeze list (LLM base, embed
+# tokens, preprocessor, encoder all frozen) but LoRA is NOT set to null, so it
+# inherits recipe/luciole-8b's r=64 and trains via the prevent_freeze_params
+# mechanism (LoRA tensors can never be frozen from config, see stage3_full_8b.yaml).
+#
+# Architecturally this is the same trainable shape as stage3_full_8b.yaml /
+# run/luciole-8b.yaml (adapter + LoRA, encoder frozen) — only the data, LR and
+# "trained from scratch vs warm-started" differ. Use this instead of the plain
+# stage1_adapter_8b.yaml if you've decided stage 1 SHOULD already shape the LLM
+# via LoRA rather than leaving that entirely to stage 3.
+#
+# Data: v4 stage-1 recognition-heavy mix (see conf/data/v4/input_cfg_train_stage1.yaml).
+#
+# Launch (from training/; see conf/run/xp/v4/launch_curriculum_v4_8b.sh):
+#   LUCIOLE_8B="/lustre/fsn1/projects/rech/qgz/commun/OpenLLM-BPI-output/sft/final/Luciole-8B-Instruct-1.1"
+#   CONDA_ENV="$SCRATCH/speechlm/envs/nemo27-salm_automodel_3"
+#   NEMO_FORK="$HOME/NeMo"
+#   python slurm_launcher.py \
+#     --config run/xp/v4/stage1_adapter_lora_8b \
+#     --data-version v4/input_cfg_train_stage1_weighted_randomorder_sharded.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --llm-model "$LUCIOLE_8B" --conda-env "$CONDA_ENV" --nemo-fork "$NEMO_FORK" \
+#     --subdir curriculum_v4 --job-name luciole8b_v4_stage1_lora
+# ============================================================
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-8b
+  - _self_
+
+model:
+  # lora NOT overridden — inherits recipe/luciole-8b's r=64 / lora_alpha=64.
+  freeze_params:      # full 4-pattern freeze; LoRA still trains (prevent_freeze_params)
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+    - "^perception\\.encoder\\..+$"
+  optimizer:
+    lr: 3e-4
+  lr_scheduler:
+    min_lr: 1e-4
+
+trainer:
+  max_steps: 10_000
+
+# Same trainable shape as recipe/luciole-8b's single-phase run (adapter + LoRA,
+# encoder frozen), so its 27-bucket layout is inherited unchanged below and
+# should be a validated fit (measured for exactly this shape in xp_commands.sh).

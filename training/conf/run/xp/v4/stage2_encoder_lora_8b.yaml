@@ -1,0 +1,76 @@
+# @package _global_
+# ============================================================
+# Luciole-8B — CURRICULUM STAGE 2 of 3 — ENCODER TUNING (adapter + encoder + LoRA).
+# Same as stage2_encoder_8b.yaml but LoRA is NOT disabled: adapter + encoder +
+# LoRA all train together (mirrors conf/run/xp/v3/stage2_from_lora_8b.yaml,
+# except this is meant as a curriculum STAGE rather than a warm-start-from-
+# single-phase experiment). LLM base, embeddings and preprocessor stay frozen;
+# LoRA trains via prevent_freeze_params regardless of freeze_params (see
+# stage3_full_8b.yaml).
+#
+# Pick this file over stage2_encoder_8b.yaml if stage 1 already trained a
+# LoRA (i.e. warm-starting from stage1_adapter_lora_8b.yaml) and it should
+# keep training here instead of being frozen until stage 3.
+#
+# Data: v4 stage-2 mix, v2 rebalance (QA↓/AQA↑, see
+# conf/data/v4/input_cfg_train_stage2_v2.yaml for the rationale). Swap in
+# input_cfg_train_stage2_weighted_randomorder_sharded.yaml for the original
+# (non-v2) split if preferred.
+#
+# Warm-start = stage 1's LAST checkpoint (the LoRA variant). Its filename
+# embeds the step (e.g. 010000-last.ckpt), so resolve it with a glob and
+# export CHECKPOINT BEFORE launching (see conf/run/xp/v4/launch_curriculum_v4_8b.sh).
+#
+# Launch (from training/; see conf/run/xp/v4/launch_curriculum_v4_8b.sh):
+#   LUCIOLE_8B="/lustre/fsn1/projects/rech/qgz/commun/OpenLLM-BPI-output/sft/final/Luciole-8B-Instruct-1.1"
+#   CONDA_ENV="$SCRATCH/speechlm/envs/nemo27-salm_automodel_3"
+#   NEMO_FORK="$HOME/NeMo"
+#   EXP=${EXPERIMENT_ROOT:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}/Luciole-8B
+#   export CHECKPOINT=$(ls -t "$EXP"/curriculum_v4/luciole8b_v4_stage1_lora/checkpoints/*-last.ckpt | head -1)
+#   python slurm_launcher.py \
+#     --config run/xp/v4/stage2_encoder_lora_8b \
+#     --data-version v4/input_cfg_train_stage2_v2_weighted_randomorder_sharded.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --llm-model "$LUCIOLE_8B" --conda-env "$CONDA_ENV" --nemo-fork "$NEMO_FORK" \
+#     --subdir curriculum_v4 --job-name luciole8b_v4_stage2_lora
+# ============================================================
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-8b
+  - _self_
+
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}   # warm-start from stage 1 (LoRA variant)
+  # lora NOT overridden — inherits recipe/luciole-8b's r=64 / lora_alpha=64,
+  # and must match the warm-start checkpoint's LoRA shape (see the r/target_modules
+  # guard note in conf/run/xp/v3/stage2_from_lora_8b.yaml — a mismatch drops the
+  # LoRA tensors silently instead of erroring).
+  freeze_params:      # drop "^perception\.encoder\..+$" → encoder trains; LLM base frozen
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+  optimizer:
+    lr: 1e-4
+  lr_scheduler:
+    min_lr: 1e-6
+
+trainer:
+  max_steps: 200_000
+
+# TODO(MEMORY, UNVERIFIED — BLOCKING): same caveat as stage2_encoder_8b.yaml,
+# plus LoRA's extra activations/grads on top. Ported from
+# conf/run/xp/v3/stage2_from_lora_8b.yaml, itself flagged UNVERIFIED for the
+# 8B. Do NOT launch past a --qos dev smoke test until
+# curriculum/oomptimizer_stage2_encoder.slurm has been re-run for this exact
+# 8B + encoder+LoRA shape.
+data:
+  train_ds:
+    num_buckets: 14
+    bucket_duration_bins: [96,128,160,192,256,288,320,384,512,576,640,768,1088,2048]
+    bucket_batch_size: [31,27,18,16,14,12,11,9,7,6,5,5,3,1]  # 1B numbers — UNVERIFIED for 8B, re-measure
+    max_duration: 150
+    max_tokens: 2048
+exp_manager:
+  checkpoint_callback_params:
+    every_n_train_steps: 10000

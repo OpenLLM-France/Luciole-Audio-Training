@@ -1,0 +1,68 @@
+# @package _global_
+# ============================================================
+# Luciole-8B — CURRICULUM STAGE 3 of 3 — LLM-LoRA FINE-TUNE (adapter + LLM-LoRA).
+# Ports run/curriculum/stage3_full.yaml (1B) to 8B on the automodel backend.
+# Thaw the LLM via LoRA on top of the trained adapter. The audio encoder is
+# KEPT FROZEN here: unfreezing it on top of LoRA overflows VRAM even on the
+# 1B, so stage 2 remains the only encoder-tuning stage. Trainable = adapter +
+# LoRA, NOT the encoder.
+#
+# Works as the stage-3 continuation regardless of whether stage 2 already had
+# LoRA enabled:
+#   - warm-starting from stage2_encoder_8b.yaml (no LoRA): LoRA is introduced
+#     fresh here (init_from_checkpoint keeps only matching-shape keys, so the
+#     brand-new LoRA tensors just get their normal init).
+#   - warm-starting from stage2_encoder_lora_8b.yaml (LoRA already training):
+#     this file's r=64 / lora_alpha=64 (inherited from recipe/luciole-8b)
+#     must match what stage 2 used, or the LoRA weights are silently dropped
+#     (set_model_dict_for_partial_init keeps only matching-shape keys, so a
+#     mismatched strict load trivially "succeeds") — keep both in sync if you
+#     ever change r there.
+#
+# Data: v4 stage-3 QA-emphasised mix (see conf/data/v4/input_cfg_train_stage3.yaml).
+#
+# Warm-start = stage 2's LAST checkpoint. Its filename embeds the step
+# (e.g. 200000-last.ckpt), so resolve it with a glob and export CHECKPOINT
+# BEFORE launching (see conf/run/xp/v4/launch_curriculum_v4_8b.sh).
+#
+# Launch (from training/; see conf/run/xp/v4/launch_curriculum_v4_8b.sh):
+#   LUCIOLE_8B="/lustre/fsn1/projects/rech/qgz/commun/OpenLLM-BPI-output/sft/final/Luciole-8B-Instruct-1.1"
+#   CONDA_ENV="$SCRATCH/speechlm/envs/nemo27-salm_automodel_3"
+#   NEMO_FORK="$HOME/NeMo"
+#   EXP=${EXPERIMENT_ROOT:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}/Luciole-8B
+#   export CHECKPOINT=$(ls -t "$EXP"/curriculum_v4/luciole8b_v4_stage2/checkpoints/*-last.ckpt | head -1)
+#   python slurm_launcher.py \
+#     --config run/xp/v4/stage3_full_8b \
+#     --data-version v4/input_cfg_train_stage3_weighted_randomorder_sharded.yaml \
+#     --speech-encoder-model "$SCRATCH/speechlm/models/parakeet-tdt-0.6b-v3.nemo" \
+#     --llm-model "$LUCIOLE_8B" --conda-env "$CONDA_ENV" --nemo-fork "$NEMO_FORK" \
+#     --subdir curriculum_v4 --job-name luciole8b_v4_stage3
+# ============================================================
+defaults:
+  - /base
+  - /base_automodel
+  - /recipe: luciole-8b
+  - _self_
+
+model:
+  init_from_checkpoint: ${oc.env:CHECKPOINT}
+  # lora NOT overridden — inherits recipe/luciole-8b's r=64 / lora_alpha=64.
+  # Restated only as a guard comment, not a value change (see the sync note above).
+  freeze_params:    # encoder KEPT FROZEN (VRAM); LLM frozen except LoRA → trains adapter + LoRA
+    - "^llm\\..+$"
+    - "^embed_tokens\\..+$"
+    - "^perception\\.preprocessor\\..+$"
+    - "^perception\\.encoder\\..+$"
+  optimizer:
+    lr: 2e-4
+  lr_scheduler:
+    min_lr: 1e-6
+
+trainer:
+  max_steps: 100_000
+
+# Same trainable shape as recipe/luciole-8b's single-phase run (adapter +
+# LoRA, encoder frozen), so its 27-bucket layout is inherited unchanged below
+# and should be a validated fit (measured for exactly this shape in
+# xp_commands.sh — 2.894 s/step on 4xH100, ~24.5k steps per 20h qos-t3 slot,
+# so 100k steps needs ~4 slots — size --array accordingly).
