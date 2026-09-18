@@ -86,18 +86,18 @@ conversations.
 
 | | |
 |---|---|
-| Audio encoder | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen |
-| RoTE | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
-| Audio adapter | Linear(1024→2048) projection into the LLM embedding space |
-| LLM | Luciole-1B-Instruct-1.1, adapted with LoRA (on `q_proj`/`v_proj`, r=64, α=64) |
-| Trainable params | 12.3M / ~1.9B (0.6%) |
-| Optimizer | AdamW (β=(0.9, 0.98), weight decay 0.001) |
-| LR schedule | Cosine annealing (max LR 2e-4, min LR 1e-6, 500 warmup steps) |
-| Batching | Dynamic, bucketed by audio duration (27 buckets) |
-| Steps | 100,000 |
-| Gradient clipping | 1.0 |
-| Strategy | DDP, 1 node × 4 GPUs |
-| Precision | bf16 |
+| **Audio encoder** | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen |
+| **RoTE** | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
+| **Audio adapter** | Linear (1024→2048) projection into the LLM embedding space |
+| **LLM** | Luciole-1B-Instruct-1.1, adapted with LoRA (on `q_proj`/`v_proj`, r=64, α=64) |
+| **Trainable params** | 12.3M / ~1.9B (0.6%) |
+| **Optimizer** | AdamW (β=(0.9, 0.98), weight decay 0.001) |
+| **LR schedule** | Cosine annealing (max LR 2e-4, min LR 1e-6, 500 warmup steps) |
+| **Batching** | Dynamic, bucketed by audio duration (27 buckets) |
+| **Steps** | 100,000 |
+| **Gradient clipping** | 1.0 |
+| **Strategy** | DDP, 1 node × 4 GPUs |
+| **Precision** | bf16 |
 
 The model was trained for 100k steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
 bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
@@ -106,6 +106,8 @@ matching dynamic batch size per bucket (238 down to 1).
 Validation covered CommonVoice ASR (fr/en/ar),
 Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
 captioning (AudioCaps, MusicCaps).
+
+The training code and configs are available in the [Luciole-Audio-Training repository](https://github.com/OpenLLM-France/Luciole-Audio-Training). Training used an updated version of [NeMo/Speech 3.0](https://github.com/NVIDIA-NeMo/Speech) which can be found in our [NeMo/Speech fork](https://github.com/linagora-labs/NeMo/tree/luciole_speech.3.1.0-rc0).
 
 ## Evaluation
 
