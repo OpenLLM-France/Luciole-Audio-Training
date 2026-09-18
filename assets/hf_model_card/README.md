@@ -109,9 +109,9 @@ captioning (AudioCaps, MusicCaps).
 
 <!-- TODO: fill in once eval/ results for this checkpoint are available -->
 
-## Testing the model
+## Using the model
 
-### Test with vLLM
+### With vLLM
 
 The exported checkpoint's `config.json` declares `"model_type": "nemo_speechlm"` and
 `"architectures": ["NeMoSpeechLMForConditionalGeneration"]`. Both are registered with vLLM by the SALM
@@ -132,12 +132,10 @@ LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder
 **Install using uv**
 
 ```bash
-git clone --branch luciole_speech.3.1.0-rc0 https://github.com/linagora-labs/NeMo.git
-cd NeMo
 uv venv .venv --python 3.12
 source .venv/bin/activate
 
-uv sync --extra speechlm2 --extra tts
+uv pip install "nemo-toolkit[speechlm2,tts] @ git+https://github.com/linagora-labs/NeMo.git@luciole_speech.3.1.0-rc0"
 uv pip install vllm==0.28.0
 uv pip install "numpy<=2.4"
 ```
@@ -145,11 +143,9 @@ uv pip install "numpy<=2.4"
 **Serve**
 
 ```bash
-uv run --no-sync vllm serve /path/to/Luciole-1B-Audio \
+vllm serve /path/to/Luciole-1B-Audio \
     --max-model-len 16384
 ```
-
-`--no-sync` because otherwise it changes the torchvision version.
 
 **Query** (OpenAI-compatible chat API — audio sent as base64):
 
@@ -181,7 +177,7 @@ The `<|audio|>` placeholder is the same `audio_locator_tag` used during training
 wherever the audio should be attended to; the plugin expands it automatically. Audio must be 16 kHz mono;
 the encoder supports chunked processing for long-form audio (well beyond the durations seen in training).
 
-### Test with NeMo (no vLLM)
+### With NeMo
 
 The checkpoint can also be loaded directly with NeMo's `SALM` class
 ([`nemo.collections.speechlm2.models.salm`](https://github.com/NVIDIA-NeMo/Speech/blob/main/nemo/collections/speechlm2/models/salm.py)).
@@ -189,10 +185,10 @@ The checkpoint can also be loaded directly with NeMo's `SALM` class
 **Install**
 
 ```bash
-git clone --branch luciole_speech.3.1.0-rc0 https://github.com/linagora-labs/NeMo.git
-cd NeMo
 uv venv .venv --python 3.12
-uv sync --extra speechlm2 --extra tts
+source .venv/bin/activate
+
+uv pip install "nemo-toolkit[speechlm2,tts] @ git+https://github.com/linagora-labs/NeMo.git@luciole_speech.3.1.0-rc0"
 ```
 
 **Load and generate:**
