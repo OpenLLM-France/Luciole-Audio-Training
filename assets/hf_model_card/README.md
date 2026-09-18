@@ -17,7 +17,7 @@ base_model:
 
 ![luciole_logo.png](luciole_logo.png)
 
-# Model Card for Luciole-1B-Audio-1.1
+# Model Card for Luciole-1B-Audio-1.0
 
 * [Model Description](#model-description)
   * [Bias, Risks, and Limitations](#bias-risks-and-limitations)
