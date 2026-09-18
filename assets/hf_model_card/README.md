@@ -15,7 +15,6 @@ base_model:
 - nvidia/parakeet-tdt-0.6b-v3
 ---
 
-<!-- TODO: add luciole_logo.png to this folder, or drop this line -->
 ![luciole_logo.png](luciole_logo.png)
 
 # Model Card for Luciole-1B-Audio-1.1
@@ -35,12 +34,12 @@ base_model:
 
 ## Model Description
 
-**Luciole-1B-Audio-1.1** is a version capable of understanding audio of [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1).
+**Luciole-1B-Audio-1.0** is a version capable of understanding audio of [Luciole-1B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-1B-Instruct-1.1).
 The model was developed by [LINAGORA](https://linagora.com) and
 [OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
 [BPI France](https://www.bpifrance.fr/) under the France 2030 program.
 
-The training of Luciole-1B-Audio-1.1 was conducted on Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
+The training of Luciole-1B-Audio-1.0 was conducted on Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
 using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech).
 The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning) and more.
 
@@ -87,8 +86,10 @@ conversations.
 
 | | |
 |---|---|
-| LLM | Luciole-1B-Instruct-1.1, adapted with LoRA (on `q_proj`/`v_proj`, r=64, α=64) |
 | Audio encoder | Parakeet-TDT-0.6B-v3 Conformer encoder, frozen |
+| RoTE | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
+| Audio adapter | Linear(1024→2048) projection into the LLM embedding space |
+| LLM | Luciole-1B-Instruct-1.1, adapted with LoRA (on `q_proj`/`v_proj`, r=64, α=64) |
 | Trainable params | 12.3M / ~1.9B (0.6%) |
 | Optimizer | AdamW (β=(0.9, 0.98), weight decay 0.001) |
 | LR schedule | Cosine annealing (max LR 2e-4, min LR 1e-6, 500 warmup steps) |
@@ -126,7 +127,7 @@ nemo_speechlm = "nemo.collections.speechlm2.vllm.salm:register"
 ```
 
 vLLM auto-discovers this plugin at startup as soon as `nemo-toolkit` and `vllm` are installed in the same
-environment (no `--trust-remote-code` and no custom `--model-impl` flag needed). The plugin merges the
+environment. The plugin merges the
 LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder + connector to turn each
 `<|audio|>` tag into the right number of audio-embedding slots before generation.
 
@@ -144,7 +145,7 @@ uv pip install "numpy<=2.4"
 **Serve**
 
 ```bash
-vllm serve /path/to/Luciole-1B-Audio \
+vllm serve OpenLLM-France/Luciole-1B-Audio-1.0 \
     --max-model-len 16384
 ```
 
@@ -198,7 +199,7 @@ uv pip install "nemo-toolkit[speechlm2,tts] @ git+https://github.com/linagora-la
 import torch
 from nemo.collections.speechlm2 import SALM
 
-model = SALM.from_pretrained("OpenLLM-France/Luciole-1B-Audio")  # or a local checkpoint directory
+model = SALM.from_pretrained("OpenLLM-France/Luciole-1B-Audio-1.0")  # or a local checkpoint directory
 model = model.eval().to(torch.bfloat16).to("cuda")
 
 # High-level API: pass the audio file path(s) directly in the prompt, next to the
@@ -226,7 +227,7 @@ A prompt can carry several turns and several audio clips (one `<|audio|>` tag pe
 
 ## Acknowledgements
 
-Training of Luciole-1B-Audio-1.1 was made possible by computing AI and storage resources by GENCI at IDRIS thanks to the grant 2025-AS011016445 on the supercomputer Jean Zay’s H100 partition. We gratefully acknowledge support from GENCI and IDRIS and from Stephane Requena (GENCI) and Pierre-François Lavallée (IDRIS) in particular.
+Training of Luciole-1B-Audio-1.0 was made possible by computing AI and storage resources by GENCI at IDRIS thanks to the grant 2025-AS011016445 on the supercomputer Jean Zay’s H100 partition. We gratefully acknowledge support from GENCI and IDRIS and from Stephane Requena (GENCI) and Pierre-François Lavallée (IDRIS) in particular.
 
 <!-- TODO: contributor list, à la Luciole-1B-Instruct-1.1's Acknowledgements section -->
 
