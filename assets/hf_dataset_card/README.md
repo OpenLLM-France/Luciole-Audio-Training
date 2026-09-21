@@ -127,9 +127,10 @@ Example record:
 
 ### Tasks
 
-The dataset covers the following tasks, organised by domain as `<domain>/<task>`:
+The dataset covers the following tasks, organised by domain as `<domain>/<task>` (each
+exposed as the configuration `<domain>.<task>`):
 
-**Speech** (`speech/…`)
+**Speech**
 
 - **`asr`** — *Automatic Speech Recognition*: transcribe spoken audio into text.
 - **`ast`** — *Automatic Speech Translation*: translate spoken audio into text in another language (the split's `language` is the source-target pair, e.g. `en-fr` for the translation from English to French).
@@ -148,12 +149,12 @@ The dataset covers the following tasks, organised by domain as `<domain>/<task>`
 - **`sentence_stress_reasoning`** — *Sentence-Stress Reasoning*: reason about how the stressed words change the meaning or intent of the utterance.
 - **`task_switching`** — *Multi-turn, Multi-task Conversations*: dialogues that combine several of the above tasks (and several audio clips) within a single conversation.
 
-**Music** (`music/…`)
+**Music**
 
 - **`qa`** — *Music Question Answering*: answer questions about a music clip (genre, instruments, mood, tempo…).
 - **`captioning`** — *Music Captioning*: produce a descriptive caption of a music clip.
 
-**Sound** (`sound/…`)
+**Sound**
 
 - **`qa`** — *Environmental-sound Question Answering*: answer questions about non-speech / everyday sounds.
 - **`captioning`** — *Environmental-sound Captioning*: describe non-speech / ambient sounds.
