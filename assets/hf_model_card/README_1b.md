@@ -13,6 +13,9 @@ tags:
 base_model:
 - OpenLLM-France/Luciole-1B-Instruct-1.1
 - nvidia/parakeet-tdt-0.6b-v3
+datasets:
+  - OpenLLM-France/Luciole-Audio-Training-Dataset
+library_name: nemo
 ---
 
 ![luciole_logo.png](luciole_logo.png)
