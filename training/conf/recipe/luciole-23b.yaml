@@ -1,5 +1,12 @@
 # @package _global_
 model:
+  automodel_parallel:
+    # Full FSDP2 shard (HSDP measured, no gain — see recipe/luciole-8b.yaml).
+    # activation_checkpointing_llm defaults to False in code: keep it here so any
+    # run/xp config built on this recipe gets it, or it OOMs at this bucket layout.
+    dp_replicate_size: 1
+    activation_checkpointing_llm: true
+
   optimizer:
     lr: 2e-4
   lora:
