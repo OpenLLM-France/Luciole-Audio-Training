@@ -194,7 +194,7 @@ exp_manager:
     save_top_k: -1
     always_save_nemo: false
     save_nemo_on_train_end: false
-    every_n_train_steps: 5000
+    every_n_train_steps: 10000
     # Sinon le -last (46 Go sur le 23B) est réécrit à chaque fin de validation.
     save_on_train_epoch_end: true
     

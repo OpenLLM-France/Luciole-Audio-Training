@@ -38,11 +38,12 @@ def resolve_class_path(exp_config: Path, override: str | None) -> str:
 def parse_step(entry: Path) -> int | None:
     """Extract the training step from a checkpoint name.
 
-    Handles bare digits ('002500'[.ckpt]) and Lightning's default format
-    ('step=002500.ckpt', 'step=015000-last.ckpt'). Returns None if no step found.
+    Handles bare digits ('002500'[.ckpt]), Lightning's default format
+    ('step=002500.ckpt', 'step=015000-last.ckpt') and the duplex one, whose train script
+    swaps `=` for `-` ('step-002500.ckpt'). Returns None if no step found.
     """
     stem = entry.name[:-5] if entry.name.endswith(".ckpt") else entry.name
-    m = re.search(r"step=(\d+)", stem) or re.fullmatch(r"(\d+)", stem)
+    m = re.search(r"step[=-](\d+)", stem) or re.fullmatch(r"(\d+)", stem)
     return int(m.group(1)) if m else None
 
 

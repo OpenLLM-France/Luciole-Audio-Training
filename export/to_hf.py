@@ -135,6 +135,7 @@ PORTABLE_REFS = {
     "Luciole-1B-Instruct-1.1": "OpenLLM-France/Luciole-1B-Instruct-1.1",
     "Luciole-8B-Instruct-1.1": "OpenLLM-France/Luciole-8B-Instruct-1.1",
     "parakeet-tdt-0.6b-v3": "nvidia/parakeet-tdt-0.6b-v3",
+    "nemotron-3.5-asr-streaming-0.6b": "nvidia/nemotron-3.5-asr-streaming-0.6b",
 }
 PORTABLE_REF_KEYS = ("pretrained_llm", "pretrained_asr")
 

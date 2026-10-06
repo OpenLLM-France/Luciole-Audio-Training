@@ -156,9 +156,16 @@ export NEMO_MODELS_CACHE="$TMP_CACHE"
 # earlier stage's checkpoint exists: CHECKPOINT_DIR is a literal path known at
 # submission time, CHECKPOINT (the actual *-last.ckpt file) is only resolved here,
 # once the dependency has been satisfied and the file is guaranteed to exist.
-if [[ -z "${CHECKPOINT:-}" && -n "${CHECKPOINT_DIR:-}" ]]; then
-    CHECKPOINT="$(ls -t "${CHECKPOINT_DIR}"/*-last.ckpt 2>/dev/null | head -1)"
-    if [[ -z "$CHECKPOINT" ]]; then
+# *-last.ckpt are distcp DIRECTORIES: `ls -d` lists the entry itself, plain `ls -t`
+# would list its content and return a bare "__0_0.distcp".
+if [[ -n "${CHECKPOINT:-}" && -n "${CHECKPOINT_DIR:-}" ]]; then
+    echo "❌ Both CHECKPOINT (${CHECKPOINT}) and CHECKPOINT_DIR (${CHECKPOINT_DIR}) are set;" \
+         "a stale CHECKPOINT in the submitting shell would silently win. Unset one." >&2
+    exit 1
+fi
+if [[ -n "${CHECKPOINT_DIR:-}" ]]; then
+    CHECKPOINT="$(ls -td "${CHECKPOINT_DIR}"/*-last.ckpt 2>/dev/null | head -1)"
+    if [[ -z "$CHECKPOINT" || ! -e "$CHECKPOINT" ]]; then
         echo "❌ No *-last.ckpt found in CHECKPOINT_DIR=${CHECKPOINT_DIR}" >&2
         exit 1
     fi

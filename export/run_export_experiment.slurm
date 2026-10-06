@@ -24,7 +24,11 @@ module load arch/h100 nemo/2.7.3
 LOCAL_FOLDER=$(pwd)
 TMP_CACHE="$SCRATCH/speechlm/.cache"
 
-export EXPERIMENT_FOLDER="$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
+# Root of the experiments. Duplex runs live elsewhere:
+#   EXPERIMENT_FOLDER=$ALL_CCFRSCRATCH/audio/training/duplex NEMO_DIR=$HOME/NeMo_Duplex \
+#   CLASS_PATH=nemo.collections.speechlm2.models.DuplexSTTModel sbatch run_export_experiment.slurm <run>
+export EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments}"
+umask 007  # hf_checkpoints/ lands in the shared project space: group qgz only
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export TMPDIR=$JOBSCRATCH
@@ -53,6 +57,11 @@ EVERY="${2:-50000}"
 CONDA_ENV="${CONDA_ENV:-nemo27-salm_automodel_3}"
 echo "Conda env: $CONDA_ENV"
 conda activate "$SCRATCH/speechlm/envs/$CONDA_ENV"
+# NeMo copy to import instead of the env's editable one (e.g. $HOME/NeMo_Duplex for the duplex runs).
+if [ -n "${NEMO_DIR:-}" ]; then
+    export PYTHONPATH="$NEMO_DIR${PYTHONPATH:+:$PYTHONPATH}"
+    echo "NeMo: $(python -c 'import nemo; print(nemo.__file__)' | tail -1)"
+fi
 
 # Extra step(s) to always export on top of the --every selection. Defaults to
 # 10000 and 15000; override positionally or via env, e.g.
@@ -67,6 +76,8 @@ STEPS_ARG=""
 # default. Disable either with INCLUDE_FIRST=0 / INCLUDE_LAST=0.
 FIRST_ARG=""; [ "${INCLUDE_FIRST:-1}" = "0" ] && FIRST_ARG="--no-include-first"
 LAST_ARG="";  [ "${INCLUDE_LAST:-1}"  = "0" ] && LAST_ARG="--no-include-last"
+# Re-export checkpoints already in hf_checkpoints/ (skipped otherwise): FORCE=1
+FORCE_ARG=""; [ "${FORCE:-0}" = "1" ] && FORCE_ARG="--force"
 
 # Model class is auto-detected from the experiment's exp_config.yaml
 # (SALMAutomodel when model.use_nemo_automodel, else SALM). Override only if
@@ -80,4 +91,5 @@ python $LOCAL_FOLDER/export_experiment.py \
     $STEPS_ARG \
     $FIRST_ARG \
     $LAST_ARG \
-    $CLASS_PATH_ARG
+    $CLASS_PATH_ARG \
+    $FORCE_ARG

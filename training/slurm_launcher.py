@@ -273,7 +273,7 @@ def main():
                               "[<subdir>/]<job_name>)")
     g_train.add_argument("--checkpoint-dir", default=None,
                          help="Directory to resolve CHECKPOINT from at job RUNTIME via "
-                              "`ls -t <dir>/*-last.ckpt` (e.g. the previous curriculum "
+                              "`ls -td <dir>/*-last.ckpt` (e.g. the previous curriculum "
                               "stage's .../checkpoints/ dir). Use with --after so stage2 "
                               "can be submitted before stage1's checkpoint file exists.")
 
@@ -364,6 +364,17 @@ def main():
             env_overrides[name] = value
 
     if args.checkpoint_dir is not None:
+        # sbatch runs with --export=ALL, and run_train.slurm only resolves CHECKPOINT_DIR
+        # when CHECKPOINT is empty: a CHECKPOINT left exported in the shell would silently
+        # win over --checkpoint-dir.
+        if os.environ.get("CHECKPOINT"):
+            sys.exit(
+                f"CHECKPOINT is already exported in this shell "
+                f"({os.environ['CHECKPOINT']}) and would silently override "
+                f"--checkpoint-dir.\n"
+                f"Run `unset CHECKPOINT` to use --checkpoint-dir, or drop --checkpoint-dir "
+                f"to use CHECKPOINT."
+            )
         env_overrides["CHECKPOINT_DIR"] = expand_or_die(args.checkpoint_dir, "--checkpoint-dir")
 
     overrides = list(args.overrides)
@@ -442,7 +453,7 @@ def main():
             f"Config '{args.config}' warm-starts from ${{oc.env:CHECKPOINT}} but neither "
             f"CHECKPOINT nor --checkpoint-dir is set.\n"
             f"Either export a literal checkpoint path, e.g.:\n"
-            f'  export CHECKPOINT="$(ls -t "$EXP"/<stage>/checkpoints/*-last.ckpt | head -1)"\n'
+            f'  export CHECKPOINT="$(ls -td "$EXP"/<stage>/checkpoints/*-last.ckpt | head -1)"\n'
             f"or, if the checkpoint doesn't exist yet (chaining onto a running stage), pass\n"
             f"  --checkpoint-dir <stage1-exp-dir>/checkpoints --after <stage1-jobid>\n"
             f"and it will be resolved once the job actually starts."

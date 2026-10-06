@@ -16,10 +16,6 @@ model:
     target_modules: ["q_proj", "v_proj", "up_proj", "down_proj"]
     lora_dropout: 0.0
 
-trainer:
-  max_steps: 10_000_000
-  limit_train_batches: 250_000
-
 data:
   train_ds:
     num_buckets: 27
