@@ -25,13 +25,15 @@ library_name: nemo
 * [Model Description](#model-description)
   * [Bias, Risks, and Limitations](#bias-risks-and-limitations)
   * [Recommendations](#recommendations)
-* [Training Details](#training-details)
-  * [Training Data](#training-data)
+* [Training details](#training-details)
+  * [Training data](#training-data)
   * [Instruction template](#instruction-template)
   * [Training Procedure](#training-procedure)
 * [Evaluation](#evaluation)
-* [Testing the model](#testing-the-model)
-* [Citation](#citation)
+* [Using the model](#using-the-model)
+  * [With vLLM](#with-vllm)
+  * [With NeMo](#with-nemo)
+  * [Example prompts for each task](#example-prompts-for-each-task)
 * [Acknowledgements](#acknowledgements)
 * [Contact](#contact)
 
@@ -52,7 +54,7 @@ The model was trained on various tasks and types of audios including ASR (Automa
   language model: it can struggle with math word problems, is susceptible to hallucination, and its
   context window is limited to 16,384 tokens.
 <!-- - The audio encoder and its front-end were entirely frozen during training, so audio understanding is bounded by what
-  Parakeet-TDT-0.6B-v3 already hears — the model cannot learn to compensate for acoustic conditions the
+  Parakeet-TDT-0.6B-v3 already hears: the model cannot learn to compensate for acoustic conditions the
   encoder itself handles poorly. -->
 - Training data was concentrated on French and English (ASR, AST, spoken QA). Expect the strongest performance on fr/en tasks and treat other
   languages, and the music/sound captioning tasks, as less tested.
@@ -81,13 +83,13 @@ speaker/gender/age/emotion/language recognition, and music/sound captioning and 
 Same chat template as the base LLM (inspired by Qwen3), extended with an `<|audio|>` locator tag:
 wherever `<|audio|>` appears in a turn, the corresponding audio segment is encoded and its embeddings
 replace the tag before the sequence reaches the LLM. Conversations can carry several audio clips and mix
-audio-only, text-only, and audio+text turns within the same dialogue — see the
+audio-only, text-only, and audio+text turns within the same dialogue (see the
 [dataset card](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset) for example
-conversations.
+conversations).
 
 ### Training Procedure
 
-| | |
+| Component | Details |
 |---|---|
 | **Audio encoder** | [Parakeet-TDT-0.6B-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) Conformer encoder, frozen |
 | **RoTE** | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
@@ -165,7 +167,7 @@ vllm serve OpenLLM-France/Luciole-8B-Audio-1.0 \
     --max-model-len 16384
 ```
 
-**Query** (OpenAI-compatible chat API — audio sent as base64):
+**Query** (OpenAI-compatible chat API, audio sent as base64):
 
 ```python
 import base64
@@ -191,7 +193,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-The `<|audio|>` placeholder is the same `audio_locator_tag` used during training — put it in the text
+The `<|audio|>` placeholder is the same `audio_locator_tag` used during training: put it in the text
 wherever the audio should be attended to; the plugin expands it automatically. Audio must be 16 kHz mono;
 the encoder supports chunked processing for long-form audio (well beyond the durations seen in training).
 
@@ -219,7 +221,7 @@ model = SALM.from_pretrained("OpenLLM-France/Luciole-8B-Audio-1.0")  # or a loca
 model = model.eval().to(torch.bfloat16).to("cuda")
 
 # High-level API: pass the audio file path(s) directly in the prompt, next to the
-# `<|audio|>` placeholder — SALM loads and resamples the audio for you.
+# `<|audio|>` placeholder; SALM loads and resamples the audio for you.
 answer_ids = model.generate(
     prompts=[
         [
@@ -241,8 +243,8 @@ A prompt can carry several turns and several audio clips (one `<|audio|>` tag pe
 
 - ASR: 
   - `Transcribe in English`
-  - `Transcribe in French`
   - `Transcris en français`
+  - `Transcribe this audio in the source language`
 - QA: `Listen to the audio and answer the question.`
 - AST: `Translate this file into French.`
 - Diarization: 
