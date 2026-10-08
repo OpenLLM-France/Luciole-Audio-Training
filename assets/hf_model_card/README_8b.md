@@ -18,7 +18,7 @@ datasets:
 library_name: nemo
 ---
 
-![luciole_logo.png](luciole_logo.png)
+![luciole_logo.png](assets/luciole_logo.png)
 
 # Model Card for Luciole-8B-Audio-1.0
 
@@ -113,7 +113,19 @@ The training code and configs are available in the [Luciole-Audio-Training repos
 
 ## Evaluation
 
-✍ Coming soon!
+
+
+To evaluate our models and compare them with other open-weight Audio LLMs, we used [our fork of AudioBench](https://github.com/OpenLLM-France/AudioBench). We used a combination of datasets from AudioBench and datasets available in [our HF audio evaluation repository](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Evaluation-Dataset). You can find the full details and results on [our AudioBench leaderboard](https://openllm-france.github.io/AudioBench/).
+
+A small excerpt from the leaderboard, showing the main table across all tasks and languages:
+
+![results.png](assets/results.png)
+
+Results for French and English only, as well as for ASR, AST, and QA tasks only:
+
+![results.png](assets/results_fr_en.png)
+
+As you can see, the model [OpenLLM-France/Luciole-8B-Audio-1.0](https://huggingface.co/OpenLLM-France/Luciole-8B-Audio-1.0) performs well in French and English compared to other models.
 
 ## Using the model
 
@@ -224,6 +236,18 @@ print(model.tokenizer.ids_to_text(answer_ids[0].tolist()))
 ```
 
 A prompt can carry several turns and several audio clips (one `<|audio|>` tag per clip, in order).
+
+### Example prompts for each task
+
+- ASR: 
+  - `Transcribe in English`
+  - `Transcribe in French`
+  - `Transcris en français`
+- QA: `Listen to the audio and answer the question.`
+- AST: `Translate this file into French.`
+- Diarization: 
+  - `Provide a time-stamped, speaker-attributed transcript of this audio.`
+  - `Transcris et diarise cet enregistrement, avec les horodatages de chaque tour.`
 
 ## Acknowledgements
 
