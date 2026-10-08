@@ -93,7 +93,7 @@ conversations).
 |---|---|
 | **Audio encoder** | [Parakeet-TDT-0.6B-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) Conformer encoder, frozen |
 | **RoTE** | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
-| **Audio adapter** | Linear (1024→2048) projection into the LLM embedding space |
+| **Audio adapter** | Linear projection into the LLM embedding space (1024 -> 2048) |
 | **LLM** | [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1), adapted with LoRA (on `q_proj`/`v_proj`, `up_proj`, `down_proj`, r=64, α=64) |
 | **Trainable params** | 82.1M / ~8.2B (1.0%) |
 | **Optimizer** | AdamW (β=(0.9, 0.98), weight decay 0.001) |
