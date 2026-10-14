@@ -3,6 +3,12 @@ license: apache-2.0
 language:
 - fr
 - en
+- de
+- es
+- it
+- pt
+- nl
+- ar
 pipeline_tag: audio-text-to-text
 tags:
 - openllm-france
@@ -41,12 +47,12 @@ library_name: nemo
 
 **Luciole-8B-Audio-1.0** is an audio-capable version of [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1).
 The model was developed by [LINAGORA](https://linagora.com) and
-[OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
+the [OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
 [BPI France](https://www.bpifrance.fr/) under the France 2030 program.
 
-The training of Luciole-8B-Audio-1.0 was conducted on Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
-using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech).
-The model was trained on various tasks and types of audios including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning) and more.
+The training of Luciole-8B-Audio-1.0 was conducted on the Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
+using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech) toolkit.
+The model was trained on various tasks and types of audio, including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning) and more.
 
 ### Bias, Risks, and Limitations
 
@@ -56,25 +62,32 @@ The model was trained on various tasks and types of audios including ASR (Automa
 <!-- - The audio encoder and its front-end were entirely frozen during training, so audio understanding is bounded by what
   Parakeet-TDT-0.6B-v3 already hears: the model cannot learn to compensate for acoustic conditions the
   encoder itself handles poorly. -->
-- Training data was concentrated on French and English (ASR, AST, spoken QA). Expect the strongest performance on fr/en tasks and treat other
-  languages, and the music/sound captioning tasks, as less tested.
+- Language coverage is uneven. French and English make up most of the training mix and are the only languages seen on every task. German, Spanish and Italian were seen in training for ASR, AST and spoken QA. Portuguese, Dutch and Arabic for ASR and AST only.
+- Arabic is the weakest language: the frozen Parakeet-TDT-0.6B-v3 encoder was not trained on Arabic,
+  so the model is clearly less reliable there (FLEURS WER ~30%).
 <!-- - LoRA fine-tuning only touches attention projections in the LLM; no additional audio-specific safety or
   refusal tuning was performed beyond what the base LLM already has. -->
 
 ### Recommendations
 
-- Use for French/English speech transcription, translation, spoken question answering, and audio/music/
-  sound description in a conversational setting. Verify quality yourself before relying on it for other
-  languages or for dedicated ASR/AST pipelines, where a specialized model may still do better.
-- As with the base LLM, pairing it with a RAG pipeline helps when up-to-date or domain knowledge is
-  needed.
+- Speech, sound and music understanding: (summarization, captioning, sound/music QA, conversation):
+  best in French and English, the only languages the model was trained on for these tasks.
+- Transcription (ASR) and translation (AST): supported in French, English, German, Spanish,
+  Italian, Portuguese and Dutch. For production ASR/AST pipelines, a dedicated model may still
+  perform better.
+- Spoken question answering: mainly supported in French and English. German, Spanish and
+  Italian are also supported, but with far less training data.
+- Other languages and tasks: outside French and English, evaluate the model on your own data
+  before relying on it, especially for a task the model was not trained on in that language.
+- Up-to-date or domain-specific knowledge: as with the base LLM, pair the model with a RAG
+  pipeline.
 
 ## Training details
 
 ### Training data
 
 Trained on the [OpenLLM-France/Luciole-Audio-Training-Dataset](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset),
-a large multilingual, multi-task collection of audio–text conversations comprising : ASR (Automatic Speech Recognition),
+a large multilingual, multi-task collection of audio–text conversations comprising: ASR (Automatic Speech Recognition),
 AST (Automatic Speech Translation), spoken question answering, summarization, diarization, temporal localization,
 speaker/gender/age/emotion/language recognition, and music/sound captioning and QA (Question Answering).
 
