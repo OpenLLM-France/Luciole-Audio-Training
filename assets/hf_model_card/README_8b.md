@@ -11,7 +11,7 @@ tags:
 - salm
 - nemo
 base_model:
-- OpenLLM-France/Luciole-1B-Instruct-1.1
+- OpenLLM-France/Luciole-8B-Instruct-1.1
 - nvidia/parakeet-tdt-0.6b-v3
 datasets:
   - OpenLLM-France/Luciole-Audio-Training-Dataset
@@ -39,7 +39,7 @@ library_name: nemo
 
 ## Model Description
 
-**Luciole-8B-Audio-1.0** is a version capable of understanding audio of [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1).
+**Luciole-8B-Audio-1.0** is an audio-capable version of [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1).
 The model was developed by [LINAGORA](https://linagora.com) and
 [OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
 [BPI France](https://www.bpifrance.fr/) under the France 2030 program.
@@ -93,7 +93,7 @@ conversations).
 |---|---|
 | **Audio encoder** | [Parakeet-TDT-0.6B-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) Conformer encoder, frozen |
 | **RoTE** | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
-| **Audio adapter** | Linear projection into the LLM embedding space (1024 -> 2048) |
+| **Audio adapter** | Linear projection into the LLM embedding space (1024 -> 4096) |
 | **LLM** | [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1), adapted with LoRA (on `q_proj`/`v_proj`, `up_proj`, `down_proj`, r=64, α=64) |
 | **Trainable params** | 82.1M / ~8.2B (1.0%) |
 | **Optimizer** | AdamW (β=(0.9, 0.98), weight decay 0.001) |
@@ -102,6 +102,7 @@ conversations).
 | **Steps** | 100,000 |
 | **Gradient clipping** | 1.0 |
 | **Strategy** | FSDP2 (full sharding), activation checkpointing on the LLM (to allow for long sequences), 1 node × 4 H100 |
+| **Precision** | bf16 |
 
 The model was trained for 100k steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
 bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
@@ -111,11 +112,9 @@ Validation covered CommonVoice ASR (fr/en/ar),
 Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
 captioning (AudioCaps, MusicCaps).
 
-The training code and configs are available in the [Luciole-Audio-Training repository](https://github.com/OpenLLM-France/Luciole-Audio-Training). Training used an updated version of [NeMo/Speech 3.0](https://github.com/NVIDIA-NeMo/Speech) which can be found in our [NeMo/Speech fork](https://github.com/linagora-labs/NeMo/tree/luciole_speech.3.1.0-rc0).
+The training code and configs are available in the [Luciole-Audio-Training repository](https://github.com/OpenLLM-France/Luciole-Audio-Training). Training used an updated version of [NeMo/Speech 3.1](https://github.com/NVIDIA-NeMo/Speech) which can be found in our [NeMo/Speech fork](https://github.com/linagora-labs/NeMo/tree/luciole_speech.3.1.0-rc0).
 
 ## Evaluation
-
-
 
 To evaluate our models and compare them with other open-weight Audio LLMs, we used [our fork of AudioBench](https://github.com/OpenLLM-France/AudioBench). We used a combination of datasets from AudioBench and datasets available in [our HF audio evaluation repository](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Evaluation-Dataset). You can find the full details and results on [our AudioBench leaderboard](https://openllm-france.github.io/AudioBench/).
 
@@ -125,7 +124,7 @@ A small excerpt from the leaderboard, showing the main table across all tasks an
 
 Results for French and English only, as well as for ASR, AST, and QA tasks only:
 
-![results.png](assets/results_fr_en.png)
+![results_fr_en.png](assets/results_fr_en.png)
 
 As you can see, the model [OpenLLM-France/Luciole-8B-Audio-1.0](https://huggingface.co/OpenLLM-France/Luciole-8B-Audio-1.0) performs well in French and English compared to other models.
 
@@ -179,7 +178,7 @@ with open("sample.wav", "rb") as f:   # 16 kHz mono
     audio_b64 = base64.b64encode(f.read()).decode()
 
 response = client.chat.completions.create(
-    model="Luciole-1B-Audio",
+    model="OpenLLM-France/Luciole-8B-Audio-1.0",
     messages=[
         {
             "role": "user",
@@ -242,9 +241,8 @@ A prompt can carry several turns and several audio clips (one `<|audio|>` tag pe
 ### Example prompts for each task
 
 - ASR: 
-  - `Transcribe in English`
-  - `Transcris en français`
-  - `Transcribe this audio in the source language`
+  - `Make a word-for-word transcription in English of the spoken content.`
+  - `Fais une transcription mot pour mot en français du contenu parlé.`
 - QA: `Listen to the audio and answer the question.`
 - AST: `Translate this file into French.`
 - Diarization: 
@@ -258,7 +256,9 @@ Training of Luciole-8B-Audio-1.0 was made possible by computing AI and storage r
 Luciole-8B-Audio-1.0 was created by members of LINAGORA, including in alphabetical order:
 
 Audran Bert (LINAGORA)
+
 Hédi Naouara (LINAGORA)
+
 Jérôme Louradour (LINAGORA)
 
 We thank the support teams from IDRIS and [NVIDIA](https://www.nvidia.com/en-eu/) for technical guidance throughout the project.
