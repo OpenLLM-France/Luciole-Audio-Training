@@ -3,6 +3,8 @@ AudioSegment
 bitsandbytes
 ctranslate2==4.0.0
 datasets
+evaluate
+flow-judge
 dask
 dask[dataframe]
 faster_whisper

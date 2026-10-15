@@ -3,11 +3,12 @@ name = "luciole-audio"
 version = "0.1.0"
 description = "Scripts to train Audio Adapter models"
 readme = "README.md"
-license = "GPL-3.0"
+license = "AGPL-3.0-only"
 authors = []
 # The heavy ML extras (TTS, moshi, unsloth, nemo) generally require >=3.10.
-# Note: the [tts] extra (coqui TTS 0.22) does not support 3.12 — use 3.10/3.11 if you need it.
-requires-python = ">=3.10"
+# Note: the [tts] extra (coqui TTS 0.22) does not support 3.12, and on 3.10 it hard-pins
+# numpy==1.22.0 which conflicts with the project's numpy==1.26.4 — use 3.11 if you need it.
+requires-python = ">=3.11"
 
 dependencies = [
     "numpy==1.26.4",
@@ -75,7 +76,6 @@ templating = [
 ]
 # data/tts/
 tts = [
-    "luciole-audio[hf]",
     "TTS==0.22.0",
     "moshi==0.2.11",
     "sphn<0.2",
@@ -121,17 +121,38 @@ utils = [
 ]
 
 # --- convenience bundles ---
+# Note: tts is excluded here (see [tool.uv.conflicts] below) — parler-tts hard-pins
+# transformers==4.46.1, which is incompatible with the hf extra's transformers==4.43.4
+# pinned everywhere else. Install tts in its own environment.
 all-data = [
-    "luciole-audio[data,generation,processing,templating,tts]",
+    "luciole-audio[data,generation,processing,templating]",
 ]
 all = [
-    "luciole-audio[data,generation,processing,templating,tts,training,eval,export,utils]",
+    "luciole-audio[data,generation,processing,templating,training,eval,export,utils]",
 ]
 
 [dependency-groups]
 dev = [
     "ruff>=0.1.11",
     "pre-commit>=3.6.0",
+]
+
+[tool.uv]
+# tts pulls parler-tts, which hard-pins transformers==4.46.1. Every hf-based extra hard-pins
+# transformers==4.43.4 instead, so tts can never be installed alongside any of them. By default
+# uv locks a single resolution that must support every extra combination at once, so a plain
+# `uv sync`/`uv lock` fails even when neither extra is explicitly requested — telling it these
+# pairs conflict lets it resolve each one separately instead.
+conflicts = [
+    [{ extra = "tts" }, { extra = "hf" }],
+    [{ extra = "tts" }, { extra = "data" }],
+    [{ extra = "tts" }, { extra = "generation" }],
+    [{ extra = "tts" }, { extra = "processing" }],
+    [{ extra = "tts" }, { extra = "templating" }],
+    [{ extra = "tts" }, { extra = "eval" }],
+    [{ extra = "tts" }, { extra = "utils" }],
+    [{ extra = "tts" }, { extra = "all" }],
+    [{ extra = "tts" }, { extra = "all-data" }],
 ]
 
 [build-system]

@@ -1,37 +1,50 @@
-# Audio-Adapter-Training
+# Luciole-Audio-Training
 
-## Overview
+Training and export scripts for **Luciole Audio**: speech/audio-augmented LLMs (SALM)
+built on the Luciole models (1B, 8B, 23B) with NVIDIA NeMo `speechlm2`.
 
-This project is focused on training a multimodal model to adapt LLM with audio. The goal is to develop a robust and efficient audio system for Lucie.
+## Repository layout
+
+| Folder      | Content |
+|-------------|---------|
+| `data/`     | Dataset conversion to NeMo/Lhotse manifests, data generation, templating, TTS |
+| `training/` | SALM training (`salm_train.py`), Hydra configs (`conf/`), Slurm launcher |
+| `export/`   | Export of NeMo checkpoints to Hugging Face format (`to_hf.py`) |
+| `utils/`    | Shared helpers (audio, inference, metrics) |
+| `assets/`   | Model/dataset cards, plotting and upload scripts |
+| `demo/`     | WebRTC demo app |
+| `install/`  | Environment installation scripts (Jean-Zay) |
 
 ## Installation
 
-To install the necessary dependencies, run the following command:
+**Data preparation** scripts (`data/`) import `luciole_audio.*`, so the repo must be installed:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[data]"   # or [generation], [processing], [templating], [all-data], ...
 ```
+
+The `tts` extra conflicts with the others (different `transformers` pin) and must be
+installed in a separate environment.
 
 ## Usage
 
-### Configs:
-Before starting your training, you have to update the `configs.py` file to set up your training parameters (e.g., base model, output directory, and other important settings).
-
-### Training:
-To train the model, use the following command. But first, you should change the dataset needed for training and development:
+Training (submits `training/run_train.slurm`):
 
 ```bash
-python main.py --audio_path path/to/audio/train path/to/audio/train --dev path/to/dev.{json, tsv} --train path/to/train.{json, tsv} --gpus 1
+python training/slurm_launcher.py --config run/luciole-8b --gpus 4 --time 20:00:00
 ```
 
-## Inference:
-To infer the model, you just need to enter the path to the model (the script will take the last checkpoint trained) and an audio file, like in the following command:
+Hugging Face export:
 
 ```bash
-python infer.py path/to/model path/to/audio --gpus 1
+sbatch export/run_hf_export.slurm
 ```
+
+## Evaluation
+
+Models are evaluated with [our fork of AudioBench](https://github.com/OpenLLM-France/AudioBench)
+(results on the [leaderboard](https://openllm-france.github.io/AudioBench/)).
 
 ## License
 
-This project is licensed under the AGPL v3 License. See the [LICENSE](LICENSE) file for more information.
-
+AGPL v3, see [LICENSE](LICENSE).
