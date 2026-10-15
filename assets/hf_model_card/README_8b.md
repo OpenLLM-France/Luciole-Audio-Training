@@ -57,8 +57,8 @@ The model was trained on various tasks and types of audio, including ASR (Automa
 ### Bias, Risks, and Limitations
 
 - Inherits the limitations of the base [Luciole-8B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-8B-Instruct-1.1)
-  language model: it can struggle with math word problems, is susceptible to hallucination, and its
-  context window is limited to 16,384 tokens.
+  language model: it can struggle with math word problems and is susceptible to hallucination.
+- Training sequences were capped at 16,384 tokens (audio and text combined), so longer contexts are untested.
 <!-- - The audio encoder and its front-end were entirely frozen during training, so audio understanding is bounded by what
   Parakeet-TDT-0.6B-v3 already hears: the model cannot learn to compensate for acoustic conditions the
   encoder itself handles poorly. -->
@@ -70,7 +70,7 @@ The model was trained on various tasks and types of audio, including ASR (Automa
 
 ### Recommendations
 
-- Speech, sound and music understanding: (summarization, captioning, sound/music QA, conversation):
+- Speech, sound and music understanding (summarization, captioning, sound/music QA, conversation):
   best in French and English, the only languages the model was trained on for these tasks.
 - Transcription (ASR) and translation (AST): supported in French, English, German, Spanish,
   Italian, Portuguese and Dutch. For production ASR/AST pipelines, a dedicated model may still
