@@ -1,0 +1,281 @@
+---
+license: apache-2.0
+language:
+- fr
+- en
+- de
+- es
+- it
+- pt
+- nl
+- ar
+pipeline_tag: audio-text-to-text
+tags:
+- openllm-france
+- audio-language-model
+- speech-llm
+- salm
+- nemo
+base_model:
+- OpenLLM-France/Luciole-23B-Instruct-1.1
+- nvidia/parakeet-tdt-0.6b-v3
+datasets:
+  - OpenLLM-France/Luciole-Audio-Training-Dataset
+library_name: nemo
+---
+
+![luciole_logo.png](assets/luciole_logo.png)
+
+# Model Card for Luciole-23B-Audio-1.0
+
+* [Model Description](#model-description)
+  * [Bias, Risks, and Limitations](#bias-risks-and-limitations)
+  * [Recommendations](#recommendations)
+* [Training details](#training-details)
+  * [Training data](#training-data)
+  * [Instruction template](#instruction-template)
+  * [Training Procedure](#training-procedure)
+* [Evaluation](#evaluation)
+* [Using the model](#using-the-model)
+  * [With vLLM](#with-vllm)
+  * [With NeMo](#with-nemo)
+  * [Example prompts for each task](#example-prompts-for-each-task)
+* [Acknowledgements](#acknowledgements)
+* [Contact](#contact)
+
+## Model Description
+
+**Luciole-23B-Audio-1.0** is an audio-capable version of [Luciole-23B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-23B-Instruct-1.1).
+The model was developed by [LINAGORA](https://linagora.com) and
+the [OpenLLM-France](https://huggingface.co/OpenLLM-France) consortium, as part of the OpenLLM France project funded by
+[BPI France](https://www.bpifrance.fr/) under the France 2030 program.
+
+The training of Luciole-23B-Audio-1.0 was conducted on the Jean Zay supercomputer managed by [IDRIS](http://www.idris.fr/docs/idris/missions),
+using the [NVIDIA NeMo Speech](https://github.com/NVIDIA-NeMo/Speech) toolkit.
+The model was trained on various tasks and types of audio, including ASR (Automatic Speech Recognition), AST (Automatic Speech Translation), QA (Question Answering), Sound (Question Answering and Captioning), Music (Question Answering and Captioning) and more.
+
+### Bias, Risks, and Limitations
+
+- Inherits the limitations of the base [Luciole-23B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-23B-Instruct-1.1)
+  language model: it can struggle with math word problems and is susceptible to hallucination.
+- Training sequences were capped at 16,384 tokens (audio and text combined), so longer contexts are untested.
+<!-- - The audio encoder and its front-end were entirely frozen during training, so audio understanding is bounded by what
+  Parakeet-TDT-0.6B-v3 already hears: the model cannot learn to compensate for acoustic conditions the
+  encoder itself handles poorly. -->
+- Language coverage is uneven. French and English make up most of the training mix and are the only languages seen on every task. German, Spanish and Italian were seen in training for ASR, AST and spoken QA. Portuguese, Dutch and Arabic for ASR and AST only.
+- Arabic is the weakest language: the frozen Parakeet-TDT-0.6B-v3 encoder was not trained on Arabic,
+  so the model is clearly less reliable there (FLEURS WER ~25%).
+<!-- - LoRA fine-tuning only touches attention projections in the LLM; no additional audio-specific safety or
+  refusal tuning was performed beyond what the base LLM already has. -->
+
+### Recommendations
+
+- Speech, sound and music understanding (summarization, captioning, sound/music QA, conversation):
+  best in French and English, the only languages the model was trained on for these tasks.
+- Transcription (ASR) and translation (AST): supported in French, English, German, Spanish,
+  Italian, Portuguese and Dutch. For production ASR/AST pipelines, a dedicated model may still
+  perform better.
+- Spoken question answering: mainly supported in French and English. German, Spanish and
+  Italian are also supported, but with far less training data.
+- Other languages and tasks: outside French and English, evaluate the model on your own data
+  before relying on it, especially for a task the model was not trained on in that language.
+- Up-to-date or domain-specific knowledge: as with the base LLM, pair the model with a RAG
+  pipeline.
+
+## Training details
+
+### Training data
+
+Trained on the [OpenLLM-France/Luciole-Audio-Training-Dataset](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset),
+a large multilingual, multi-task collection of audio–text conversations comprising: ASR (Automatic Speech Recognition),
+AST (Automatic Speech Translation), spoken question answering, summarization, diarization, temporal localization,
+speaker/gender/age/emotion/language recognition, and music/sound captioning and QA (Question Answering).
+
+### Instruction template
+
+Same chat template as the base LLM (inspired by Qwen3), extended with an `<|audio|>` locator tag:
+wherever `<|audio|>` appears in a turn, the corresponding audio segment is encoded and its embeddings
+replace the tag before the sequence reaches the LLM. Conversations can carry several audio clips and mix
+audio-only, text-only, and audio+text turns within the same dialogue (see the
+[dataset card](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset) for example
+conversations).
+
+### Training Procedure
+
+| Component | Details |
+|---|---|
+| **Audio encoder** | [Parakeet-TDT-0.6B-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) Conformer encoder, frozen |
+| **RoTE** | Applied between audio encoder and audio adapter. θ=1200, rotary fraction=0.2. Inspired by [Goel et al., 2024, OMCAT](https://arxiv.org/abs/2410.12109).|
+| **Audio adapter** | Linear projection into the LLM embedding space (1024 -> 6144) |
+| **LLM** | [Luciole-23B-Instruct-1.1](https://huggingface.co/OpenLLM-France/Luciole-23B-Instruct-1.1), adapted with LoRA (on `q_proj`/`v_proj`, `up_proj`, `down_proj`, r=64, α=64) |
+| **Trainable params** | 276M / ~24.1B (1.1%) |
+| **Optimizer** | AdamW (β=(0.9, 0.98), weight decay 0.001) |
+| **LR schedule** | Cosine annealing (max LR 2e-4, min LR 1e-6, 500 warmup steps) |
+| **Batching** | Dynamic, bucketed by audio duration (27 buckets) |
+| **Steps** | 100,000 |
+| **Gradient clipping** | 1.0 |
+| **Strategy** | FSDP2 (full sharding), activation checkpointing on the LLM (to allow for long sequences), 1 node × 4 H100 |
+| **Precision** | bf16 |
+
+The model was trained for 100k steps and drew from a weighted, randomly-ordered, sharded mix of that dataset,
+bucketed by duration into 27 buckets (up to 1,200s / 16,384 audio-equivalent tokens per example) with a
+matching dynamic batch size per bucket (238 down to 1).
+
+Validation covered CommonVoice ASR (fr/en/ar),
+Multilingual TEDx speech translation (fr→en), spoken QA (SLUE-SQA-5, VoxPopuli-QA, en/fr), and audio/music
+captioning (AudioCaps, MusicCaps).
+
+The training code and configs are available in the [Luciole-Audio-Training repository](https://github.com/OpenLLM-France/Luciole-Audio-Training). Training used an updated version of [NeMo/Speech 3.1](https://github.com/NVIDIA-NeMo/Speech) which can be found in our [NeMo/Speech fork](https://github.com/linagora-labs/NeMo/tree/luciole_speech.3.1.0-rc0).
+
+## Evaluation
+
+To evaluate our models and compare them with other open-weight Audio LLMs, we used [our fork of AudioBench](https://github.com/OpenLLM-France/AudioBench). We used a combination of datasets from AudioBench and datasets available in [our HF audio evaluation repository](https://huggingface.co/datasets/OpenLLM-France/Luciole-Audio-Evaluation-Dataset). You can find the full details and results on [our AudioBench leaderboard](https://openllm-france.github.io/AudioBench/).
+
+A small excerpt from the leaderboard, showing the main table across all tasks and languages:
+
+![results.png](assets/results.png)
+
+Results for French and English only, as well as for ASR, AST, and QA tasks only:
+
+![results_fr_en.png](assets/results_fr_en.png)
+
+As you can see, the model [OpenLLM-France/Luciole-23B-Audio-1.0](https://huggingface.co/OpenLLM-France/Luciole-23B-Audio-1.0) performs well in French and English compared to other models.
+
+## Using the model
+
+### With vLLM
+
+The exported checkpoint's `config.json` declares `"model_type": "nemo_speechlm"` and
+`"architectures": ["NeMoSpeechLMForConditionalGeneration"]`. Both are registered with vLLM by the SALM
+plugin that ships inside `nemo-toolkit`
+([`nemo.collections.speechlm2.vllm.salm`](https://github.com/NVIDIA-NeMo/Speech/tree/main/nemo/collections/speechlm2/vllm/salm))
+via the `vllm.general_plugins` entry point:
+
+```toml
+[project.entry-points."vllm.general_plugins"]
+nemo_speechlm = "nemo.collections.speechlm2.vllm.salm:register"
+```
+
+vLLM auto-discovers this plugin at startup as soon as `nemo-toolkit` and `vllm` are installed in the same
+environment. The plugin merges the
+LoRA adapters into the LLM backbone on load and runs the frozen Parakeet encoder + connector to turn each
+`<|audio|>` tag into the right number of audio-embedding slots before generation.
+
+**Install using uv**
+
+```bash
+uv venv .venv --python 3.12
+source .venv/bin/activate
+
+uv pip install "nemo-toolkit[speechlm2,tts] @ git+https://github.com/linagora-labs/NeMo.git@luciole-1b-vllm-nemotron-fix"
+uv pip install vllm==0.28.0
+uv pip install "numpy<=2.4"
+```
+
+**Serve**
+
+```bash
+vllm serve OpenLLM-France/Luciole-23B-Audio-1.0 \
+    --max-model-len 16384
+```
+
+**Query** (OpenAI-compatible chat API, audio sent as base64):
+
+```python
+import base64
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+
+with open("sample.wav", "rb") as f:   # 16 kHz mono
+    audio_b64 = base64.b64encode(f.read()).decode()
+
+response = client.chat.completions.create(
+    model="OpenLLM-France/Luciole-23B-Audio-1.0",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Transcris cet audio en français : <|audio|>"},
+                {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}},
+            ],
+        }
+    ],
+)
+print(response.choices[0].message.content)
+```
+
+The `<|audio|>` placeholder is the same `audio_locator_tag` used during training: put it in the text
+wherever the audio should be attended to; the plugin expands it automatically. Audio must be 16 kHz mono;
+the encoder supports chunked processing for long-form audio (well beyond the durations seen in training).
+
+### With NeMo
+
+The checkpoint can also be loaded directly with NeMo's `SALM` class
+([`nemo.collections.speechlm2.models.salm`](https://github.com/NVIDIA-NeMo/Speech/blob/main/nemo/collections/speechlm2/models/salm.py)).
+
+**Install**
+
+```bash
+uv venv .venv --python 3.12
+source .venv/bin/activate
+
+uv pip install "nemo-toolkit[speechlm2,tts] @ git+https://github.com/linagora-labs/NeMo.git@luciole-1b-vllm-nemotron-fix"
+```
+
+**Load and generate:**
+
+```python
+import torch
+from nemo.collections.speechlm2 import SALM
+
+model = SALM.from_pretrained("OpenLLM-France/Luciole-23B-Audio-1.0")  # or a local checkpoint directory
+model = model.eval().to(torch.bfloat16).to("cuda")
+
+# High-level API: pass the audio file path(s) directly in the prompt, next to the
+# `<|audio|>` placeholder; SALM loads and resamples the audio for you.
+answer_ids = model.generate(
+    prompts=[
+        [
+            {
+                "role": "user",
+                "content": f"Transcris cet audio en français : {model.audio_locator_tag}",
+                "audio": ["sample.wav"],
+            }
+        ]
+    ],
+    max_new_tokens=256,
+)
+print(model.tokenizer.ids_to_text(answer_ids[0].tolist()))
+```
+
+A prompt can carry several turns and several audio clips (one `<|audio|>` tag per clip, in order).
+
+### Example prompts for each task
+
+- ASR: 
+  - `Make a word-for-word transcription in English of the spoken content.`
+  - `Fais une transcription mot pour mot en français du contenu parlé.`
+- QA: `Listen to the audio and answer the question.`
+- AST: `Translate this file into French.`
+- Diarization: 
+  - `Provide a time-stamped, speaker-attributed transcript of this audio.`
+  - `Transcris et diarise cet enregistrement, avec les horodatages de chaque tour.`
+
+## Acknowledgements
+
+Training of Luciole-23B-Audio-1.0 was made possible by computing AI and storage resources by GENCI at IDRIS thanks to the grant 2025-AS011016445 on the supercomputer Jean Zay’s H100 partition. We gratefully acknowledge support from GENCI and IDRIS and from Stephane Requena (GENCI) and Pierre-François Lavallée (IDRIS) in particular.
+
+Luciole-23B-Audio-1.0 was created by members of LINAGORA, including in alphabetical order:
+
+Audran Bert (LINAGORA)
+
+Hédi Naouara (LINAGORA)
+
+Jérôme Louradour (LINAGORA)
+
+We thank the support teams from IDRIS and [NVIDIA](https://www.nvidia.com/en-eu/) for technical guidance throughout the project.
+
+## Contact
+
+contact@openllm-france.fr
