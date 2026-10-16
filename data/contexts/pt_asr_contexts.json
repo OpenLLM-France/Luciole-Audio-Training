@@ -37,7 +37,10 @@
       "Transforme este áudio em texto escrito, tudo em minúsculas e sem nenhum sinal de pontuação.",
       "Crie uma transcrição em texto da fala, removendo a pontuação e as maiúsculas.",
       "Transcreva as palavras faladas deste arquivo, em minúsculas sem pontuação.",
-      "Forneça uma transcrição completa desta gravação, em minúsculas e sem pontuação."
+      "Forneça uma transcrição completa desta gravação, em minúsculas e sem pontuação.",
+      "Transcreva o áudio em português removendo a pontuação e as maiúsculas.",
+      "Transcreva o áudio em português sem maiúsculas nem pontuação.",
+      "Transcreva o áudio em português sem pontuação e em minúsculas."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle, en minuscules et sans ponctuation.",
@@ -91,7 +94,8 @@
       "Transforme este áudio em texto escrito.",
       "Crie uma transcrição em texto da fala.",
       "Transcreva as palavras faladas deste arquivo.",
-      "Forneça uma transcrição completa desta gravação."
+      "Forneça uma transcrição completa desta gravação.",
+      "Transcreva o áudio em português."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle.",

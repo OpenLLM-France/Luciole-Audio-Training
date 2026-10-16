@@ -38,7 +38,15 @@
       "Create a text transcript of the speech, all in lowercase and without any punctuation marks.",
       "Transcribe the spoken words from this file, in lowercase and without punctuation.",
       "Write out the dialogue from the audio, in lowercase without punctuation.",
-      "Provide a full transcription of this recording, without punctuation or capital letters."
+      "Provide a full transcription of this recording, without punctuation or capital letters.",
+      "Can you write the text of this audio file in its source language with no punctuation and all lowercase?",
+      "Can you write the text of this audio file in its source language, all in lowercase and without any punctuation marks?",
+      "Transcribe in English without any capital letters or punctuation",
+      "Transcribe in English without capitals or punctuation.",
+      "Transcribe the audio in its original language in lowercase and without any punctuation.",
+      "Transcribe the audio in its original language, all in lowercase, without any punctuation.",
+      "Write exactly in English what is said in this audio recording without punctuation or capital letters.",
+      "Write exactly in English what is said in this audio recording, without using capitals or punctuation."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle, en minuscules et sans ponctuation.",
@@ -90,7 +98,11 @@
       "Create a text transcript of the speech.",
       "Transcribe the spoken words from this file.",
       "Write out the dialogue from the audio.",
-      "Provide a full transcription of this recording."
+      "Provide a full transcription of this recording.",
+      "Can you write the text of this audio file in its source language?",
+      "Transcribe in English",
+      "Transcribe the audio in its original language.",
+      "Write exactly in English what is said in this audio recording."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle.",

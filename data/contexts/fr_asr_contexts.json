@@ -31,7 +31,11 @@
       "S'il te plaît, transcris ce qui est dit sans mettre de majuscules ni de ponctuation.",
       "Écris le contenu tout en minuscules, sans aucune ponctuation.",
       "Prends note de ce qui est dit sans aucune majuscule ni ponctuation.",
-      "Transforme ce fichier audio en texte en minuscules et sans ponctuation."
+      "Transforme ce fichier audio en texte en minuscules et sans ponctuation.",
+      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source, tout en minuscules, sans aucune ponctuation?",
+      "Transcris en français sans majuscules ni ponctuation",
+      "Transcrivez l'audio dans sa langue originelle, en minuscules et sans ponctuation.",
+      "Écrivez exactement en français ce qui est dit dans cet enregistrement audio, sans ponctuation et en minuscules."
     ],
     "0.05": [
       "Transcribe the audio in its original language in lowercase and without any punctuation.",
@@ -44,7 +48,6 @@
       "Transcreva o áudio em francês sem pontuação e em minúsculas."
     ]
   },
-
   "default_contexts": {
     "0.95": [
       "Transcrivez l'audio en français de la manière la plus précise possible.",
@@ -77,7 +80,11 @@
       "Transcris ce qui est dit",
       "Écris le contenu",
       "Prends note de ce qui est dit",
-      "Transforme ce fichier audio en text, s'il te plait."
+      "Transforme ce fichier audio en texte, s'il te plaît.",
+      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source?",
+      "Transcris en français",
+      "Transcrivez l'audio dans sa langue originelle.",
+      "Écrivez exactement en français ce qui est dit dans cet enregistrement audio."
     ],
     "0.05": [
       "Transcribe the audio in its original language.",
@@ -88,6 +95,53 @@
       "Trascrivi il discorso in francese.",
       "Transkribiere das Audio auf Französisch so genau wie möglich.",
       "Transcreva o áudio em francês."
+    ]
+  },
+  "events": {
+    "0.95": [
+      "Transcrivez l'audio en français en indiquant entre crochets les événements sonores comme [laughter], [applause] ou [noise].",
+      "Écrivez exactement ce qui est dit dans cet enregistrement, en notant aussi les rires, applaudissements, musique et bruits entre crochets.",
+      "Transcris l'audio mot pour mot et signale les sons non verbaux avec des balises entre crochets.",
+      "Faites une transcription complète en français, y compris les événements sonores ([laughter], [applause], [music], [noise], [cough], [breath]…).",
+      "Transcrivez fidèlement l'enregistrement et marquez les passages inaudibles avec [inaudible] et les bruits avec [noise].",
+      "Peux-tu transcrire cette piste audio en indiquant aussi les rires, la musique et les bruits de fond entre crochets ?",
+      "Transcription verbatim de l'audio, avec les événements non verbaux annotés entre crochets.",
+      "Transcrivez ce que disent les personnes et ajoutez entre crochets les événements comme les rires ou les applaudissements.",
+      "Donnez la transcription de cet extrait en français en conservant les balises d'événements sonores entre crochets.",
+      "Transcris l'audio en français et note entre crochets tout ce qui n'est pas de la parole : rires, toux, respiration, musique, bruits."
+    ],
+    "0.05": [
+      "Transcribe the audio in French and mark non-speech events in square brackets, such as [laughter], [applause] or [noise].",
+      "Write exactly what is said in this French recording, including sound events in brackets.",
+      "Transcribe in French with event tags like [laughter], [music], [cough] or [inaudible]."
+    ]
+  },
+  "no_events": {
+    "0.95": [
+      "Transcrivez uniquement les paroles de l'audio en français, sans indiquer les bruits, rires ou musique.",
+      "Écrivez ce qui est dit dans cet enregistrement, sans balises pour les événements sonores.",
+      "Transcris l'audio mot pour mot, mais ignore les sons non verbaux : pas de crochets.",
+      "Faites une transcription des paroles seulement, sans annoter les rires, applaudissements ou bruits de fond.",
+      "Transcrivez fidèlement ce que disent les personnes, sans ajouter de balises comme [laughter] ou [noise].",
+      "Peux-tu écrire ce que tu entends dans cette piste, en ne gardant que la parole ?",
+      "Donne seulement le texte prononcé dans cet extrait, sans décrire les autres sons.",
+      "Transcris en français ce qui est dit, sans aucune indication entre crochets."
+    ],
+    "0.05": [
+      "Transcribe only the speech in this French recording, without tags for laughter, music or noise.",
+      "Write what is said in French, with no bracketed sound events."
+    ]
+  },
+  "events_nocasepunc": {
+    "0.95": [
+      "Transcrivez l'audio en minuscules et sans ponctuation, en indiquant entre crochets les événements sonores comme [laughter] ou [noise].",
+      "Écrivez ce qui est dit sans majuscules ni ponctuation, et notez les rires, bruits et musique entre crochets.",
+      "Transcris mot pour mot en minuscules sans ponctuation, avec les sons non verbaux balisés entre crochets.",
+      "Transcription en minuscules, sans ponctuation, avec les événements non verbaux annotés entre crochets ([laughter], [cough], [breath], [noise]…).",
+      "Transcrivez sans majuscules ni ponctuation et marquez les passages inaudibles avec [inaudible] et les bruits avec [noise]."
+    ],
+    "0.05": [
+      "Transcribe in French, lowercase and without punctuation, marking non-speech events in square brackets such as [laughter] or [noise]."
     ]
   }
 }

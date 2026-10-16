@@ -7,13 +7,13 @@
       "Haz una transcripción completa del archivo WAV, todo en minúsculas, sin ninguna puntuación.",
       "Transcribe fielmente todo lo que se dice en esta grabación, sin poner mayúsculas ni puntuación.",
       "¿Puedes escribir todo lo que escuchas en esta pista de audio, sin ninguna mayúscula ni puntuación?",
-      "Crea una transcripción completa de este extracto en inglés, todo en minúsculas y sin ningún signo de puntuación.",
+      "Crea una transcripción completa de este extracto en español, todo en minúsculas y sin ningún signo de puntuación.",
       "Escribe exactamente lo que dicen los hablantes, quitando la puntuación y las mayúsculas.",
       "Transcribe todo el texto hablado en minúsculas sin puntuación.",
       "¿Puedes darme la transcripción completa del clip de audio, en minúsculas y sin puntuación?",
       "Escribe todo lo que escuchas en su idioma original, sin puntuación y en minúsculas.",
       "Transcribe fielmente cada palabra que se pronuncia en el extracto, sin mayúsculas ni puntuación.",
-      "Escribe una transcripción completa del segmento de audio en inglés, todo en minúsculas, sin ninguna puntuación.",
+      "Escribe una transcripción completa del segmento de audio en español, todo en minúsculas, sin ninguna puntuación.",
       "Transcribe todo lo que se dice en este clip de audio, sin poner mayúsculas ni puntuación.",
       "Haz una transcripción palabra por palabra del contenido hablado, sin ninguna mayúscula ni puntuación.",
       "Dame la versión escrita del archivo MP3, todo en minúsculas y sin ningún signo de puntuación.",
@@ -38,7 +38,10 @@
       "Crea una transcripción del discurso quitando la puntuación y las mayúsculas.",
       "Transcribe las palabras habladas de este archivo, en minúsculas sin puntuación.",
       "Escribe el diálogo del audio en minúsculas y sin puntuación.",
-      "Proporciona una transcripción completa de esta grabación, sin puntuación y en minúsculas."
+      "Proporciona una transcripción completa de esta grabación, sin puntuación y en minúsculas.",
+      "Transcribe el audio en español en minúsculas sin puntuación.",
+      "Transcribe el audio en español sin poner mayúsculas ni puntuación.",
+      "Transcribe el audio en español sin puntuación ni mayúsculas."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle, en minuscules et sans ponctuation.",
@@ -62,13 +65,13 @@
       "Haz una transcripción completa del archivo WAV.",
       "Transcribe fielmente todo lo que se dice en esta grabación.",
       "¿Puedes escribir todo lo que escuchas en esta pista de audio?",
-      "Crea una transcripción completa de este extracto en inglés.",
+      "Crea una transcripción completa de este extracto en español.",
       "Escribe exactamente lo que dicen los hablantes.",
       "Transcribe todo el texto hablado sin reformular nada.",
       "¿Puedes darme la transcripción completa del clip de audio?",
       "Escribe todo lo que escuchas en su idioma original.",
       "Transcribe fielmente cada palabra que se pronuncia en el extracto.",
-      "Escribe una transcripción completa del segmento de audio en inglés.",
+      "Escribe una transcripción completa del segmento de audio en español.",
       "Transcribe todo lo que se dice en este clip de audio.",
       "Haz una transcripción palabra por palabra del contenido hablado.",
       "Dame la versión escrita del archivo MP3.",
@@ -93,7 +96,8 @@
       "Crea una transcripción del discurso.",
       "Transcribe las palabras habladas de este archivo.",
       "Escribe el diálogo del audio.",
-      "Proporciona una transcripción completa de esta grabación."
+      "Proporciona una transcripción completa de esta grabación.",
+      "Transcribe el audio en español."
     ],
     "0.05": [
       "Transcrivez l'audio dans sa langue originelle.",
