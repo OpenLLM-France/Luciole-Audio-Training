@@ -141,6 +141,9 @@ Results for French and English only, as well as for ASR, AST, and QA tasks only:
 
 As you can see, the model [OpenLLM-France/Luciole-8B-Audio-1.0](https://huggingface.co/OpenLLM-France/Luciole-8B-Audio-1.0) performs well in French and English compared to other models.
 
+For more detailed results in French ASR you can take a look at our [🏆 French ASR Leaderboard](https://linagora-labs.github.io/asr_benchmark/) where we use various types of datasets to evaluate the open source models. 
+
+
 ## Using the model
 
 ### With vLLM
@@ -254,8 +257,14 @@ A prompt can carry several turns and several audio clips (one `<|audio|>` tag pe
 ### Example prompts for each task
 
 - ASR: 
-  - `Make a word-for-word transcription in English of the spoken content.`
-  - `Fais une transcription mot pour mot en français du contenu parlé.`
+  - English: `Make a word-for-word transcription in English of the spoken content.`
+  - French: `Fais une transcription mot pour mot en français du contenu parlé.`
+  - German: `Erstelle eine wortwörtliche Transkription des gesprochenen Inhalts auf Deutsch.`
+  - Spanish: `Haz una transcripción palabra por palabra en español del contenido hablado.`
+  - Italian: `Fai una trascrizione parola per parola in italiano del contenuto parlato.`
+  - Portuguese: `Faça uma transcrição palavra por palavra em português do conteúdo falado.`
+  - Dutch: `Maak een woord-voor-woord transcriptie in het Nederlands van de gesproken inhoud.`
+  - No language given: `Can you write the text of this audio file in its source language?`
 - QA: `Listen to the audio and answer the question.`
 - AST: `Translate this file into French.`
 - Diarization: 
