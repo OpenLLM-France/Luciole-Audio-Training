@@ -263,7 +263,7 @@ applyTheme(document.documentElement.getAttribute('data-theme') || 'linagora');
 // Markdown rendering
 // =============================================================================
 if (window.marked) {
-    marked.setOptions({ gfm: true, breaks: false });
+    marked.setOptions({ gfm: true, breaks: true });
 }
 
 function renderMarkdown(text) {
