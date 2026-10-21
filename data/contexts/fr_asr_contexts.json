@@ -7,7 +7,7 @@
       "Faites une transcription complète du fichier WAV en français, tout en minuscules, sans aucune ponctuation.",
       "Transcrivez fidèlement tout ce qui est dit dans cet enregistrement sans mettre de majuscules ni de ponctuation.",
       "Peux-tu écrire tout ce que tu entends dans cette piste audio sans ponctuation et en minuscules ?",
-      "Transcris mot pour mot le contenu de cet enregistrement en enlevant la ponctuation et les majuscules.",
+      "Transcris le contenu de cet enregistrement en enlevant la ponctuation et les majuscules.",
       "Faites une transcription intégrale de cet extrait en français sans aucune majuscule ni ponctuation.",
       "Transcris exactement ce que disent les personnes, tout en minuscules et sans aucun signe de ponctuation.",
       "Écris le texte complet de ce que tu entends, tout en minuscules, sans aucune ponctuation.",
@@ -15,13 +15,13 @@
       "Fais une transcription exacte et complète de ce fichier audio sans mettre de majuscules ni de ponctuation.",
       "Peux-tu me donner la transcription complète du clip audio sans majuscules ni ponctuation ?",
       "Note tout ce que tu entends sans ponctuation et en minuscules.",
-      "Peux-tu faire une version textuelle intégrale du contenu entendu sans aucune majuscule ni ponctuation.",
+      "Peux-tu faire une version textuelle intégrale du contenu entendu sans aucune majuscule ni ponctuation ?",
       "Transcris fidèlement tout ce qui est dit dans l'extrait en enlevant la ponctuation et les majuscules.",
       "Rédige une transcription complète de l'audio en français, tout en minuscules, sans aucune ponctuation.",
       "Transcris tout ce qui est dit dans cet enregistrement sonore en minuscules sans ponctuation.",
-      "Fais une transcription mot pour mot du contenu parlé sans majuscules ni ponctuation.",
-      "Donne moi la restitution écrite du fichier MP3 en minuscules et sans ponctuation.",
-      "File le texte que tu as entendu dans cet enregistrement FLAC sans mettre de majuscules ni de ponctuation.",
+      "Fais une transcription du contenu parlé sans majuscules ni ponctuation.",
+      "Donne-moi la restitution écrite du fichier MP3 en minuscules et sans ponctuation.",
+      "Écris le texte que tu as entendu dans cet enregistrement FLAC sans mettre de majuscules ni de ponctuation.",
       "Est-ce que vous pouvez m'écrire la transcription de ce que dit la personne sans aucune majuscule ni ponctuation ?",
       "Est-ce que tu peux me donner le texte de ce qu'on entend, tout en minuscules et sans aucun signe de ponctuation ?",
       "Pouvez-vous me donner la version écrite du média audio sans ponctuation et en minuscules ?",
@@ -32,7 +32,7 @@
       "Écris le contenu tout en minuscules, sans aucune ponctuation.",
       "Prends note de ce qui est dit sans aucune majuscule ni ponctuation.",
       "Transforme ce fichier audio en texte en minuscules et sans ponctuation.",
-      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source, tout en minuscules, sans aucune ponctuation?",
+      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source, tout en minuscules, sans aucune ponctuation ?",
       "Transcris en français sans majuscules ni ponctuation",
       "Transcrivez l'audio dans sa langue originelle, en minuscules et sans ponctuation.",
       "Écrivez exactement en français ce qui est dit dans cet enregistrement audio, sans ponctuation et en minuscules."
@@ -56,7 +56,7 @@
       "Faites une transcription complète du fichier WAV en français, s'il vous plaît.",
       "Transcrivez fidèlement tout ce qui est dit dans cet enregistrement.",
       "Peux-tu écrire tout ce que tu entends dans cette piste audio ?",
-      "Transcris mot pour mot le contenu de cet enregistrement.",
+      "Transcris le contenu de cet enregistrement.",
       "Faites une transcription intégrale de cet extrait en français.",
       "Transcris exactement ce que disent les personnes.",
       "Écris le texte complet de ce que tu entends.",
@@ -64,16 +64,16 @@
       "Fais une transcription exacte et complète de ce fichier audio.",
       "Peux-tu me donner la transcription complète du clip audio ?",
       "Note tout ce que tu entends dans sa langue originale.",
-      "Peux-tu faire une version textuelle intégrale du contenu entendu.",
+      "Peux-tu faire une version textuelle intégrale du contenu entendu ?",
       "Transcris fidèlement tout ce qui est dit dans l'extrait.",
       "Rédige une transcription complète de l'audio en français.",
       "Transcris tout ce qui est dit dans cet enregistrement sonore.",
-      "Fais une transcription mot pour mot du contenu parlé.",
-      "Donne moi la restitution écrite du fichier MP3",
-      "File le texte que tu as entendu dans cet enregistrement FLAC.",
-      "Est-ce que vous pouvez m'écrire la transcription de ce que dit la personne?",
+      "Fais une transcription du contenu parlé.",
+      "Donne-moi la restitution écrite du fichier MP3.",
+      "Écris le texte que tu as entendu dans cet enregistrement FLAC.",
+      "Est-ce que vous pouvez m'écrire la transcription de ce que dit la personne ?",
       "Est-ce que tu peux me donner le texte de ce qu'on entend ?",
-      "Pouvez-vous me donner la version écrite du média audio?",
+      "Pouvez-vous me donner la version écrite du média audio ?",
       "Tu peux écrire le texte de cet enregistrement ?",
       "Transcris",
       "Transcris la parole",
@@ -81,7 +81,7 @@
       "Écris le contenu",
       "Prends note de ce qui est dit",
       "Transforme ce fichier audio en texte, s'il te plaît.",
-      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source?",
+      "Peux-tu rédiger le texte de ce fichier audio dans sa langue source ?",
       "Transcris en français",
       "Transcrivez l'audio dans sa langue originelle.",
       "Écrivez exactement en français ce qui est dit dans cet enregistrement audio."
@@ -100,27 +100,29 @@
   "events": {
     "0.95": [
       "Transcrivez l'audio en français en indiquant entre crochets les événements sonores comme [laughter], [applause] ou [noise].",
-      "Écrivez exactement ce qui est dit dans cet enregistrement, en notant aussi les rires, applaudissements, musique et bruits entre crochets.",
-      "Transcris l'audio mot pour mot et signale les sons non verbaux avec des balises entre crochets.",
-      "Faites une transcription complète en français, y compris les événements sonores ([laughter], [applause], [music], [noise], [cough], [breath]…).",
-      "Transcrivez fidèlement l'enregistrement et marquez les passages inaudibles avec [inaudible] et les bruits avec [noise].",
+      "Écrivez exactement ce qui est dit dans cet enregistrement en notant les rires, applaudissements, musique, bruits, etc.",
+      "Transcris l'audio et signale les sons non verbaux avec des balises.",
+      "Faites une transcription complète en français, y compris les événements sonores ([laughter], [applause], [music], [noise], [cough], [breath]...).",
+      "Transcrivez fidèlement l'enregistrement et marquez les différents événements audio avec des balises comme [inaudible] ou [noise].",
       "Peux-tu transcrire cette piste audio en indiquant aussi les rires, la musique et les bruits de fond entre crochets ?",
-      "Transcription verbatim de l'audio, avec les événements non verbaux annotés entre crochets.",
-      "Transcrivez ce que disent les personnes et ajoutez entre crochets les événements comme les rires ou les applaudissements.",
+      "Transcription de l'audio, avec les événements non verbaux annotés entre crochets.",
+      "Transcrivez ce que disent les personnes et ajoutez les événements comme les rires, les applaudissements et les autres sons.",
       "Donnez la transcription de cet extrait en français en conservant les balises d'événements sonores entre crochets.",
-      "Transcris l'audio en français et note entre crochets tout ce qui n'est pas de la parole : rires, toux, respiration, musique, bruits."
+      "Transcris l'audio en français et note entre crochets tout ce qui n'est pas de la parole : rires, toux, respiration, musique, bruits.",
+      "Transcris et marque les rires, la respiration et les autres sons avec des balises entre crochets."
     ],
     "0.05": [
       "Transcribe the audio in French and mark non-speech events in square brackets, such as [laughter], [applause] or [noise].",
       "Write exactly what is said in this French recording, including sound events in brackets.",
-      "Transcribe in French with event tags like [laughter], [music], [cough] or [inaudible]."
+      "Transcribe in French with event tags like [laughter], [music], [cough] or [inaudible].",
+      "Give me the transcription including non-speech events like laughter, coughing, applause, music or any other sounds."
     ]
   },
   "no_events": {
     "0.95": [
       "Transcrivez uniquement les paroles de l'audio en français, sans indiquer les bruits, rires ou musique.",
       "Écrivez ce qui est dit dans cet enregistrement, sans balises pour les événements sonores.",
-      "Transcris l'audio mot pour mot, mais ignore les sons non verbaux : pas de crochets.",
+      "Transcris l'audio, mais ignore les sons non verbaux : pas de crochets.",
       "Faites une transcription des paroles seulement, sans annoter les rires, applaudissements ou bruits de fond.",
       "Transcrivez fidèlement ce que disent les personnes, sans ajouter de balises comme [laughter] ou [noise].",
       "Peux-tu écrire ce que tu entends dans cette piste, en ne gardant que la parole ?",
@@ -129,19 +131,105 @@
     ],
     "0.05": [
       "Transcribe only the speech in this French recording, without tags for laughter, music or noise.",
-      "Write what is said in French, with no bracketed sound events."
+      "Write what is said in French, with no bracketed sound events.",
+      "Transcribe the audio without annotating non-speech events like [laughter] or [music]."
     ]
   },
   "events_nocasepunc": {
     "0.95": [
       "Transcrivez l'audio en minuscules et sans ponctuation, en indiquant entre crochets les événements sonores comme [laughter] ou [noise].",
       "Écrivez ce qui est dit sans majuscules ni ponctuation, et notez les rires, bruits et musique entre crochets.",
-      "Transcris mot pour mot en minuscules sans ponctuation, avec les sons non verbaux balisés entre crochets.",
-      "Transcription en minuscules, sans ponctuation, avec les événements non verbaux annotés entre crochets ([laughter], [cough], [breath], [noise]…).",
-      "Transcrivez sans majuscules ni ponctuation et marquez les passages inaudibles avec [inaudible] et les bruits avec [noise]."
+      "Transcris en minuscules sans ponctuation, avec les sons non verbaux balisés entre crochets.",
+      "Transcription en minuscules, sans ponctuation, avec les événements non verbaux annotés entre crochets ([laughter], [cough], [breath], [noise]...).",
+      "Transcrivez sans majuscules ni ponctuation et marquez les passages inaudibles avec [inaudible] et les bruits avec [noise].",
+      "Peux-tu écrire le contenu de cet extrait audio tout en minuscules et sans ponctuation, en ajoutant entre crochets les rires, la musique et les autres bruits ?"
     ],
     "0.05": [
-      "Transcribe in French, lowercase and without punctuation, marking non-speech events in square brackets such as [laughter] or [noise]."
+      "Transcribe in French, lowercase and without punctuation, marking non-speech events in square brackets such as [laughter] or [noise].",
+      "Write down what is said in lowercase and with no punctuation. Also, include any sound events like [music]."
+    ]
+  },
+  "no_events_nocasepunc": {
+    "0.95": [
+      "Transcrivez uniquement les paroles en minuscules et sans ponctuation, sans indiquer les bruits, rires ou musique.",
+      "Écrivez ce qui est dit sans majuscules ni ponctuation, et sans balises pour les événements sonores.",
+      "Transcris l'audio en minuscules sans ponctuation, en ignorant les sons non verbaux : pas de crochets.",
+      "Transcription des paroles seulement, en minuscules et sans ponctuation, sans annoter les rires ni les bruits de fond.",
+      "Transcrivez sans majuscules ni ponctuation, sans ajouter de balises comme [laughter] ou [noise].",
+      "Peux-tu écrire le contenu de cet extrait audio tout en minuscules et sans ponctuation, en ne gardant que la parole ?"
+    ],
+    "0.05": [
+      "Transcribe only the speech in this French recording, lowercase and without punctuation, with no tags for laughter, music or noise.",
+      "Write down everything that is said, in lowercase and with no punctuation. Also, do not include any sound events like [music] or [applause]."
+    ]
+  },
+  "disfluencies": {
+    "0.95": [
+      "Transcrivez l'audio en français en gardant les hésitations comme « euh » ou « hmm ».",
+      "Écrivez exactement ce qui est dit, y compris les hésitations (euh, hmm).",
+      "Transcris tout ce que tu entends, hésitations comprises.",
+      "Faites une transcription fidèle à l'oral, sans supprimer les « euh » et les « hmm ».",
+      "Peux-tu transcrire cet enregistrement en conservant les marques d'hésitation ?",
+      "Transcription de la parole telle quelle, avec les hésitations.",
+      "Transcrivez ce que disent les personnes, sans enlever les hésitations.",
+      "Donne la transcription de cet extrait en notant aussi les « euh » et les « hmm ».",
+      "Transcris mot pour mot le contenu de cet enregistrement, avec les hésitations, les répétitions et les mots coupés.",
+      "Fais une transcription mot pour mot du contenu parlé, « euh » et « hmm » compris.",
+      "Transcription verbatim de l'audio : garde les hésitations, les répétitions et les faux départs."
+    ],
+    "0.05": [
+      "Transcribe the audio in French, keeping hesitations such as \"euh\" or \"hmm\".",
+      "Write down what is said, including filled pauses like \"euh\".",
+      "Verbatim transcription in French, including hesitations, repetitions and false starts.",
+      "Transcribe word for word in French, keeping every \"euh\" and \"hmm\"."
+    ]
+  },
+  "no_disfluencies": {
+    "0.95": [
+      "Transcrivez l'audio en français sans les hésitations comme « euh » ou « hmm ».",
+      "Écrivez ce qui est dit en retirant les hésitations (euh, hmm).",
+      "Transcris ce que tu entends, sans noter les hésitations.",
+      "Faites une transcription sans les « euh » ni les « hmm ».",
+      "Peux-tu transcrire cet enregistrement en supprimant les marques d'hésitation ?",
+      "Transcrivez ce que disent les personnes en ignorant les hésitations.",
+      "Donne la transcription de cet extrait sans les « euh » et les « hmm ».",
+      "Transcription de la parole, sans les hésitations."
+    ],
+    "0.05": [
+      "Transcribe the audio in French without hesitations such as \"euh\" or \"hmm\".",
+      "Write down what is said, leaving out filled pauses like \"euh\"."
+    ]
+  },
+  "disfluencies_nocasepunc": {
+    "0.95": [
+      "Transcrivez l'audio en minuscules et sans ponctuation, en gardant les hésitations comme « euh » ou « hmm ».",
+      "Écrivez ce qui est dit sans majuscules ni ponctuation, hésitations comprises.",
+      "Transcris tout en minuscules sans ponctuation, sans enlever les « euh » et les « hmm ».",
+      "Transcription en minuscules, sans ponctuation, avec les marques d'hésitation (euh, hmm).",
+      "Peux-tu transcrire cet extrait en minuscules et sans ponctuation, en conservant les hésitations ?",
+      "Transcrivez sans majuscules ni ponctuation et notez aussi les hésitations.",
+      "Transcris mot pour mot le contenu de cet enregistrement en minuscules et sans ponctuation, avec les hésitations et les répétitions.",
+      "Fais une transcription mot pour mot du contenu parlé sans majuscules ni ponctuation, « euh » et « hmm » compris.",
+      "Transcription verbatim en minuscules et sans ponctuation, hésitations et faux départs compris."
+    ],
+    "0.05": [
+      "Transcribe in French, lowercase and without punctuation, keeping hesitations such as \"euh\" or \"hmm\".",
+      "Write down what is said in lowercase with no punctuation, including filled pauses like \"euh\".",
+      "Verbatim transcription in French, lowercase and without punctuation, including hesitations and false starts."
+    ]
+  },
+  "no_disfluencies_nocasepunc": {
+    "0.95": [
+      "Transcrivez l'audio en minuscules et sans ponctuation, sans les hésitations comme « euh » ou « hmm ».",
+      "Écrivez ce qui est dit sans majuscules ni ponctuation, en retirant les hésitations.",
+      "Transcris tout en minuscules sans ponctuation, sans les « euh » ni les « hmm ».",
+      "Transcription en minuscules, sans ponctuation et sans marques d'hésitation.",
+      "Peux-tu transcrire cet extrait en minuscules et sans ponctuation, en supprimant les hésitations ?",
+      "Transcrivez sans majuscules ni ponctuation, en ignorant les hésitations."
+    ],
+    "0.05": [
+      "Transcribe in French, lowercase and without punctuation, leaving out hesitations such as \"euh\" or \"hmm\".",
+      "Write down what is said in lowercase with no punctuation, leaving out filled pauses like \"euh\"."
     ]
   }
 }

@@ -30,6 +30,8 @@ Proportions
 * content turns: 2 turns 35%, 3 turns 30%, 4 turns 25%, 5 turns 10% (TURN_DIST)
 * bundled turn at turn 1 40%, turn 2 30%, later 30% (COMPOUND_POS_*)
 * audios per conversation: 1 85%, 2 11%, 3 4% (EXTRA_CLIP_DIST)
+* a second clip glued into turn 1 in 15% of conversations, a third in 15% of those
+  (--dual-transcription-rate / --dual-triple-rate)
 * speaker accent / gender / age asked in 5% of conversations each, at most two
   per conversation (--accent-rate / --gender-rate / --age-rate, 0 to disable)
 * opening language fr 55%, en 35%, rest 10% (--lang-share)
@@ -2525,14 +2527,14 @@ def parse_args():
                    help="Share of conversations that change audio part-way through. Composes "
                         "with the three shapes rather than replacing them: each segment is "
                         "still sequential, compound or hybrid.")
-    p.add_argument("--dual-transcription-rate", type=float, default=0.0,
+    p.add_argument("--dual-transcription-rate", type=float, default=0.15,
                    help="Share of conversations where a second clip is glued into segment "
                         "1's own turn 1 (both audios, no assistant reply between them), its "
                         "transcript folded into the normal ask pool as one more item. Composes "
                         "with sequential/compound/hybrid: whichever shape segment 1 draws, that "
                         "item is guaranteed to be asked -- alone, bundled with translations, "
                         "chained, recapped. 0 disables it.")
-    p.add_argument("--dual-triple-rate", type=float, default=0.0,
+    p.add_argument("--dual-triple-rate", type=float, default=0.15,
                    help="Of the conversations already carrying a dual clip, the share that get "
                         "a THIRD clip glued into the same turn instead. Never merges into a "
                         "single 'both clips' clause (only the second clip does): always its own "

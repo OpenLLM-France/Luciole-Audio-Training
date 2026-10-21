@@ -542,12 +542,12 @@
         "json": [
           "Effectue la diarisation des locuteurs sur cet audio et renvoie le résultat en JSON.",
           "Identifie qui a parlé et quand, et donne le résultat au format JSON.",
-          "Diarise cet enregistrement ; restitue les segments de parole en JSON.",
-          "Diarise cet audio en JSON avec un tableau \"speakers\" de {\"spk_id\": \"spkN\", \"duration\": <s>, \"nbr_seg\": <n>} et un tableau \"segments\" de {\"seg_id\": <i>, \"spk_id\": \"spkN\", \"seg_begin\": <s>, \"seg_end\": <s>}.",
+          "Diarise cet enregistrement et restitue les segments de parole en JSON.",
+          "Diarise cet audio en JSON avec un e liste \"speakers\" de {\"spk_id\": \"spkN\", \"duration\": <s>, \"nbr_seg\": <n>} et un tableau \"segments\" de {\"seg_id\": <i>, \"spk_id\": \"spkN\", \"seg_begin\": <s>, \"seg_end\": <s>}.",
           "Restitue du JSON avec \"speakers\" (durée totale \"duration\" et nombre de segments \"nbr_seg\" par locuteur) et \"segments\" ({\"seg_id\", \"spk_id\", \"seg_begin\", \"seg_end\"}).",
           "Effectue la diarisation et renvoie un objet JSON : \"speakers\" résumant la duration et le nbr_seg de chaque spk_id, et \"segments\" listant chaque tour avec seg_begin/seg_end.",
           "Donne la diarisation en JSON, temps en secondes : un résumé \"speakers\" ({spk_id, duration, nbr_seg}) et une liste \"segments\" ({seg_id, spk_id, seg_begin, seg_end}).",
-          "Diarise cet enregistrement en JSON avec deux tableaux : \"speakers\" ({\"spk_id\", \"duration\", \"nbr_seg\"}) et \"segments\" ({\"seg_id\", \"spk_id\", \"seg_begin\", \"seg_end\"})."
+          "Diarise cet enregistrement en JSON avec deux listes : \"speakers\" ({\"spk_id\", \"duration\", \"nbr_seg\"}) et \"segments\" ({\"seg_id\", \"spk_id\", \"seg_begin\", \"seg_end\"})."
         ]
       },
       "timestamps_asr": {

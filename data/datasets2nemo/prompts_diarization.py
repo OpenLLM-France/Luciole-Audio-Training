@@ -84,10 +84,14 @@ def _r_asr_letter(segs, meeting):
 def _r_ts_plain(segs, meeting):
     return "\n".join(f"Speaker {s['n']} {s['s']:.2f} {s['e']:.2f}" for s in segs)
 
+# Fixed RTTM <uri>: the source file name can't be inferred from the audio, so training on
+# it taught the model to hallucinate corpus ids (e.g. "ESLO1_ENT_PROV").
+RTTM_URI = "audio"
+
 def _r_ts_rttm(segs, meeting):
     # Classic NIST RTTM: SPEAKER <uri> <chan> <onset> <dur> <NA> <NA> <spk> <NA> <NA>
     return "\n".join(
-        f"SPEAKER {meeting} 1 {s['s']:.2f} {s['e'] - s['s']:.2f} <NA> <NA> Speaker_{s['n']} <NA> <NA>"
+        f"SPEAKER {RTTM_URI} 1 {s['s']:.2f} {s['e'] - s['s']:.2f} <NA> <NA> Speaker_{s['n']} <NA> <NA>"
         for s in segs)
 
 def _r_ts_bracket(segs, meeting):

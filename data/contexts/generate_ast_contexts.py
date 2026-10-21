@@ -27,7 +27,7 @@ localized_languages = {
     "German": {"French": "Französisch", "English": "Englisch", "Spanish": "Spanisch", "German": "Deutsch", "Italian": "Italienisch", "Portuguese": "Portugiesisch", "Arabic": "Arabisch", "Dutch": "Niederländisch"},
     "Italian": {"French": "francese", "English": "inglese", "Spanish": "spagnolo", "German": "tedesco", "Italian": "italiano", "Portuguese": "portoghese", "Arabic": "arabo", "Dutch": "olandese"},
     "Portuguese": {"French": "francês", "English": "inglês", "Spanish": "espanhol", "German": "alemão", "Italian": "italiano", "Portuguese": "português", "Arabic": "árabe", "Dutch": "holandês"},
-    "Arabic": {"French": "فرنسي", "English": "إنجليزي", "Spanish": "إسباني", "German": "ألماني", "Italian": "إيطالي", "Portuguese": "برتغالي", "Arabic": "عربي", "Dutch": "الهولندية"}
+    "Arabic": {"French": "الفرنسية", "English": "الإنجليزية", "Spanish": "الإسبانية", "German": "الألمانية", "Italian": "الإيطالية", "Portuguese": "البرتغالية", "Arabic": "العربية", "Dutch": "الهولندية"}
 }
 
 # Prompt templates (multiple variations)
@@ -83,9 +83,9 @@ templates = {
             "Traduza este arquivo de {lang1} para {lang2}."
         ],
         "Arabic": [
-            "ترجم المحتوى  الصوتي التالي  من {lang1} إلى {lang2}.",
+            "ترجم المحتوى الصوتي التالي من {lang1} إلى {lang2}.",
             "يرجى ترجمة هذا النص المستخرج من المقطع الصوتي التالي من {lang1} إلى {lang2}.",
-            "هل بإمكانك ترجمة هذا الخطاب من اللغة {lang1} إلى اللغة {lang2} بطريقه طبيعية؟",
+            "هل بإمكانك ترجمة هذا الخطاب من اللغة {lang1} إلى اللغة {lang2} بطريقة طبيعية؟",
             "قم بتحويل المحتوى المنطوق من اللغة {lang1} إلى اللغة {lang2}.",
             "يرجى ترجمة هذا الملف الصوتي من اللغة {lang1} إلى اللغة {lang2}."
         ]
@@ -167,10 +167,9 @@ languages = ["French", "English", "Spanish", "German", "Italian", "Portuguese", 
 def fix_prompt(text):
     text = re.sub(r"\bdu\s+([aeiouhAEIOUH])", r"de l'\1", text)
     text = re.sub(r"\ble\s+([aeiouhAEIOUH])", r"l'\1", text)
-    # it
-    text = re.sub(r'\bdallo\s+([aeiouAEIOU])', r"dall'\1", text)
-    # da + s+consonant → dallo
-    text = re.sub(r'\bdalo\s+([sS][bcdfghjklmnpqrstvwxyz])', r'dallo \1', text)
+    # it: da + il + vowel → dall', da + il + s+consonant → dallo
+    text = re.sub(r'\bdal\s+([aeiouAEIOU])', r"dall'\1", text)
+    text = re.sub(r'\bdal\s+([sS][bcdfghjklmnpqrstvwxyz])', r'dallo \1', text)
     
     # a + vowel → all'
     text = re.sub(r'\bal\s+([aeiouAEIOU])', r"all'\1", text)
