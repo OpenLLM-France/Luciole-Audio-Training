@@ -1,0 +1,10 @@
+{
+  "en": ["Keywords:", "Vocabulary:", "Terms:", "Keyterms:", "Bias terms:", "Biasing words:", "Custom vocabulary:", "Phrase hints:", "Hotwords:"],
+  "fr": ["Mots-clés :", "Vocabulaire :", "Termes :", "Vocabulaire personnalisé :", "Lexique :", "Termes spécifiques :"],
+  "es": ["Palabras clave:", "Vocabulario:", "Términos:", "Vocabulario personalizado:", "Términos clave:", "Léxico:"],
+  "de": ["Schlüsselwörter:", "Vokabular:", "Begriffe:", "Benutzerdefiniertes Vokabular:", "Fachbegriffe:", "Stichwörter:"],
+  "it": ["Parole chiave:", "Vocabolario:", "Termini:", "Vocabolario personalizzato:", "Termini specifici:", "Lessico:"],
+  "pt": ["Palavras-chave:", "Vocabulário:", "Termos:", "Vocabulário personalizado:", "Termos específicos:", "Léxico:"],
+  "nl": ["Trefwoorden:", "Woordenschat:", "Termen:", "Aangepaste woordenschat:", "Kernwoorden:", "Lexicon:"],
+  "ar": ["الكلمات المفتاحية:", "المفردات:", "المصطلحات:", "مفردات مخصصة:", "المصطلحات الأساسية:"]
+}

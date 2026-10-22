@@ -1,0 +1,11 @@
+{
+  "_comment": "Regexes (matched case-sensitively, re.UNICODE) that mark a transcription as anonymised. When --discard-anonymized is on (default), any example whose transcription matches one of these is dropped, so the placeholders never become hotwords. Conservative by design (low false-positive). Extend at the command line with --anonymization-pattern '<regex>'.",
+  "patterns": [
+    "\\bNpers\\w*\\b",
+    "\\bNlieu\\w*\\b",
+    "\\bNdate\\w*\\b",
+    "\\bNprod\\w*\\b",
+    "\\bNorg\\w*\\b",
+    "\\b[CV]{3,}\\b"
+  ]
+}

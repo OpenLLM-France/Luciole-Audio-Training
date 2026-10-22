@@ -1,0 +1,72 @@
+{
+  "_comment": "Pronunciation-preserving respelling rules per language: [regex, replacement], matched on the lower-cased word. Context (lookahead/lookbehind) keeps them sound-preserving and protects digraphs like 'ch'. Exactly one rule is applied per variant. Inspired by Huang et al., Interspeech 2024 (arXiv:2407.10303).",
+  "fr": [
+    ["ph", "f"],
+    ["c(?![eéèêiîïhyœqck])", "k"],
+    ["c(?![eéèêiîïhyœqck])", "qu"],
+    ["c$", "ck"],
+    ["qu", "k"],
+    ["(?<![aeiouyàâäéèêëïîôöûùœ])i(?![aeiouyàâäéèêëïîôöûùœ])", "y"],
+    ["au", "o"],
+    ["eau", "o"],
+    ["ain(?![aeiouyàâäéèêëïîôöûùœnm])", "in"],
+    ["in(?![aeiouyàâäéèêëïîôöûùœnm])", "ain"],
+    ["ain(?![aeiouyàâäéèêëïîôöûùœnm])", "ein"],
+    ["en(?![aeiouyàâäéèêëïîôöûùœnm])", "an"],
+    ["an(?![aeiouyàâäéèêëïîôöûùœnm])", "en"],
+    ["(?<=[aeiouyàâäéèêëïîôöûù])s(?=[aeiouyàâäéèêëïîôöûù])", "z"],
+    ["(?<=[aeiouyàâäéèêëïîôöûù])z(?=[aeiouyàâäéèêëïîôöûù])", "s"]
+  ],
+  "en": [
+    ["ph", "f"],
+    ["c(?![eihyqck])", "k"],
+    ["c(?![eihyqck])", "ck"],
+    ["ck", "k"],
+    ["(?<![aeiou])i(?![aeiou])", "y"],
+    ["(?<![aeiou])y(?![aeiou])", "i"],
+    ["qu", "kw"],
+    ["x", "ks"]
+  ],
+  "es": [
+    ["c(?![eiéíh])", "k"],
+    ["qu", "k"],
+    ["b", "v"],
+    ["v", "b"],
+    ["z", "s"]
+  ],
+  "de": [
+    ["ph", "f"],
+    ["k(?![eih])", "ck"],
+    ["ck", "k"],
+    ["v", "f"],
+    ["ei", "ai"]
+  ],
+  "it": [
+    ["ch", "k"],
+    ["c(?![eih])", "k"],
+    ["qu", "cu"],
+    ["z", "s"]
+  ],
+  "pt": [
+    ["ph", "f"],
+    ["c(?![eiçh])", "k"],
+    ["qu", "k"],
+    ["ss", "s"],
+    ["z", "s"]
+  ],
+  "nl": [
+    ["ph", "f"],
+    ["c(?![eih])", "k"],
+    ["ck", "k"],
+    ["ij", "y"]
+  ],
+  "ar": [
+    ["أ", "ا"],
+    ["إ", "ا"],
+    ["آ", "ا"],
+    ["ة", "ه"],
+    ["ى", "ي"],
+    ["ؤ", "و"],
+    ["ئ", "ي"]
+  ]
+}

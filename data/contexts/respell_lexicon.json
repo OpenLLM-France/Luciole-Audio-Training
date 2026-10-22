@@ -1,0 +1,23 @@
+{
+  "_comment": "Curated pronunciation-preserving alternative spellings for words the generic letter/G2P rules would mangle (e.g. 'ok' -> 'oq'). Keys are lower-cased; the '*' section applies to every language. The listed forms are used verbatim as the word's alternative spellings, and the letter/G2P respelling is skipped for these words. Add your own entries here.",
+  "*": {
+    "ok": ["OK", "okay", "O.K."]
+  },
+  "fr": {
+    "clé": ["clef"],
+    "clés": ["clefs"],
+    "événement": ["évènement"],
+    "nénuphar": ["nénufar"]
+  },
+  "en": {
+    "okay": ["OK", "ok"],
+    "colour": ["color"],
+    "color": ["colour"],
+    "grey": ["gray"],
+    "gray": ["grey"],
+    "theatre": ["theater"],
+    "theater": ["theatre"],
+    "catalogue": ["catalog"],
+    "catalog": ["catalogue"]
+  }
+}
