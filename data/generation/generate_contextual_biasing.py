@@ -82,17 +82,10 @@ Phonetic respelling (--respell-method g2p) uses Epitran for grapheme<->phoneme a
 
     pip install epitran
 
-This covers ar, de, es, fr, it, nl and pt out of the box. English (en) additionally needs
-flite's "lex_lookup" binary; without it the script logs nothing and falls back to the rule-based
-respelling for English only. To enable English G2P, build flite from source (the Debian/Ubuntu
-"flite" package does NOT ship lex_lookup)::
-
-    git clone https://github.com/festvox/flite.git
-    cd flite && ./configure && make && sudo make install
-    cd testsuite && make lex_lookup && sudo cp lex_lookup /usr/local/bin/
-
-lex_lookup must be on $PATH (check with ``which lex_lookup``). No install is needed for the other
-languages, nor for --respell-method rules.
+This covers ar, de, es, fr, it, nl and pt. English (en) is handled by the rule engine instead:
+Epitran's English alignment mis-assigns phonemes to letters, so its P2G swap produces non
+pronunciation-preserving spellings ("Sir" -> "Rir"); flite is therefore not needed. No install is
+needed for the rule engine (--respell-method rules).
 
 Common-word filtering (--exclude-common-words, on by default) keeps ordinary high-frequency words
 of the audio language out of the hotword pool. It uses bundled stopword lists plus word-frequency
@@ -138,7 +131,7 @@ from datetime import datetime
 from itertools import accumulate
 from pathlib import Path
 
-from respell import RespellEngine, apply_respellings, match_leading_case
+from respell import RespellEngine, match_leading_case
 
 # A "word" is a run of unicode letters, keeping internal hyphens so hyphenated compounds
 # stay whole ("mother-in-law", "Anglo-saxons"). Apostrophes still split off clitics
@@ -811,11 +804,16 @@ def count_phrase_frequencies(paths, phrase_by_len: dict[int, set], anon_patterns
             for size, keyset in phrase_by_len.items():
                 for i in range(len(toks) - size + 1):
                     window = tuple(toks[i : i + size])
-                    if window in keyset:
-                        key = " ".join(window)
-                        surfaces[key][text[spans[i][1] : spans[i + size - 1][2]]] += 1
-                        counts[key] += 1
-                        seen.add(key)
+                    if window not in keyset:
+                        continue
+                    # Only count a contiguous occurrence (no comma/punctuation between the tokens), so a
+                    # phrase surface never spans a comma ("Madame la Présidente, de").
+                    if any(not clean_gap(text, spans[j][2], spans[j + 1][1]) for j in range(i, i + size - 1)):
+                        continue
+                    key = " ".join(window)
+                    surfaces[key][text[spans[i][1] : spans[i + size - 1][2]]] += 1
+                    counts[key] += 1
+                    seen.add(key)
             for key in seen:
                 doc_counts[key] += 1
     return counts, doc_counts, surfaces
@@ -1218,6 +1216,86 @@ def _choose_spelling(entry: HotwordEntry, spellings, rng: random.Random, respell
     return alts[0] if alts else entry.surface
 
 
+def _listed_surface(base: str, spelling: str, canonical: str) -> str:
+    """How a chosen spelling is written in the list, given the word's transcript surface ``base``."""
+    if spelling == canonical:
+        return base  # list it exactly as spoken
+    if spelling.lower() == canonical.lower():
+        return spelling  # casing variant (same letters): verbatim
+    return match_leading_case(base, spelling)  # orthographic respelling: sync leading case
+
+
+def render_present(text, positives, spellings, rng, respell_prob):
+    """Render the spoken (present) hotwords and the reference transcription *consistently*.
+
+    Each transcript token gets a single chosen spelling, so a word and a multi-word expression that
+    overlap always agree: if "Chirac" is respelled "Chirack", the entity "Jacques Chirac" is listed
+    "Jacques Chirack" and the transcription reads "Jacques Chirack" too. A respelled form wins over a
+    plain one, and a single word wins over a phrase on a shared token. Returns
+    ``(new_text, listed_surfaces, used_spellings)`` with one listed surface per positive, in order.
+    """
+    spans = list(iter_tokens(text))
+    low = [s.lower() for s, _, _, _ in spans]
+    plan: dict[int, str] = {}  # token index -> surface to write
+    prio: dict[int, tuple] = {}  # token index -> (is_respelled, is_single_word) priority
+    placements: list[tuple] = []  # (first_index|None, n, fallback_surface)
+    used: list[tuple[str, str, bool]] = []
+    for entry in positives:
+        seq = entry.key.split(" ")
+        n = len(seq)
+        matches = []
+        i = 0
+        while i <= len(low) - n:
+            if low[i : i + n] == seq:
+                matches.append(i)
+                i += n
+            else:
+                i += 1
+        spelling = _choose_spelling(entry, spellings, rng, respell_prob)
+        used.append((entry.key, spelling, True))
+        canonical = spellings.get(entry.key, [entry.surface])[0]
+        if not matches:
+            placements.append((None, n, spelling))
+            continue
+        base = present_surface(text, entry.key, entry.surface)
+        parts = _listed_surface(base, spelling, canonical).split(" ")
+        placements.append((matches[0], n, None))
+        if len(parts) != n:
+            continue  # defensive: respelling changed the token count, leave the transcript as is
+        for start in matches:
+            for t in range(n):
+                ti = start + t
+                target = parts[t]
+                p = (target != spans[ti][0], n == 1)  # respelled beats plain; single word beats phrase
+                if ti not in prio or p > prio[ti]:
+                    prio[ti] = p
+                    plan[ti] = target
+    out: list[str] = []
+    cursor = 0
+    for i, (surf, st, en, _) in enumerate(spans):
+        target = plan.get(i)
+        if target is not None and target != surf:
+            out.append(text[cursor:st])
+            out.append(target)
+            cursor = en
+    out.append(text[cursor:])
+    new_text = "".join(out)
+
+    def render_span(first: int, n: int) -> str:
+        # Rebuild from the plan, keeping the original gaps between tokens (space, apostrophe, hyphen)
+        # so "Côte d'Azur" or "Saint-Sernin" are not flattened to spaces.
+        pieces: list[str] = []
+        for t in range(n):
+            ti = first + t
+            pieces.append(plan.get(ti, spans[ti][0]))
+            if t < n - 1:
+                pieces.append(text[spans[ti][2] : spans[ti + 1][1]])
+        return "".join(pieces)
+
+    listed_surfaces = [fallback if first is None else render_span(first, n) for first, n, fallback in placements]
+    return new_text, listed_surfaces, used
+
+
 def build_list_variant(
     present_keys: set[str],
     pool_size: int,
@@ -1252,22 +1330,8 @@ def build_list_variant(
     n_distractor = list_size - len(positives)
     distractors = sampler.sample(n_distractor, exclude=present_keys | positive_keys)
 
-    surfaces: list[str] = []
-    listed_present: dict[str, list[str]] = defaultdict(list)  # present key -> spelling(s) shown in the list
-    used_spellings: list[tuple[str, str, bool]] = []  # (key, spelling, is_present)
-    for entry in positives:
-        base = present_surface(text, entry.key, entry.surface)  # match the transcript casing
-        spelling = _choose_spelling(entry, spellings, rng, args.respell_prob)
-        canonical = spellings.get(entry.key, [entry.surface])[0]
-        if spelling == canonical:
-            listed = base  # list it exactly as spoken in the transcript
-        elif spelling.lower() == canonical.lower():
-            listed = spelling  # casing variant (same letters): list that casing verbatim
-        else:
-            listed = match_leading_case(base, spelling)  # orthographic respelling: sync leading case
-        surfaces.append(listed)
-        listed_present[entry.key].append(listed)
-        used_spellings.append((entry.key, spelling, True))
+    # Present hotwords and the reference transcription, rendered consistently (see render_present).
+    new_text, surfaces, used_spellings = render_present(text, positives, spellings, rng, args.respell_prob)
     for entry in distractors:
         spelling = _choose_spelling(entry, spellings, rng, args.respell_prob)
         surfaces.append(spelling)
@@ -1275,14 +1339,6 @@ def build_list_variant(
     if not surfaces:
         return None
     rng.shuffle(surfaces)
-    # Reference perturbation: rewrite each spoken hotword to the spelling it is listed with. When a
-    # word is listed in several casings (e.g. "Union" and "UNION"), the transcript keeps the one
-    # closest to how it was really spoken (apply_respellings picks per occurrence).
-    for s in surfaces:
-        k = " ".join(m.group(0).lower() for m in WORD_RE.finditer(s))
-        if k in listed_present and s not in listed_present[k]:
-            listed_present[k].append(s)
-    new_text = apply_respellings(text, listed_present) if listed_present else text
     return surfaces, positives, distractors, new_text, used_spellings
 
 
