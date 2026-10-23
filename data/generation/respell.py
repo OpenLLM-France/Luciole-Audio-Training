@@ -113,6 +113,10 @@ def match_leading_case(template: str, replacement: str) -> str:
     """Match ``replacement``'s first-letter case to ``template``'s (both directions)."""
     if not replacement:
         return replacement
+    if replacement.isupper() and len(replacement) >= 2:
+        # A clean acronym keeps its all-caps form even when the spoken occurrence is lower-case
+        # (the verb "cites" matching the convention "CITES" must stay "CYTES", never "cYTES").
+        return replacement
     if template[:1].isupper():
         return replacement[:1].upper() + replacement[1:]
     if template[:1].islower():

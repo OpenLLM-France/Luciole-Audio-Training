@@ -29,7 +29,9 @@ statistical collocations). A word is eligible when it is a proper noun, an acron
 simply rare; proper nouns, acronyms and phrases are favoured. Rarity is measured on
 case-insensitive words, but hotwords keep their case-sensitive surface form ("Tomi",
 "NASA"). The rarity cutoff is inferred so the natural share of utterances with no pool
-hotword (word or entity phrase) is close to --target-no-positive.
+hotword (word or entity phrase) is close to --target-no-positive. In --paired mode the
+overall positive/negative balance of the output is then set by --target-positive-ratio,
+by down-sampling the utterances that have no spoken candidate.
 
 The hotword-prompt language is chosen per utterance: with --lang auto (default) it is
 detected from the *instruction* with fastText (so a French transcription whose instruction
@@ -118,13 +120,16 @@ from __future__ import annotations
 
 import argparse
 import copy
+import heapq
 import json
 import math
+import multiprocessing as mp
 import os
 import random
 import re
+import shutil
 import sys
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -283,6 +288,24 @@ def is_anonymized(text: str, patterns: list[re.Pattern]) -> bool:
     return any(p.search(text) for p in patterns)
 
 
+# Recoverable transcription noise to strip in place (not whole-example discard): PFC leaves inline
+# liaison-coding artifacts such as "on onze nVN etait" (natural text: "on etait"). Unlike anonymisation
+# these are removable, so --discard-garbage deletes the matched spans and keeps the rest of the example.
+DEFAULT_GARBAGE_PATTERNS = [r"\bonze nVN\b", r"\bonze nVO\b"]
+
+
+def clean_garbage(text: str, patterns: list[re.Pattern]) -> str:
+    """Remove garbage substrings from a transcription, collapsing the double space a removal leaves."""
+    if not patterns:
+        return text
+    cleaned = text
+    for pattern in patterns:
+        cleaned = pattern.sub("", cleaned)
+    if cleaned != text:
+        cleaned = re.sub(r" {2,}", " ", cleaned).strip()
+    return cleaned
+
+
 @dataclass
 class HotwordEntry:
     """One candidate hotword (single word or multi-word expression) in the pool."""
@@ -306,6 +329,7 @@ class _Stats:
     n_anonymized: int = 0
     n_hard_negative: int = 0
     n_twins: int = 0
+    n_dropped_noncandidate: int = 0  # pure-negative utterances dropped for positive/negative balance
     list_sizes: list[int] = field(default_factory=list)
     lang_counts: Counter = field(default_factory=Counter)
     used_present: Counter = field(default_factory=Counter)  # times a hotword was a spoken positive
@@ -322,6 +346,31 @@ class _Stats:
     @property
     def hard_negative_ratio(self) -> float:
         return self.n_hard_negative / self.n_augmented if self.n_augmented else 0.0
+
+    @property
+    def positive_ratio(self) -> float:
+        return (self.n_augmented - self.n_hard_negative) / self.n_augmented if self.n_augmented else 0.0
+
+    def merge(self, other: _Stats) -> None:
+        """Fold another segment's stats into this one (for within-file parallelism)."""
+        self.n_augmented += other.n_augmented
+        self.n_skipped += other.n_skipped
+        self.n_anonymized += other.n_anonymized
+        self.n_hard_negative += other.n_hard_negative
+        self.n_twins += other.n_twins
+        self.n_dropped_noncandidate += other.n_dropped_noncandidate
+        self.list_sizes.extend(other.list_sizes)
+        self.lang_counts.update(other.lang_counts)
+        self.used_present.update(other.used_present)
+        self.used_distractor.update(other.used_distractor)
+        self.present_spell.update(other.present_spell)
+        self.absent_spell.update(other.absent_spell)
+        for lang, prompts in other.lang_prompts.items():
+            current = self.lang_prompts[lang]
+            for prompt in prompts:
+                if len(current) >= 2000:
+                    break
+                current.add(prompt)
 
 
 # --------------------------------------------------------------------------------------
@@ -536,6 +585,8 @@ def scan_corpus(paths: list[Path], args: argparse.Namespace):
     for path in paths:
         for _, record in iter_jsonl(path):
             text = get_transcription(record)
+            if text:
+                text = clean_garbage(text, args.garbage_patterns)
             if not text or is_anonymized(text, args.anon_patterns):
                 continue
             toks = tokenize_with_positions(text)
@@ -606,7 +657,9 @@ def classify_keys(freq, n_nonstart, n_nonstart_cap, n_acronym, surfaces, audio_l
     return classification, proper_or_acronym
 
 
-def collect_empty_stats(paths, proper_or_acronym, rank_of, eligible_keys, entity_by_len, anon_patterns):
+def collect_empty_stats(
+    paths, proper_or_acronym, rank_of, eligible_keys, entity_by_len, anon_patterns, garbage_patterns
+):
     """Second pass: per augmentable utterance that has no proper noun/acronym and no entity
     phrase, record the rank of its rarest eligible word. Returns (N, rmax_list).
     """
@@ -615,6 +668,8 @@ def collect_empty_stats(paths, proper_or_acronym, rank_of, eligible_keys, entity
     for path in paths:
         for _, record in iter_jsonl(path):
             text = get_transcription(record)
+            if text is not None:
+                text = clean_garbage(text, garbage_patterns)
             if text is None or get_instruction_index(record) is None:
                 continue
             if is_anonymized(text, anon_patterns):
@@ -707,6 +762,8 @@ def build_word_pool(
             continue  # ubiquitous word: no biasing value
         if not (is_proper or is_acronym) and (key in stopwords or (is_common is not None and is_common(key))):
             continue  # ordinary common word / stopword of the audio language
+        if not (is_proper or is_acronym) and len(key) < args.min_rare_word_len:
+            continue  # short ordinary word / transcription fragment (na, pr, dé); keep acronyms & names
         surface = choose_surface(nonstart_surfaces[key], surfaces[key])
         idf = math.log((total_tokens + 1.0) / (count + 1.0)) + 1e-3
         if is_acronym:
@@ -749,6 +806,8 @@ def extract_collocations(
     for path in paths:
         for _, record in iter_jsonl(path):
             text = get_transcription(record)
+            if text:
+                text = clean_garbage(text, args.garbage_patterns)
             if not text or is_anonymized(text, args.anon_patterns):
                 continue
             for sentence in split_sentences(list(iter_tokens(text))):
@@ -787,7 +846,9 @@ def extract_collocations(
     return pool
 
 
-def count_phrase_frequencies(paths, phrase_by_len: dict[int, set], anon_patterns) -> tuple[Counter, Counter, dict]:
+def count_phrase_frequencies(
+    paths, phrase_by_len: dict[int, set], anon_patterns, garbage_patterns
+) -> tuple[Counter, Counter, dict]:
     """Count case-insensitive occurrences of each phrase, how many transcriptions hold it, and the
     actual surfaces it appears with (to pick a canonical spelling that matches real casing)."""
     counts: Counter[str] = Counter()
@@ -796,6 +857,8 @@ def count_phrase_frequencies(paths, phrase_by_len: dict[int, set], anon_patterns
     for path in paths:
         for _, record in iter_jsonl(path):
             text = get_transcription(record)
+            if text:
+                text = clean_garbage(text, garbage_patterns)
             if not text or is_anonymized(text, anon_patterns):
                 continue
             spans = list(iter_tokens(text))
@@ -835,37 +898,58 @@ def present_pool_keys(text: str, pool_by_key: dict[str, HotwordEntry], phrase_by
 # Sampling utilities
 # --------------------------------------------------------------------------------------
 class WeightedSampler:
-    """Weighted sampling without replacement over a fixed pool, via rejection."""
+    """Weighted sampling without replacement over a fixed pool.
+
+    Two regimes, so the cost stays low whether a list wants a handful of distractors or most of
+    the pool: for a small ``k`` it draws in batches with the C-level ``random.choices`` and rejects
+    duplicates (cheap when few are needed); for a large ``k`` (a big fraction of the pool) it takes
+    the top ``k`` by Efraimidis-Spirakis key over the whole pool, which is weighted, exact, and
+    ``O(pool)`` regardless of ``k`` (so it never degenerates into coupon-collector rejection)."""
 
     def __init__(self, pool: list[HotwordEntry], rng: random.Random):
         self.pool = pool
         self.rng = rng
         self.cumulative = list(accumulate(e.weight for e in pool))
         self.total = self.cumulative[-1] if self.cumulative else 0.0
-
-    def _draw_index(self) -> int:
-        r = self.rng.random() * self.total
-        return bisect_right(self.cumulative, r)
+        self.inv_weight = [1.0 / e.weight if e.weight > 0.0 else float("inf") for e in pool]
 
     def sample(self, k: int, exclude: set[str]) -> list[HotwordEntry]:
         """Sample up to k distinct entries whose key is not in ``exclude``."""
         if k <= 0 or self.total <= 0.0:
             return []
+        pool = self.pool
+        if 2 * k >= len(pool):
+            # Large fraction of the pool: weighted top-k by Efraimidis-Spirakis key u**(1/w).
+            rand = self.rng.random
+            inv = self.inv_weight
+            keyed = [(rand() ** inv[i], e) for i, e in enumerate(pool) if e.key not in exclude]
+            if k >= len(keyed):
+                return [e for _, e in keyed]
+            return [e for _, e in heapq.nlargest(k, keyed)]
+        # Small fraction: batched weighted rejection via the C-level random.choices.
         chosen: list[HotwordEntry] = []
         seen: set[str] = set(exclude)
-        attempts = 0
-        max_attempts = 40 * k + 100
-        while len(chosen) < k and attempts < max_attempts:
-            attempts += 1
-            idx = self._draw_index()
-            if idx >= len(self.pool):
-                continue
-            entry = self.pool[idx]
-            if entry.key in seen:
-                continue
-            seen.add(entry.key)
-            chosen.append(entry)
+        choices = self.rng.choices
+        cumulative = self.cumulative
+        while len(chosen) < k:
+            need = k - len(chosen)
+            for entry in choices(pool, cum_weights=cumulative, k=2 * need + 8):
+                if entry.key in seen:
+                    continue
+                seen.add(entry.key)
+                chosen.append(entry)
+                if len(chosen) >= k:
+                    break
         return chosen
+
+
+def fast_shuffle(seq: list, rng: random.Random) -> None:
+    """In-place Fisher-Yates using rng.random(), avoiding random.shuffle's per-step getrandbits
+    (hot path: lists can hold hundreds of hotwords)."""
+    rand = rng.random
+    for i in range(len(seq) - 1, 0, -1):
+        j = int(rand() * (i + 1))
+        seq[i], seq[j] = seq[j], seq[i]
 
 
 def weighted_sample_subset(entries: list[HotwordEntry], k: int, rng: random.Random) -> list[HotwordEntry]:
@@ -882,8 +966,9 @@ def weighted_sample_subset(entries: list[HotwordEntry], k: int, rng: random.Rand
 def sample_list_size(rng: random.Random, lo: int, hi: int, dist: str, mean: float) -> int:
     """Sample the hotword-list size in [lo, hi].
 
-    ``exponential`` (default) and ``geometric`` concentrate on small lists with a decaying
-    tail controlled by ``mean``; ``loguniform`` and ``uniform`` ignore ``mean``.
+    ``loguniform`` (default) spreads mass evenly across orders of magnitude; ``exponential`` and
+    ``geometric`` concentrate on small lists with a decaying tail controlled by ``mean``;
+    ``loguniform`` and ``uniform`` ignore ``mean``.
     """
     lo = max(1, lo)
     hi = max(lo, hi)
@@ -1212,7 +1297,8 @@ def _choose_spelling(entry: HotwordEntry, spellings, rng: random.Random, respell
     """The spelling to list: canonical, or a random alternative spelling."""
     alts = spellings.get(entry.key)
     if respell_prob > 0 and alts and len(alts) > 1 and rng.random() < respell_prob:
-        return rng.choice(alts[1:])
+        # Cheap uniform pick over alts[1:] without rng.choice's getrandbits loop (hot path).
+        return alts[1 + int(rng.random() * (len(alts) - 1))]
     return alts[0] if alts else entry.surface
 
 
@@ -1338,13 +1424,13 @@ def build_list_variant(
         used_spellings.append((entry.key, spelling, False))
     if not surfaces:
         return None
-    rng.shuffle(surfaces)
+    fast_shuffle(surfaces, rng)
     return surfaces, positives, distractors, new_text, used_spellings
 
 
-def process_file(
+def _run_segment(
     path: Path,
-    out_path: Path,
+    out,
     pool: list[HotwordEntry],
     pool_by_key: dict[str, HotwordEntry],
     phrase_by_len: dict[int, set],
@@ -1353,16 +1439,31 @@ def process_file(
     rng: random.Random,
     args: argparse.Namespace,
     force_no_positive: float,
+    keep_noncandidate: float,
     spellings: dict,
+    line_start: int = 0,
+    line_stop: int | None = None,
 ) -> _Stats:
-    """Write the contextual-biasing manifest for a single input file."""
+    """Process the physical lines [line_start, line_stop) of ``path`` into the open handle ``out``.
+
+    With the full range this is the whole file; a line range lets several processes split one file
+    (see --jobs). Line indices are physical-line based, so contiguous ranges concatenate in order."""
     sampler = WeightedSampler(pool, rng)
     stats = _Stats()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with out_path.open("w", encoding="utf-8") as out:
-        for _, record in iter_jsonl(path):
+    with path.open(encoding="utf-8") as f:
+        for i, raw in enumerate(f):
+            if i < line_start:
+                continue
+            if line_stop is not None and i >= line_stop:
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            record = json.loads(line)
             text = get_transcription(record)
+            original_text = text
+            if text is not None:
+                text = clean_garbage(text, args.garbage_patterns)
             instr_idx = get_instruction_index(record)
             if text is None or instr_idx is None:
                 stats.n_skipped += 1
@@ -1386,6 +1487,11 @@ def process_file(
             elif present_keys:
                 include_flags = [rng.random() >= force_no_positive]
             else:
+                # Pure-negative utterance (no spoken candidate): keep only a fraction, so the overall
+                # positive share approaches --target-positive-ratio in paired mode.
+                if args.paired and rng.random() >= keep_noncandidate:
+                    stats.n_dropped_noncandidate += 1
+                    continue
                 include_flags = [False]
 
             for variant_index, include in enumerate(include_flags):
@@ -1398,7 +1504,9 @@ def process_file(
                 rec = copy.deepcopy(record)
                 if variant_index > 0 and rec.get("id") is not None:
                     rec["id"] = f"{rec['id']}{args.pair_suffix}"
-                if new_text != text:
+                # Compare to the original transcription so garbage-stripping is persisted even when
+                # no hotword was respelled (otherwise the cleaned text would be computed and dropped).
+                if new_text != original_text:
                     set_transcription(rec, new_text)
                 template = pick_template(lang, templates, rng, args.english_keyword_prob)
                 prompt = format_hotword_prompt(surfaces, template, args.hotword_separator)
@@ -1419,6 +1527,103 @@ def process_file(
                     stats.n_hard_negative += 1
                 if variant_index > 0:
                     stats.n_twins += 1
+    return stats
+
+
+# Read-only context shared with worker processes via fork (set before the pool is created, so the
+# large pool / spellings / fastText model are inherited copy-on-write rather than pickled per task).
+_PARALLEL_CTX: dict = {}
+
+
+def _count_lines(path: Path) -> int:
+    with path.open("rb") as f:
+        return sum(1 for _ in f)
+
+
+def _parallel_worker(task: tuple) -> tuple:
+    """Process one contiguous line range into a part file; return (index, stats, template-lang counts)."""
+    index, line_start, line_stop, part_path = task
+    ctx = _PARALLEL_CTX
+    args = ctx["args"]
+    prompt_lang = ctx["prompt_lang"]
+    rng = random.Random((args.seed, "segment", index))
+    with open(part_path, "w", encoding="utf-8") as out:
+        stats = _run_segment(
+            ctx["path"], out, ctx["pool"], ctx["pool_by_key"], ctx["phrase_by_len"], ctx["templates"],
+            prompt_lang, rng, args, ctx["force_no_positive"], ctx["keep_noncandidate"], ctx["spellings"],
+            line_start, line_stop,
+        )
+    n_template_hits = prompt_lang.n_template_hits if prompt_lang is not None else 0
+    corrections = dict(prompt_lang.corrections) if prompt_lang is not None else {}
+    return index, stats, n_template_hits, corrections
+
+
+def process_file(
+    path: Path,
+    out_path: Path,
+    pool: list[HotwordEntry],
+    pool_by_key: dict[str, HotwordEntry],
+    phrase_by_len: dict[int, set],
+    templates: dict[str, list[str]],
+    prompt_lang: PromptLanguageResolver | None,
+    rng: random.Random,
+    args: argparse.Namespace,
+    force_no_positive: float,
+    keep_noncandidate: float,
+    spellings: dict,
+) -> _Stats:
+    """Write the contextual-biasing manifest for a single input file (serially, or split over --jobs)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    jobs = max(1, getattr(args, "jobs", 1))
+    if jobs == 1:
+        with out_path.open("w", encoding="utf-8") as out:
+            return _run_segment(
+                path, out, pool, pool_by_key, phrase_by_len, templates, prompt_lang, rng, args,
+                force_no_positive, keep_noncandidate, spellings,
+            )
+
+    total_lines = _count_lines(path)
+    jobs = max(1, min(jobs, total_lines))
+    if jobs == 1:
+        with out_path.open("w", encoding="utf-8") as out:
+            return _run_segment(
+                path, out, pool, pool_by_key, phrase_by_len, templates, prompt_lang, rng, args,
+                force_no_positive, keep_noncandidate, spellings,
+            )
+
+    # Contiguous line ranges, one per worker; each writes an ordered part file.
+    bounds = [round(i * total_lines / jobs) for i in range(jobs + 1)]
+    part_paths = [out_path.with_name(f"{out_path.name}.part{i:03d}") for i in range(jobs)]
+    tasks = [(i, bounds[i], bounds[i + 1], str(part_paths[i])) for i in range(jobs)]
+
+    _PARALLEL_CTX.update(
+        path=path, pool=pool, pool_by_key=pool_by_key, phrase_by_len=phrase_by_len, templates=templates,
+        prompt_lang=prompt_lang, args=args, force_no_positive=force_no_positive,
+        keep_noncandidate=keep_noncandidate, spellings=spellings,
+    )
+    results: dict[int, _Stats] = {}
+    template_hits = 0
+    corrections: Counter = Counter()
+    ctx = mp.get_context("fork")
+    with ctx.Pool(processes=jobs) as workers:
+        for index, seg_stats, seg_hits, seg_corr in workers.imap_unordered(_parallel_worker, tasks):
+            results[index] = seg_stats
+            template_hits += seg_hits
+            corrections.update(seg_corr)
+    _PARALLEL_CTX.clear()
+
+    # Concatenate the part files in order, then remove them.
+    stats = _Stats()
+    with out_path.open("wb") as out:
+        for i in range(jobs):
+            with part_paths[i].open("rb") as part:
+                shutil.copyfileobj(part, out, length=1024 * 1024)
+            part_paths[i].unlink()
+            stats.merge(results[i])
+    # Reflect the workers' template-match counts on the shared resolver (for the end-of-run report).
+    if prompt_lang is not None:
+        prompt_lang.n_template_hits = template_hits
+        prompt_lang.corrections = corrections
     return stats
 
 
@@ -1463,16 +1668,22 @@ def write_readme(
     )
     lines.append(f"  natural_no_hotword_rate = {derived['natural']:.4f}")
     lines.append(f"  forcing_probability = {derived['force']:.4f}")
+    lines.append(f"  keep_noncandidate_probability = {derived['keep_noncandidate']:.4f}")
     lines.append("")
     lines.append("This file:")
     lines.append(
         f"  output_lines = {stats.n_augmented} (incl. {stats.n_twins} no-hotword twins), "
         f"unchanged_lines = {stats.n_skipped}, anonymized_dropped = {stats.n_anonymized}"
     )
-    lines.append(f"  effective_no_hotword_ratio = {stats.hard_negative_ratio:.4f} (target {args.target_no_positive})")
+    lines.append(
+        f"  positive_ratio = {stats.positive_ratio:.4f} (target {args.target_positive_ratio}), "
+        f"negative_ratio = {stats.hard_negative_ratio:.4f}"
+    )
     if args.paired:
-        lines.append("    (paired mode: target is the candidate-less utterance rate; each candidate utterance")
-        lines.append("     also gets a no-hotword twin, so the output ratio is higher by design)")
+        lines.append(
+            f"    (paired mode: each candidate utterance emits one positive + one no-hotword twin; "
+            f"{stats.n_dropped_noncandidate} pure-negative non-candidate utterances dropped for balance)"
+        )
     lines.append(f"  mean_list_size = {stats.mean_list_size:.2f}")
     lines.append("")
     lines.append("Prompt languages (auto = fastText detection, ratio over augmented lines):")
@@ -1582,15 +1793,24 @@ def parse_args() -> argparse.Namespace:
 
     # List composition.
     parser.add_argument("--min-hotwords", type=int, default=1, help="Minimum hotword-list size.")
-    parser.add_argument("--max-hotwords", type=int, default=5000, help="Maximum hotword-list size.")
+    parser.add_argument(
+        "--max-hotwords",
+        type=int,
+        default=1500,
+        help="Maximum hotword-list size. With the default loguniform distribution this also sets the tail: "
+        "about 20%% of lists are longer than 300, the rest shorter.",
+    )
     parser.add_argument(
         "--size-dist",
         choices=["exponential", "geometric", "loguniform", "uniform"],
-        default="exponential",
-        help="Distribution of the hotword-list size (exponential/geometric favour small lists).",
+        default="loguniform",
+        help="Distribution of the hotword-list size over [--min-hotwords, --max-hotwords]. 'loguniform' "
+        "(default) spreads mass evenly across orders of magnitude, so the few-keyword, hundreds and "
+        "thousands regimes are all represented; 'exponential'/'geometric' favour small lists (use "
+        "--size-mean). Each list is capped at the dataset's hotword-pool size.",
     )
     parser.add_argument(
-        "--size-mean", type=float, default=24.0, help="Mean hotword-list size for exponential/geometric."
+        "--size-mean", type=float, default=24.0, help="Mean hotword-list size for exponential/geometric only."
     )
     parser.add_argument(
         "--target-no-positive",
@@ -1600,11 +1820,29 @@ def parse_args() -> argparse.Namespace:
         "cutoff is inferred to approach it; without --paired a forcing probability tops it up.",
     )
     parser.add_argument(
+        "--target-positive-ratio",
+        type=float,
+        default=0.45,
+        help="In --paired mode, target fraction of output lines that are positive (the spoken hotword is "
+        "in the list). Each candidate utterance already yields one positive and one distractor-only twin "
+        "(50/50); utterances with no candidate are pure negatives, so they are down-sampled to reach this "
+        "ratio. If there are too few of them to reach it, the positive fraction stays between this and 0.5.",
+    )
+    parser.add_argument(
         "--paired",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Emit each utterance that has a spoken candidate twice: once with the candidate in the "
         "list and once with distractors only, so the model is not forced to rely on the hotwords.",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="Processes to split ONE input file across (default 1 = no within-file parallelism). The "
+        "global hotword pool is built once and shared; only the per-utterance list generation is "
+        "parallelised. The output has the same distribution as --jobs 1 but is not byte-identical "
+        "(each chunk draws from its own RNG stream).",
     )
     parser.add_argument(
         "--pair-suffix", default="-nobias", help="Suffix appended to the id of the no-hotword twin in paired mode."
@@ -1625,6 +1863,14 @@ def parse_args() -> argparse.Namespace:
         "use 1 for clean read speech where a name said once is a real target).",
     )
     parser.add_argument("--min-word-len", type=int, default=2, help="Minimum word length.")
+    parser.add_argument(
+        "--min-rare-word-len",
+        type=int,
+        default=3,
+        help="Minimum length for a single-word hotword that is neither a proper noun nor an acronym. "
+        "Shorter ordinary words and transcription fragments (e.g. 'na', 'pr', 'dé') are dropped; "
+        "acronyms and proper nouns are kept regardless of length.",
+    )
     parser.add_argument(
         "--max-docfreq-ratio",
         type=float,
@@ -1659,6 +1905,22 @@ def parse_args() -> argparse.Namespace:
         default=[],
         metavar="REGEX",
         help="Extra regex marking a transcription as anonymised (repeatable), added to the defaults.",
+    )
+    parser.add_argument(
+        "--discard-garbage",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Strip recoverable transcription-noise spans in place (keeping the rest of the example), "
+        f"collapsing the double space left behind. Default patterns: {DEFAULT_GARBAGE_PATTERNS} "
+        "(PFC inline liaison codes). Unlike --discard-anonymized this edits, it does not drop.",
+    )
+    parser.add_argument(
+        "--garbage-pattern",
+        action="append",
+        default=[],
+        metavar="REGEX",
+        help="Extra regex of a garbage span to strip from transcriptions (repeatable), added to the "
+        "defaults. Use word boundaries (e.g. '\\bonze nVN\\b').",
     )
     parser.add_argument(
         "--filter-disfluencies",
@@ -1746,6 +2008,11 @@ def main() -> None:
     args.anon_patterns = (
         load_anonymization_patterns(args.contexts_dir, args.anonymization_pattern) if args.discard_anonymized else []
     )
+    # Compiled garbage spans to strip in place (applied from the first scan on, so the stripped text
+    # is what feeds both candidate extraction and the written transcription).
+    args.garbage_patterns = (
+        [re.compile(p) for p in DEFAULT_GARBAGE_PATTERNS + args.garbage_pattern] if args.discard_garbage else []
+    )
     if args.lang == "auto":
         langid = LanguageIdentifier(resolve_lid_model(args))
     else:
@@ -1816,12 +2083,22 @@ def main() -> None:
 
     # Pass 2: infer the rarity cutoff that approaches the target no-hotword rate.
     n_total, pnless_rmax = collect_empty_stats(
-        inputs, proper_or_acronym, rank_of, eligible_keys, entity_by_len, args.anon_patterns
+        inputs, proper_or_acronym, rank_of, eligible_keys, entity_by_len, args.anon_patterns, args.garbage_patterns
     )
     target = args.target_no_positive
     cutoff, natural_rate = choose_cutoff(pnless_rmax, n_total, target)
     force_no_positive = 0.0 if natural_rate >= target else (target - natural_rate) / (1.0 - natural_rate)
     force_no_positive = min(max(force_no_positive, 0.0), 1.0)
+
+    # Paired-mode balance: each candidate utterance emits one positive + one distractor-only negative
+    # (50/50), and each non-candidate utterance (fraction ``natural_rate``) is a pure negative. Keep
+    # only a fraction of the latter so the overall positive share approaches --target-positive-ratio.
+    t = args.target_positive_ratio
+    if natural_rate <= 0.0 or t <= 0.0:
+        keep_noncandidate = 1.0
+    else:
+        keep_noncandidate = ((1.0 - natural_rate) / natural_rate) * (1.0 / t - 2.0)
+    keep_noncandidate = min(max(keep_noncandidate, 0.0), 1.0)
 
     # Build the pool: single words (+ entity phrases + collocations).
     word_pool = build_word_pool(
@@ -1857,7 +2134,7 @@ def main() -> None:
     phrase_doc_freq: Counter = Counter()
     if phrase_by_len:
         phrase_freq, phrase_doc_freq, phrase_surfaces = count_phrase_frequencies(
-            inputs, phrase_by_len, args.anon_patterns
+            inputs, phrase_by_len, args.anon_patterns, args.garbage_patterns
         )
         for entry in entity_pool + colloc_pool:
             entry.freq = phrase_freq.get(entry.key, entry.freq)
@@ -1905,6 +2182,7 @@ def main() -> None:
         "n_colloc": len(colloc_pool),
         "natural": natural_rate,
         "force": force_no_positive,
+        "keep_noncandidate": keep_noncandidate,
         "audio_lang": audio_lang,
         "audio_lang_auto": args.audio_lang == "auto",
         "lang_prior": prompt_lang.prior if prompt_lang is not None else {},
@@ -1939,6 +2217,7 @@ def main() -> None:
             rng,
             args,
             force_no_positive,
+            keep_noncandidate,
             spellings,
         )
         write_readme(
@@ -1954,8 +2233,11 @@ def main() -> None:
             f"mean list size {stats.mean_list_size:.1f}"
         )
 
-    overall = total_hard_negative / total_augmented if total_augmented else 0.0
-    print(f"Effective no-hotword ratio: {total_hard_negative}/{total_augmented} ({overall:.1%}), target {target:.1%}")
+    overall_pos = (total_augmented - total_hard_negative) / total_augmented if total_augmented else 0.0
+    print(
+        f"Positive ratio: {total_augmented - total_hard_negative}/{total_augmented} ({overall_pos:.1%}), "
+        f"target {args.target_positive_ratio:.1%}"
+    )
     if prompt_lang is not None:
         print(
             f"Prompt language: {prompt_lang.n_template_hits} exact template matches"
