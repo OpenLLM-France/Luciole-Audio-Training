@@ -12,7 +12,8 @@ Expected layout (matches the standard `ami_public_manual_*.zip` + `amicorpus` do
 
 Produces three manifest families (each opt-in via a flag):
   - summary/      : one row per meeting (Mix-Headset.wav + abstractive summary text)
-  - asr/          : one row per segment   (per-speaker headset .wav + transcript)
+  - asr/          : one row per segment   (per-speaker headset .wav + transcript), written
+                    to nemo/asr/en/nocontext/AMI; event markers kept raw (see meeting_asr.py)
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
                     variants, several output formats (RTTM, SRT, VTT, ...) and
                     with/without backchannels (written under a diarization-specific root)
@@ -37,6 +38,7 @@ from prompts_diarization import (
     clean_window_pieces,
     make_diar_lean_row,
 )
+from meeting_asr import asr_text, dump_asr, split_long
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -158,8 +160,20 @@ SEG_HREF_RE = re.compile(
 )
 
 
-def load_words(xml_path: Path) -> dict:
-    """Parse a words.xml file into {nite_id: {'text': str|None, 'start': float|None, 'end': float|None}}."""
+# raw markers kept by load_words(markers=True), for clean_asr.py to map to [tag]s
+def _ami_marker(tag: str, elem) -> str | None:
+    if tag == "vocalsound":
+        return f"<vocalsound:{elem.get('type', 'other')}>"
+    if tag == "gap":
+        return "<gap:foreign>" if elem.get("pron") == "foreign" else "<gap>"
+    return None     # disfmarker, transformerror: no sound of their own
+
+
+def load_words(xml_path: Path, markers: bool = False) -> dict:
+    """Parse a words.xml file into {nite_id: {'text': str|None, 'start': float|None, 'end': float|None}}.
+
+    markers=True (ASR): vocalsound / gap get a raw marker text, truncated words end
+    with "-" ("th-"), and each record gets the `join` / `lex` keys of meeting_asr.py."""
     tree = ET.parse(xml_path)
     root = tree.getroot()
     words = {}
@@ -182,6 +196,14 @@ def load_words(xml_path: Path) -> dict:
         # nonvocalsound, pause, etc. are non-lexical and have no text.
         text = elem.text.strip() if (tag == "w" and elem.text) else None
         words[nite_id] = {"text": text, "start": start_f, "end": end_f}
+        if markers:
+            rec = words[nite_id]
+            rec["lex"] = bool(text) and elem.get("punc") != "true"
+            rec["join"] = "left" if elem.get("punc") == "true" else None
+            if text and elem.get("trunc") == "true":
+                rec["text"] = text + "-"
+            if tag != "w":
+                rec["text"] = _ami_marker(tag, elem)
     return words
 
 
@@ -703,7 +725,9 @@ def build_section_summary_rows(meeting_id: str, mix_audio: Path, summary: dict,
 
 def build_asr_rows(meeting_id: str, audio_dir: Path, words_dir: Path,
                    segments_dir: Path, channel_map: dict,
-                   min_duration: float, max_duration: float):
+                   min_duration: float, max_duration: float, split: str):
+    """One row per segment on the speaker's own headset; a segment longer than
+    max_duration is cut at its longest pauses (split_long)."""
     rows = []
     speakers = collect_speaker_files(words_dir, meeting_id)
     if not speakers:
@@ -713,7 +737,7 @@ def build_asr_rows(meeting_id: str, audio_dir: Path, words_dir: Path,
     words_by_file = {}
     for letter, words_xml in speakers.items():
         try:
-            words_by_file[words_xml.name] = load_words(words_xml)
+            words_by_file[words_xml.name] = load_words(words_xml, markers=True)
         except ET.ParseError as e:
             logger.warning(f"{meeting_id}/{letter}: bad words.xml ({e}), skipping speaker")
 
@@ -734,8 +758,7 @@ def build_asr_rows(meeting_id: str, audio_dir: Path, words_dir: Path,
 
         for seg_id, seg_start, seg_end, word_refs in seg_iter:
             word_records = resolve_segment_words(word_refs, words_by_file)
-            text = segment_text(word_records)
-            if not text:
+            if not any(w.get("lex") for w in word_records):
                 continue
 
             # Prefer transcriber timestamps; fall back to word-derived bounds.
@@ -749,29 +772,32 @@ def build_asr_rows(meeting_id: str, audio_dir: Path, words_dir: Path,
                 start = min(word_starts) if start is None else start
                 end = max(word_ends) if end is None else end
 
-            duration = end - start
-            if duration <= 0:
+            if end <= start:
                 continue
-            if duration < min_duration or duration > max_duration:
-                continue
-
-            audio_turn = NemoTurn(
-                role="User", value=str(audio_path), turn_type="audio",
-                duration=round(duration, 3), offset=round(start, 3),
-            )
-            text_turn = NemoTurn(role="Assistant", value=text, turn_type="text")
-            rows.append(NemoDatasetRow(
-                id=seg_id or f"{meeting_id}.{letter}.{len(rows)}",
-                dataset_name=DATASET_NAME,
-                split=split_for(meeting_id),
-                language="en",
-                speaker=f"{meeting_id}.{letter}",
-                turns=[audio_turn, text_turn],
-                custom_metadata={
-                    "meeting":         meeting_id,
-                    "speaker_letter":  letter,
-                },
-            ))
+            seg_id = seg_id or f"{meeting_id}.{letter}.{len(rows)}"
+            pieces = split_long(word_records, start, end, max_duration)
+            for k, (p_start, p_end, p_records) in enumerate(pieces):
+                duration = p_end - p_start
+                text = asr_text(p_records)
+                if not text or duration < min_duration or duration > max_duration:
+                    continue
+                audio_turn = NemoTurn(
+                    role="User", value=str(audio_path), turn_type="audio",
+                    duration=round(duration, 3), offset=round(p_start, 3),
+                )
+                text_turn = NemoTurn(role="Assistant", value=text, turn_type="text")
+                rows.append(NemoDatasetRow(
+                    id=seg_id if len(pieces) == 1 else f"{seg_id}.{k}",
+                    dataset_name=DATASET_NAME,
+                    split=split,
+                    language="en",
+                    speaker=f"{meeting_id}.{letter}",
+                    turns=[audio_turn, text_turn],
+                    custom_metadata={
+                        "meeting":         meeting_id,
+                        "speaker_letter":  letter,
+                    },
+                ))
     return rows
 
 
@@ -1060,7 +1086,17 @@ def main():
     asr_group.add_argument("--asr", action="store_true",
                            help="Enable the per-speaker ASR manifest (off by default).")
     asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
-    asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
+    asr_group.add_argument("--asr-max-duration", type=float, default=30.0,
+                           help="Longer segments are cut at their longest pauses.")
+    asr_group.add_argument("--asr-fold-non-scenario", action=argparse.BooleanOptionalAction,
+                           default=True,
+                           help="Fold non-scenario meetings (EN*, IB*, ...) into train.")
+    asr_group.add_argument("--asr-raw-manifest-path", type=str, default=None,
+                           help="Raw ASR manifest folder (with custom_metadata). "
+                                "Default: $DATA_FOLDER/raw/summary/en/ami/asr")
+    asr_group.add_argument("--asr-manifest-path", type=str, default=None,
+                           help="Training ASR manifest folder. "
+                                "Default: $DATA_FOLDER/nemo/asr/en/nocontext/AMI")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -1161,6 +1197,14 @@ def main():
             parser.error("--manifest-path not set and DATA_FOLDER env var is missing")
         args.manifest_path = f"{data_dir}/nemo/summary/en/ami"
 
+    if args.asr:
+        if not data_dir and (args.asr_raw_manifest_path is None or args.asr_manifest_path is None):
+            parser.error("--asr-raw-manifest-path / --asr-manifest-path not set and DATA_FOLDER env var is missing")
+        if args.asr_raw_manifest_path is None:
+            args.asr_raw_manifest_path = f"{data_dir}/raw/summary/en/ami/asr"
+        if args.asr_manifest_path is None:
+            args.asr_manifest_path = f"{data_dir}/nemo/asr/en/nocontext/AMI"
+
     if args.diarization:
         if args.diar_raw_manifest_path is None:
             if not data_dir:
@@ -1178,9 +1222,6 @@ def main():
     if args.summary:
         (raw_root / "summary").mkdir(parents=True, exist_ok=True)
         (out_root / "summary").mkdir(parents=True, exist_ok=True)
-    if args.asr:
-        (raw_root / "asr").mkdir(parents=True, exist_ok=True)
-        (out_root / "asr").mkdir(parents=True, exist_ok=True)
     diar_outputs = list(DIAR_VARIANTS) + (["mixed"] if (args.diarization and args.diar_mixed) else [])
     if args.diarization:
         for v in diar_outputs:
@@ -1287,12 +1328,13 @@ def main():
                                     lean.append(make_lean_row(row))
 
         if args.asr:
+            asr_split = "train" if (args.asr_fold_non_scenario and split == "non_scenario") else split
             rows = build_asr_rows(
                 meeting_id, audio_dir, words_dir, seg_dir, channel_map,
-                args.asr_min_duration, args.asr_max_duration,
+                args.asr_min_duration, args.asr_max_duration, asr_split,
             )
             if rows:
-                raw, lean = get(asr_per_split, split)
+                raw, lean = get(asr_per_split, asr_split)
                 for r in rows:
                     raw.append(r)
                     lean.append(NemoDatasetRow(
@@ -1348,7 +1390,7 @@ def main():
     if args.summary:
         dump(summary_per_split, "summary")
     if args.asr:
-        dump(asr_per_split, "asr")
+        dump_asr(asr_per_split, Path(args.asr_raw_manifest_path), Path(args.asr_manifest_path), args.force)
     if args.diarization:
         for variant in diar_outputs:
             dump(diar_buckets[variant], variant,

@@ -1,0 +1,242 @@
+# Language rules of clean_asr.py: the words and spellings its filters use, kept out of the code.
+#
+# `common` holds the rules of every language; each language (`fr`, `en`) adds its own on top:
+# dictionaries are merged key by key, lists are appended to the common ones.
+# A word list is a list or a string of words separated by spaces; words are lowercase, apostrophes
+# are ' (the text is normalised to it). Regexes are Python `re`; in YAML, write them in '...'.
+
+common:
+  disfluencies:
+    # hesitations: {written form: [spellings]}. Each spelling is a whole word: the hyphenated
+    # "mm-hmm" (yes) is not "mm" + "hmm". Capital on the first letter or on the whole word only:
+    # "MM." (messieurs) is not a hesitation.
+    hesitations:
+      hmm: ['[Hh]u+m+', '[Hh]m+', '[Mm]h+(?:m+)?', '[Mm]m+h*', 'HU+M+', 'HM+', 'M[Mm]*[Hh]+M*', 'MMM+']
+
+fr:
+  # the words lowercase mid-sentence (build_common_words.py), relative to this directory:
+  # tells a common word ("Les", "Voilà") from a proper noun ("Gange")
+  common_words: fr_common_words.txt
+
+  # words that cannot end a sentence: a "." right after one is a pause the recase model took
+  # for a sentence end ("avec le. Les deux", "je. Je comprends")
+  no_end_words: >-
+    le la les un une des du de au aux à en dans pour par sur sous avec sans chez vers entre
+    et ou mais que qui dont je tu il ils on me te se ce cet cette ces mon ma mes ton ta tes
+    son sa ses notre nos votre vos leurs ne très
+  # determiners, pronouns, conjunctions and prepositions (with no_end_words): capitalised after a
+  # lowercase word with a lowercase word next, they are a subtitle cue start, not a proper noun
+  # ("des tablettes Qui sont", "en France Par exemple"; not "à La Réunion", "Le Pen")
+  function_words: >-
+    l' d' qu' au aux du des un une quelques plusieurs chaque certains certaines aucun aucune
+    tout toute tous toutes quel quelle quels quelles cet leur lui y en nous vous elle elles eux moi toi
+    celui celle ceux celles ceci cela ça quoi lequel laquelle lesquels lesquelles auquel auxquels duquel
+    quand lorsque puisque comme si car ni or soit
+    à par sur sous dès vers depuis pendant durant selon malgré parmi envers hors jusque jusqu'à près auprès
+  # elided words, written with their apostrophe: "l'", "qu'", "jusqu'"
+  elided: c d j l m n s t qu jusqu lorsqu puisqu
+  # pronouns after a verb's hyphen: "rassure-moi", "dit-il", "va-t-en" (the verb is the common word)
+  inverted_pronouns: moi toi le la les nous vous lui leur il ils elle elles on y en ce je tu
+
+  disfluencies:
+    hesitations:
+      euh: ['[Ee]u+h+m*', '[Hh]eu+h*', 'EU+H+M*', 'HEU+H*',
+            '[Ee]u+m+', 'EU+M+',          # "Eum" (PFC)
+            '[Ee]h+u+m+', 'EH+U+M+',      # "Ehum" (CTFAR)
+            '[Uu]+h+', 'UU*H+']           # "uh", "uh uh" (CTFNN1, CTFAR, LINAGORA)
+      hmm: ['[Mm]m+-[Hh]u*m+']            # "Mm-hum", "mm-hmm" (CTFAR)
+    # function words never correct twice in a row ("je je", "le le", "et et et"). Not "nous nous"
+    # / "vous vous" (pronominal verbs), "elle elle" / "ça ça" ("Elle, elle est..."), "oui oui",
+    # "si si", "très très" (emphasis), "la la la" (singing)
+    repeatable_not: >-
+      le la les un une des du de au aux à en dans pour par sur avec sans chez
+      et ou mais que qui je tu il ils on ce cette ces mon ma mes ton ta tes son sa ses ne se me te y
+
+  disfluency_model:
+    # words, never removed by the model
+    discourse_words: ben bah bé hein ah oh eh bon ouais oui non voilà quoi enfin bref alors donc
+    # a word said twice on purpose: "vous vous croyez" (pronominal), "très très", "plein plein de bisous"
+    repeated_on_purpose: nous vous elle ça très oui non si bien plein la na
+
+  normalize_interjections:
+    # {written form: spelling regex}, any case: one spelling per interjection. They are words,
+    # kept in every output. The isolated "b" is a cut-off word ("b-"), not "bah".
+    forms:
+      bah: 'b(?:eh|é|â|a)'
+      ben: 'bein|bin'
+      hein: 'hin'
+      ah: 'a+h{2,}|a{2,}h+'
+      oh: 'o+h{2,}|o{2,}h+'
+      pff: 'pf|pf{3,}'
+
+  fix_punctuation:
+    # words that start a sentence: capitalised after a lowercase word, a "." is inserted before
+    # ("très bien Bon" -> "très bien. Bon")
+    starters: >-
+      je tu il ils elle elles on nous vous moi toi eux ça ce cette c' j' qu' d'accord
+      et mais donc alors puis bon oui non ouais voilà enfin bref okay ok merci
+    # after these, a capitalised function word is lowercased, no "." inserted ("ah Je" -> "ah je")
+    interjections: ah oh eh bah ben euh hm hein ouh
+    # other words that start a subtitle cue ("est absurde Si ça arrive", "de Taipei La défense"):
+    # a "." is inserted only when the next word is lowercase, not in "Le Pen", "La Société Générale"
+    # (not du/des/un/en/que/tout...: "à propos Du genre", "y a Des bonnes", "répétées Que tu" are mid-sentence)
+    cue_starts: >-
+      si dans d'ailleurs est-ce parce quand comme pour après avant ensuite aujourd'hui maintenant
+      ici là ah oh ben bah eh depuis pourtant cependant ainsi aussi sinon même quoi pourquoi
+      comment où voici bonjour salut d'abord premièrement évidemment bien
+      le la les ce cet cette ces mon ma mes ton ta tes son sa ses notre nos votre vos leur leurs
+    cue_elided: l' d' qu' s' n' c' j' m' t'
+    # no capital after an abbreviation's period: "Piquet Jr. a été", "M. Dupont" (initials
+    # "J.-C." are handled by the code)
+    abbreviations: >-
+      etc cf ex p pp st ste mr mm mme mmes mlle mgr me dr pr prof jr sr co cie inc ltd corp
+      av apr env vol chap fig éd coll réf tél no n° bd
+
+  speaker_labels:
+    # a capitalised word of this list before ":" at a sentence start is a speaker label
+    # ("Public : Paris !"); "Résultat : on a gagné" is speech
+    label_words: >-
+      public participants participant tous homme femme voix narrateur narratrice journaliste
+      présentateur présentatrice enfant enfants intervieweur intervieweuse interviewer
+      intervenant intervenante policier policière douanier douanière maman papa
+    # mid-sentence, a label is not after these words (with no_end_words):
+    # "Section de Wavefolding : Les", "selon Saint Matthieu : Heureux"
+    not_before_label: selon après avant contre depuis pendant durant comme malgré parmi
+
+  fix_spurious_caps:
+    # capitalised mid-sentence with no sentence boundary before: lowercased ("Bien sûr Et." ->
+    # "Bien sûr et."), unless the next word is a capitalised proper noun ("de La Poste")
+    function_words: >-
+      et mais donc or ni car alors puis ensuite parce puisque quand lorsque si comme que qui quoi où
+      je tu il ils elle elles on nous vous moi toi lui eux ce cette ces ça cela y
+      le la les un une des du au aux de dans en pour par sur avec sans chez à
+      mon ma mes ton ta tes son sa ses notre votre leur leurs
+      oui non ouais ah oh bah ben bon euh hein voilà bref enfin pas plus très tout tous
+    elided: c j l d qu n s m t
+
+  restore_elisions:
+    # restore_elisions: an elided word written without its apostrophe before a vowel or h
+    # ("j ai" -> "j'ai", "qu il" -> "qu'il", "L univers" -> "L'univers"; SUMM-RE)
+    words: c d j l m n s t qu jusqu lorsqu puisqu quelqu presqu aujourd
+    # left as they are: a spelled letter (next or previous word is one letter too: "N I C O";
+    # a capital one mid-sentence: "le jour J en fait"),
+    # a letter after a number ("trois d", "2 d") or after these words ("un t", "let s go")
+    not_after: un une le lettre deux trois quatre cinq six let it that what
+    # {word: next words}: "a t il" is "a-t-il", "c huit" a letter and a number
+    not_before:
+      t: il ils elle elles on
+      c: huit onze un une
+
+  replacements:
+    # named lists of replacements, used by the `replace` filter: `replace: {rules: missing_hyphens}`.
+    # `words`: {phrase: replacement}, whole words, any case, the case of the first letter kept;
+    #          {phrase: {to: replacement, not_after: words}} leaves it after these words.
+    # `patterns`: [{pattern, repl, ignore_case, keep_case}], as in the config, applied after `words`.
+    missing_hyphens:             # compounds written without their hyphen (SimSamu): "est ce que"
+      words:
+        c'est à dire: c'est-à-dire
+        au dessus: au-dessus
+        au dessous: au-dessous
+        au delà: au-delà
+        ci dessus: ci-dessus
+        ci dessous: ci-dessous
+        là dessus: là-dessus
+        là dessous: là-dessous
+        là dedans: là-dedans
+        là bas: là-bas
+        là haut: là-haut
+        celui là: celui-là
+        celle là: celle-là
+        ceux là: ceux-là
+        celles là: celles-là
+        celui ci: celui-ci
+        celle ci: celle-ci
+        ceux ci: ceux-ci
+        celles ci: celles-ci
+        grand mère: grand-mère
+        grand père: grand-père
+        grands parents: grands-parents
+        après midi: après-midi
+        week end: week-end
+        rendez vous: rendez-vous
+        vis à vis: vis-à-vis
+        quelques uns: quelques-uns
+        quelques unes: quelques-unes
+        moi même: moi-même
+        toi même: toi-même
+        lui même: lui-même
+        elle même: elle-même
+        soi même: soi-même
+        nous mêmes: nous-mêmes
+        nous même: nous-même
+        vous mêmes: vous-mêmes
+        vous même: vous-même
+        eux mêmes: eux-mêmes
+        elles mêmes: elles-mêmes
+        # imperatives of the second person singular and "nous" (the -ez ones are a pattern)
+        dis moi: dis-moi
+        dites moi: dites-moi
+        dites nous: dites-nous
+        faites moi: faites-moi
+        écoute moi: écoute-moi
+        regarde moi: regarde-moi
+        attends moi: attends-moi
+        réponds moi: réponds-moi
+        casse toi: casse-toi
+        calme toi: calme-toi
+        dépêche toi: dépêche-toi
+        réveille toi: réveille-toi
+        tais toi: tais-toi
+        assieds toi: assieds-toi
+        vas y: vas-y
+        allons y: allons-y
+        calmez vous: calmez-vous
+        dépêchez vous: dépêchez-vous
+        asseyez vous: asseyez-vous
+        allongez vous: allongez-vous
+        couchez vous: couchez-vous
+        taisez vous: taisez-vous
+        rassurez vous: rassurez-vous
+        # adverb, but the verb after a subject: "ça peut être grave"
+        peut être:
+          to: peut-être
+          not_after: il elle on ça ce cela qui ne tout rien y en se le la les lui leur
+      patterns:
+        # "est ce que", "n'est ce pas", "Qui est ce ?"; not "c'est ce que", "est ce monsieur"
+        - {pattern: '(?<![cC]'')\b([Ee]st) ce(?=\s+(?:que|qu''|qui|pas)\b|\s*[?.,!]|$)', repl: '\1-ce'}
+        # imperative + pronoun: "amenez le à l'hôpital", "passez la moi", "allez y"; not
+        # "attendez le médecin", "chez moi", "vous amenez le à", "écoutez y a"
+        - {pattern: '(?<!\b[Vv]ous )\b(?!(?:chez|assez|avez|nez)\b)([^\W\d_]+ez) (le|la|les|lui|leur)(?=\s+(?:à|au|aux|dans|moi|lui|leur|en|y)\b|\s*[.,;:?!]|$)', repl: '\1-\2'}
+        - {pattern: '(-(?:le|la|les)) (moi|lui|leur|nous)\b', repl: '\1-\2'}
+        - {pattern: '(?<!\b[Vv]ous )\b(?!(?:chez|assez|avez|nez)\b)([^\W\d_]+ez) (moi|y)(?![\w''-])(?! a\b)', repl: '\1-\2'}
+        # "ce cas là", "cette fois là"; not "ce que là", "ce sera là"
+        - {pattern: '\b((?:[Cc]e|[Cc]et|[Cc]ette|[Cc]es) (?!(?:que|qui|qu|dont|où|sera|serait|sont|seront|fut|soit|doit|peut|pourrait|devrait|n)\b)[^\W\d_]+) là\b', repl: '\1-là'}
+        # inversion: "me semble t il" -> "me semble-t-il", "y a t il" -> "y a-t-il" (VoxPopuli)
+        - {pattern: '\b([^\W\d_]+) t (il|elle|on|ils|elles)\b', repl: '\1-t-\2'}
+        - {pattern: '\b([Vv]ice) (?=président|présidente|présidents|présidentes|premier|première|ministre|roi|reine|amiral|champion|championne)', repl: '\1-'}
+        # numbers under a hundred: "quatre vingt dix sept" -> "quatre-vingt-dix-sept" ("vingt et un" stays)
+        - {pattern: '\b([Qq]uatre) (vingts?)\b', repl: '\1-\2'}
+        - {pattern: '\b(vingt|trente|quarante|cinquante|soixante|quatre-vingt) (deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize)\b', repl: '\1-\2', ignore_case: true}
+        - {pattern: '\b(dix) (sept|huit|neuf)\b', repl: '\1-\2', ignore_case: true}
+
+    # a segment cut mid-sentence ends with a word that cannot end one: its final "." is the
+    # recase model's, not a sentence end ("…gens de." -> "…gens de"; MLS recasepunc)
+    no_final_period:
+      patterns:
+        - {pattern: '(?<![\w''-])(le|la|les|de|du|des|au|aux|à|dans|par|sur|sous|chez|vers|et|ou|que|dont|je|tu|il|ils|me|te|se|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos|ne|très|l''|d''|qu'')\.$', repl: '\1', ignore_case: true}
+    # "MM" / "M. M." of the recase model for the hesitation "mm" (not "MM." = messieurs; CFPB, CFPP2000, TCOF_Enfants)
+    mm_hesitation:
+      patterns:
+        - {pattern: '(?<![\w''-])M\.? ?M(?![\w''-])', repl: 'mm'}
+
+en:
+  # same role as fr no_end_words, for the "." moved off a removed hesitation
+  no_end_words: the a an of to for with from and or but my your our their i
+  disfluencies:
+    # en "er": not "ER" (emergency room)
+    hesitations:
+      uh: ['[Uu]+h+', 'UU*H+']
+      um: ['[Uu]+h*m+', 'UU*H*M+']
+      er: ['[Ee]r+m*']
+    # not "that that", "had had", "is is" ("what it is is"), "in"/"on" ("come in in")
+    repeatable_not: the a an of to for with from and or but I he she we they my your his our their

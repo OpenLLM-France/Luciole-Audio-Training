@@ -1,0 +1,255 @@
+# Text cleaning of the French ASR manifests (audit: data/asr_fr_text_audit.md).
+#   python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/fr.yaml --datasets ESLO [--dry-run --limit 10000]
+#
+# A dataset is:
+#   input:      manifest(s) to clean, globs relative to root
+#   output:     directory where the cleaned files go, under the input file names
+#   outputs:    files written per input (default [base]):
+#                 base                 tags and hesitations removed, usual prompts
+#                 events               [tags] kept, prompts ask for them               -> <output>/events/
+#                 disfluencies         hesitations (euh, hmm) kept, prompts ask for them -> <output>/disfluencies/
+#                 events_disfluencies  both kept                                        -> <output>/events_disfluencies/
+#   nocasepunc: lines that get a prompt asking for no case nor punctuation (default false: none):
+#                 true: lines with no uppercase letter and no punctuation;
+#                 N:    those, and lines of N+ words with no punctuation (lowercased)
+#   filters:    filters and blocks (fr_blocks.yaml), in order; a filter with params is
+#               written `name: {param: value}` (see each filter in clean_asr.py)
+# The prompt of each line is chosen last, from its final text.
+#
+# Run first the builders of clean/<Dataset>/intermediate/: build_yodas.py, rebuild/<dataset>.py,
+# build_silence.py ([silence] lines, read with the inputs).
+
+include: [fr_blocks.yaml]
+root: /data-server/datasets/audio/nemo/asr/fr
+contexts: data/contexts/fr_asr_contexts.json   # relative to the repo
+seed: 1234
+
+datasets:
+  # --- text rebuilt from the raw corpus (rebuild/<name>.py) -------------------------------
+  Multilingual_TEDx:
+    input: clean/Multilingual_TEDx/intermediate/train*.jsonl
+    output: clean/Multilingual_TEDx
+    outputs: [base, events]
+    filters:
+      - strip_html
+      - join_split_compounds
+      - drop_foreign
+      - map_tags: {tables: [tedx]}
+      - drop_stage_directions
+      - parentheses
+      - drop_subtitle_debris
+      - speaker_labels             # "Public : Paris !"
+      - speech_rate
+      - markers_subtitles
+      - finish
+
+  YouTubeFr:
+    input: clean/YouTubeFr/intermediate/train_split*.jsonl
+    output: clean/YouTubeFr
+    outputs: [base, events]
+    nocasepunc: 20                 # 20+ words unpunctuated: ~27k lines; shorter ones are mostly whole cues
+    filters:
+      - normalize_unicode
+      - strip_html
+      - merge_rare_tags
+      - join_split_compounds
+      - all_caps: {min_words: 3, action: drop}   # lowercasing loses proper nouns
+      - drop_subtitle_debris
+      - speaker_labels             # "Shigaraki : Et voilà !"
+      - drop_subtitle_junk
+      - period_if_next_sentence    # "...les clous" + next cue "Voilà votre..." -> "...les clous."
+      - speech_rate
+      - markers_subtitles
+      - finish
+
+  ESLO:
+    input: [clean/ESLO/intermediate/train_recasepunc.jsonl, clean/ESLO/intermediate/train_recasepunc_silence.jsonl]
+    output: clean/ESLO
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, join_split_compounds, recased, speech_rate, markers_model, finish]
+
+  TCOF_Adultes:
+    input: [clean/TCOF_Adultes/intermediate/train_recasepunc.jsonl, clean/TCOF_Adultes/intermediate/train_recasepunc_silence.jsonl]
+    output: clean/TCOF_Adultes
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model,
+              normalize_spacing, fix_punctuation, french_typography]   # long pauses are real
+
+  TCOF_Enfants:
+    input: [clean/TCOF_Enfants/intermediate/train_recasepunc.jsonl, clean/TCOF_Enfants/intermediate/train_recasepunc_silence.jsonl]
+    output: clean/TCOF_Enfants
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # slow child speech
+
+  CFPP2000:
+    input: clean/CFPP2000/intermediate/train_recasepunc*.jsonl
+    output: clean/CFPP2000
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model, finish]
+
+  CLAPI:
+    input: [clean/CLAPI/intermediate/train_recasepunc.jsonl, clean/CLAPI/intermediate/train_recasepunc_silence.jsonl]
+    output: clean/CLAPI
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # long pauses are real
+
+  CFPB:
+    input: [clean/CFPB/intermediate/train_recasepunc.jsonl, clean/CFPB/intermediate/train_recasepunc_silence.jsonl]
+    output: clean/CFPB
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model,
+              normalize_spacing, fix_punctuation, french_typography]
+
+  OFROM:
+    input: clean/OFROM/intermediate/train_recasepunc.jsonl
+    output: clean/OFROM
+    outputs: [base, disfluencies]
+    filters: [join_split_compounds, recased, speech_rate, normalize_interjections, disfluency_model, disfluencies,
+              normalize_spacing, fix_punctuation, french_typography]   # no event tags
+
+  PFC:
+    input: [clean/PFC/intermediate/train.jsonl, clean/PFC/intermediate/train_silence.jsonl]
+    output: clean/PFC
+    outputs: [base, events, disfluencies, events_disfluencies]
+    nocasepunc: true               # 41 % of lines are uncased
+    filters:
+      - merge_rare_tags
+      - join_split_compounds
+      - speaker_labels             # "E : D'accord."
+      - drop_if_match: {patterns: ['[a-z]9[a-zA-Z]', '\b[a-zà-ÿ]+[A-Z]']}   # SAMPA left in the text: "tsv9j", "'pResiptasjO'"
+      - speech_rate
+      - markers_model
+      - finish
+
+  ACSYNT:
+    input: [clean/ACSYNT/intermediate/train.jsonl, clean/ACSYNT/intermediate/train_silence.jsonl]
+    output: clean/ACSYNT
+    outputs: [base, events, disfluencies, events_disfluencies]   # base fluent thanks to the model (9 % of lines with a repeat by the rules alone)
+    filters: [merge_rare_tags, join_split_compounds, speaker_labels, speech_rate, markers_model, finish]   # "L: Ah je fais..."
+
+  LesVocaux:
+    input: clean/LesVocaux/intermediate/train_recasepunc*.jsonl
+    output: clean/LesVocaux
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters:
+      - merge_rare_tags
+      - join_split_compounds
+      - drop_if_match: {patterns: ['\[étranger\]']}   # foreign speech, not a canonical tag
+      - recased
+      - speech_rate                # 0 line in the full files, 2 in the max30 ones
+      # markers_model, with the [beep] lines (anonymised name: 41 %) dropped from the outputs
+      # without tags: removing the tag leaves a hole ("Salut mon, bon ben")
+      - normalize_interjections
+      - events: {drop_if_stripped: [inaudible, beep]}
+      - disfluency_model
+      - disfluencies
+      - finish
+
+  SimSamu:
+    input: clean/SimSamu/intermediate/train.jsonl
+    output: clean/SimSamu
+    outputs: [base, disfluencies]
+    filters:
+      - replace: {rules: [{pattern: '\b[Hh]eu\b', repl: euh, keep_case: true}]}
+      - replace: {rules: missing_hyphens}   # "est ce que" -> "est-ce que" (rules.yaml)
+      - speech_rate
+      - normalize_interjections
+      - disfluency_model
+      - disfluencies
+      - finish
+
+  LINAGORA_Meetings:
+    input: clean/LINAGORA_Meetings/intermediate/train*.jsonl
+    output: clean/LINAGORA_Meetings
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [merge_rare_tags, join_split_compounds, speech_rate, markers_model, finish]
+
+  LVL-Atril-CTFNN1:
+    input: [clean/LVL-Atril-CTFNN1/intermediate/train.jsonl, clean/LVL-Atril-CTFNN1/intermediate/train_silence.jsonl]
+    output: clean/LVL-Atril-CTFNN1
+    outputs: [base, events, disfluencies, events_disfluencies]
+    nocasepunc: true               # 67 % of lines are uncased, mixed with cased ones
+    filters: [merge_rare_tags, join_split_compounds, fix_spurious_caps, speech_rate, markers_model, finish]
+
+  LVL-Atril-CTFAR:
+    input: [clean/LVL-Atril-CTFAR/intermediate/train.jsonl, clean/LVL-Atril-CTFAR/intermediate/train_silence.jsonl]
+    output: clean/LVL-Atril-CTFAR
+    outputs: [base, events, disfluencies, events_disfluencies]
+    nocasepunc: true
+    filters: [join_split_compounds, fix_spurious_caps, drop_subtitle_junk, speech_rate, markers_model, finish]
+
+  SUMM-RE:
+    input: clean/SUMM-RE/intermediate/train.jsonl
+    output: clean/SUMM-RE
+    outputs: [base, disfluencies]
+    nocasepunc: true               # 2 % of lines got no case/punctuation from whisper
+    filters: [join_split_compounds, restore_elisions, speech_rate, normalize_interjections, disfluency_model,
+              disfluencies: {truncations: false}, finish]
+
+  Yodas:
+    input: clean/Yodas/intermediate/train.jsonl   # from build_yodas.py
+    output: clean/Yodas
+    outputs: [base, events]
+    nocasepunc: 8                  # ~28 % of videos have unpunctuated subtitles; 8+ words: never punctuated
+    filters:
+      - normalize_unicode
+      - strip_html
+      - join_split_compounds
+      - drop_if_match: {patterns: ['\[\s*_+\s*\]']}   # "[ __ ]": censored swear word
+      - drop_foreign
+      - map_tags: {tables: [youtube, asterisk, tedx]}
+      - drop_unknown_brackets      # speaker labels "[Alfredo : ...]", "[...]" cuts
+      - parentheses
+      - drop_subtitle_debris
+      - speaker_labels             # "Fossoyeur : Ne tirez pas"
+      - join_elisions
+      - drop_subtitle_junk
+      - speech_rate
+      - markers_subtitles
+      - finish
+
+  VoxForge:                        # read prompts; verse capitals and quotes are right ("J'Accuse")
+    input: clean/VoxForge/intermediate/train_recasepunc.jsonl
+    output: clean/VoxForge
+    filters: [add_final_period, speech_rate, french_typography]
+
+  # --- text kept from context/ ------------------------------------------------------------
+  AfricanAccentedFrench:
+    input: clean/AfricanAccentedFrench/intermediate/train_recasepunc.jsonl   # link to context/.../train_recasepunc_max30.jsonl (no full version)
+    output: clean/AfricanAccentedFrench
+    filters: [fix_spurious_caps, speech_rate, normalize_interjections, disfluencies, normalize_spacing, fix_punctuation,
+              french_typography]
+
+  PxSLU:
+    input: context/PxSLU/train_recasepunc.jsonl
+    output: clean/PxSLU
+    filters: [fix_mixed_case, speech_rate, disfluencies, normalize_spacing, fix_punctuation, french_typography]   # "AciCLOvir" -> "Aciclovir"
+
+  Multilingual_LibriSpeech:        # lowercase, no punctuation
+    input: context/Multilingual_LibriSpeech/train.jsonl
+    output: clean/Multilingual_LibriSpeech
+    nocasepunc: true
+    filters: [drop_ocr, speech_rate]   # read speech: no events nor disfluencies; nothing to fix in the punctuation
+
+  Multilingual_LibriSpeech_recasepunc:
+    input: context/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl
+    output: clean/Multilingual_LibriSpeech_recasepunc
+    filters: [drop_ocr, direct_speech, fix_spurious_caps, speech_rate, replace: {rules: no_final_period},
+              fix_punctuation, french_typography]   # "…gens de.": cut segment
+
+  CommonVoice:                     # one full sentence per line, hand-punctuated
+    input: context/CommonVoice/train.jsonl
+    output: clean/CommonVoice
+    filters: [normalize_unicode, join_split_compounds, add_final_period, speech_rate, finish_hand_punctuated]   # read: no events nor disfluencies
+
+  FLEURS:                          # hand-punctuated
+    input: context/FLEURS/train.jsonl
+    output: clean/FLEURS
+    filters: [add_final_period, finish_hand_punctuated]   # read: no events nor disfluencies
+
+  VoxPopuli:
+    input: context/VoxPopuli/train.jsonl
+    output: clean/VoxPopuli
+    nocasepunc: true               # 6 % of lines fell back to the lowercase normalized text (no raw text)
+    filters: [replace: {rules: missing_hyphens}, speech_rate, normalize_interjections, disfluencies, finish,
+              uncased_no_punctuation]   # no hyphen in the source

@@ -114,5 +114,220 @@
       "Transkribiere das Audio auf Englisch so genau wie möglich.",
       "Transcreva o áudio em inglês."
     ]
+  },
+  "events": {
+    "0.95": [
+      "Transcribe the audio in English and mark sound events in square brackets, such as [laughter], [applause] or [noise].",
+      "Write exactly what is said in this recording, noting laughter, applause, music, noise, etc.",
+      "Transcribe the audio and flag non-speech sounds with tags.",
+      "Give a complete transcription in English, including sound events ([laughter], [applause], [music], [noise], [cough], [breath]...).",
+      "Transcribe the recording faithfully and mark the different audio events with tags such as [inaudible] or [noise].",
+      "Can you transcribe this audio track, also marking laughter, music and background noise in square brackets?",
+      "Transcription of the audio, with non-speech events annotated in square brackets.",
+      "Transcribe what the people say and add events such as laughter, applause and other sounds.",
+      "Give the transcription of this excerpt in English, keeping the sound event tags in square brackets.",
+      "Transcribe the audio in English and note in square brackets everything that is not speech: laughter, coughing, breathing, music, noise.",
+      "Transcribe and mark laughter, breathing and other sounds with tags in square brackets."
+    ],
+    "0.05": [
+      "Transcrivez l'audio en anglais en indiquant entre crochets les événements sonores comme [laughter], [applause] ou [noise].",
+      "Écrivez exactement ce qui est dit dans cet enregistrement en anglais, événements sonores entre crochets compris.",
+      "Transcris en anglais avec des balises d'événements comme [laughter], [music], [cough] ou [inaudible].",
+      "Donne-moi la transcription avec les événements non verbaux : rires, toux, applaudissements, musique ou autres sons.",
+      "Transcrivez l'audio dans sa langue d'origine et marquez entre crochets les événements non verbaux, comme [laughter] ou [music].",
+      "Transcribe el audio en inglés y marca entre corchetes los eventos no verbales, como [laughter] o [applause].",
+      "Trascrivi l'audio in inglese e indica tra parentesi quadre gli eventi non verbali, come [laughter] o [music].",
+      "Transkribiere das Audio auf Englisch und markiere nicht-sprachliche Ereignisse in eckigen Klammern, z. B. [laughter] oder [noise].",
+      "Transcreva o áudio em inglês e marque entre colchetes os eventos não verbais, como [laughter] ou [applause]."
+    ]
+  },
+  "no_events": {
+    "0.95": [
+      "Transcribe only the speech in the audio in English, without marking noise, laughter or music.",
+      "Write what is said in this recording, without tags for sound events.",
+      "Transcribe the audio but ignore non-speech sounds: no square brackets.",
+      "Transcribe the speech only, without annotating laughter, applause or background noise.",
+      "Faithfully transcribe what the people say, without adding tags such as [laughter] or [noise].",
+      "Can you write what you hear in this track, keeping only the speech?",
+      "Give only the spoken text of this excerpt, without describing the other sounds.",
+      "Transcribe in English what is said, without anything in square brackets."
+    ],
+    "0.05": [
+      "Transcrivez uniquement les paroles de cet enregistrement en anglais, sans balises pour les rires, la musique ou les bruits.",
+      "Écrivez ce qui est dit en anglais, sans événements sonores entre crochets.",
+      "Transcris l'audio sans annoter les événements non verbaux comme [laughter] ou [music].",
+      "Transcrivez la parole dans sa langue d'origine, sans balises entre crochets pour les rires, la musique ou les bruits.",
+      "Transcribe solo el habla en inglés, sin etiquetas para risas, música o ruidos.",
+      "Trascrivi solo il parlato in inglese, senza etichette per risate, musica o rumori.",
+      "Transkribiere nur das Gesprochene auf Englisch, ohne Markierungen für Lachen, Musik oder Geräusche.",
+      "Transcreva apenas a fala em inglês, sem etiquetas para risos, música ou ruídos."
+    ]
+  },
+  "events_nocasepunc": {
+    "0.95": [
+      "Transcribe the audio in lowercase without punctuation, marking sound events in square brackets such as [laughter] or [noise].",
+      "Write what is said without capitals or punctuation, and note laughter, noise and music in square brackets.",
+      "Transcribe in lowercase without punctuation, with non-speech sounds tagged in square brackets.",
+      "Lowercase transcription without punctuation, with non-speech events annotated in square brackets ([laughter], [cough], [breath], [noise]...).",
+      "Transcribe without capitals or punctuation, and mark inaudible passages with [inaudible] and noises with [noise].",
+      "Can you write the content of this audio clip all in lowercase and without punctuation, adding laughter, music and other noises in square brackets?"
+    ],
+    "0.05": [
+      "Transcrivez en anglais, en minuscules et sans ponctuation, en indiquant entre crochets les événements sonores comme [laughter] ou [noise].",
+      "Écrivez ce qui est dit en minuscules et sans ponctuation, avec aussi les événements sonores comme [music].",
+      "Transcrivez l'audio dans sa langue d'origine, en minuscules et sans ponctuation, avec les événements sonores entre crochets comme [noise].",
+      "Transcribe el audio en inglés sin puntuación ni mayúsculas, marcando los eventos sonoros entre corchetes como [noise].",
+      "Trascrivi l'audio in inglese senza punteggiatura e in minuscolo, indicando gli eventi sonori tra parentesi quadre come [noise].",
+      "Transkribiere das Audio auf Englisch ohne Satzzeichen und in Kleinbuchstaben und markiere Geräusche in eckigen Klammern wie [noise].",
+      "Transcreva o áudio em inglês sem pontuação e em minúsculas, marcando os eventos sonoros entre colchetes como [noise]."
+    ]
+  },
+  "no_events_nocasepunc": {
+    "0.95": [
+      "Transcribe only the speech in lowercase without punctuation, without marking noise, laughter or music.",
+      "Write what is said without capitals or punctuation, and without tags for sound events.",
+      "Transcribe the audio in lowercase without punctuation, ignoring non-speech sounds: no square brackets.",
+      "Speech-only transcription, in lowercase and without punctuation, without annotating laughter or background noise.",
+      "Transcribe without capitals or punctuation, without adding tags such as [laughter] or [noise].",
+      "Can you write the content of this audio clip all in lowercase and without punctuation, keeping only the speech?"
+    ],
+    "0.05": [
+      "Transcrivez uniquement les paroles de cet enregistrement en anglais, en minuscules et sans ponctuation, sans balises pour les rires, la musique ou les bruits.",
+      "Écrivez tout ce qui est dit, en minuscules et sans ponctuation, sans aucun événement sonore comme [music] ou [applause].",
+      "Transcrivez la parole dans sa langue d'origine, en minuscules et sans ponctuation, sans balises pour les sons non verbaux.",
+      "Transcribe solo el habla en inglés, sin puntuación ni mayúsculas y sin etiquetas de sonidos.",
+      "Trascrivi solo il parlato in inglese, senza punteggiatura, in minuscolo e senza etichette per i suoni.",
+      "Transkribiere nur das Gesprochene auf Englisch, ohne Satzzeichen, in Kleinbuchstaben und ohne Geräuschmarkierungen.",
+      "Transcreva apenas a fala em inglês, sem pontuação, em minúsculas e sem etiquetas de sons."
+    ]
+  },
+  "disfluencies": {
+    "0.95": [
+      "Transcribe the audio in English, keeping hesitations such as \"uh\" or \"um\".",
+      "Write exactly what is said, including hesitations (uh, um).",
+      "Transcribe everything you hear, hesitations included.",
+      "Give a transcription faithful to the speech, without removing the \"uh\"s and \"um\"s.",
+      "Can you transcribe this recording, keeping the hesitation markers?",
+      "Transcription of the speech as it is, with the hesitations.",
+      "Transcribe what the people say, without removing the hesitations.",
+      "Give the transcription of this excerpt, also writing down the \"uh\"s and \"um\"s.",
+      "Transcribe the content of this recording word for word, with hesitations, repetitions and cut-off words.",
+      "Make a word-for-word transcription of the spoken content, \"uh\" and \"um\" included.",
+      "Verbatim transcription of the audio: keep hesitations, repetitions and false starts."
+    ],
+    "0.05": [
+      "Transcrivez l'audio en anglais en gardant les hésitations comme « uh » ou « um ».",
+      "Écrivez ce qui est dit, y compris les hésitations comme « uh ».",
+      "Transcription verbatim en anglais, avec les hésitations, les répétitions et les faux départs.",
+      "Transcris mot pour mot en anglais, en gardant tous les « uh » et les « um ».",
+      "Transcrivez l'audio dans sa langue d'origine, en gardant les hésitations, les répétitions et les faux départs.",
+      "Transcribe el audio en inglés palabra por palabra, conservando las vacilaciones como \"uh\" o \"um\".",
+      "Trascrivi l'audio in inglese parola per parola, mantenendo le esitazioni come \"uh\" o \"um\".",
+      "Transkribiere das Audio wortwörtlich auf Englisch, einschließlich Zögerlaute wie \"uh\" oder \"um\".",
+      "Transcreva o áudio em inglês palavra por palavra, mantendo as hesitações como \"uh\" ou \"um\"."
+    ]
+  },
+  "no_disfluencies": {
+    "0.95": [
+      "Transcribe the audio in English without hesitations such as \"uh\" or \"um\".",
+      "Write what is said, removing the hesitations (uh, um).",
+      "Transcribe what you hear, without writing down the hesitations.",
+      "Give a transcription without the \"uh\"s and \"um\"s.",
+      "Can you transcribe this recording, removing the hesitation markers?",
+      "Transcribe what the people say, ignoring the hesitations.",
+      "Give the transcription of this excerpt without the \"uh\"s and \"um\"s.",
+      "Transcription of the speech, without the hesitations."
+    ],
+    "0.05": [
+      "Transcrivez l'audio en anglais sans les hésitations comme « uh » ou « um ».",
+      "Écrivez ce qui est dit, sans les hésitations comme « uh ».",
+      "Transcrivez l'audio dans sa langue d'origine, sans les hésitations.",
+      "Transcribe el audio en inglés sin las vacilaciones como \"uh\" o \"um\".",
+      "Trascrivi l'audio in inglese senza le esitazioni come \"uh\" o \"um\".",
+      "Transkribiere das Audio auf Englisch ohne Zögerlaute wie \"uh\" oder \"um\".",
+      "Transcreva o áudio em inglês sem as hesitações como \"uh\" ou \"um\"."
+    ]
+  },
+  "disfluencies_nocasepunc": {
+    "0.95": [
+      "Transcribe the audio in lowercase without punctuation, keeping hesitations such as \"uh\" or \"um\".",
+      "Write what is said without capitals or punctuation, hesitations included.",
+      "Transcribe everything in lowercase without punctuation, without removing the \"uh\"s and \"um\"s.",
+      "Lowercase transcription without punctuation, with the hesitation markers (uh, um).",
+      "Can you transcribe this clip in lowercase and without punctuation, keeping the hesitations?",
+      "Transcribe without capitals or punctuation and also write down the hesitations.",
+      "Transcribe the content of this recording word for word in lowercase and without punctuation, with hesitations and repetitions.",
+      "Make a word-for-word transcription of the spoken content without capitals or punctuation, \"uh\" and \"um\" included.",
+      "Verbatim transcription in lowercase and without punctuation, hesitations and false starts included."
+    ],
+    "0.05": [
+      "Transcrivez en anglais, en minuscules et sans ponctuation, en gardant les hésitations comme « uh » ou « um ».",
+      "Écrivez ce qui est dit en minuscules et sans ponctuation, hésitations comme « uh » comprises.",
+      "Transcription verbatim en anglais, en minuscules et sans ponctuation, avec les hésitations et les faux départs.",
+      "Transcrivez l'audio dans sa langue d'origine, en minuscules et sans ponctuation, en gardant les hésitations comme « uh » ou « um ».",
+      "Transcribe el audio en inglés sin puntuación ni mayúsculas, conservando las vacilaciones como \"uh\".",
+      "Trascrivi l'audio in inglese senza punteggiatura e in minuscolo, mantenendo le esitazioni come \"uh\".",
+      "Transkribiere das Audio auf Englisch ohne Satzzeichen und in Kleinbuchstaben, mit Zögerlauten wie \"uh\".",
+      "Transcreva o áudio em inglês sem pontuação e em minúsculas, mantendo as hesitações como \"uh\"."
+    ]
+  },
+  "no_disfluencies_nocasepunc": {
+    "0.95": [
+      "Transcribe the audio in lowercase without punctuation, without hesitations such as \"uh\" or \"um\".",
+      "Write what is said without capitals or punctuation, removing the hesitations.",
+      "Transcribe everything in lowercase without punctuation, without the \"uh\"s and \"um\"s.",
+      "Lowercase transcription, without punctuation and without hesitation markers.",
+      "Can you transcribe this clip in lowercase and without punctuation, removing the hesitations?",
+      "Transcribe without capitals or punctuation, ignoring the hesitations."
+    ],
+    "0.05": [
+      "Transcrivez en anglais, en minuscules et sans ponctuation, sans les hésitations comme « uh » ou « um ».",
+      "Écrivez ce qui est dit en minuscules et sans ponctuation, sans les hésitations comme « uh ».",
+      "Transcrivez l'audio dans sa langue d'origine, en minuscules et sans ponctuation, sans les hésitations.",
+      "Transcribe el audio en inglés sin puntuación ni mayúsculas y sin las vacilaciones.",
+      "Trascrivi l'audio in inglese senza punteggiatura, in minuscolo e senza le esitazioni.",
+      "Transkribiere das Audio auf Englisch ohne Satzzeichen, in Kleinbuchstaben und ohne Zögerlaute.",
+      "Transcreva o áudio em inglês sem pontuação, em minúsculas e sem as hesitações."
+    ]
+  },
+  "events_disfluencies": {
+    "0.95": [
+      "Transcribe everything that is said, with the hesitations (uh, um) and the noises in square brackets such as [laughter].",
+      "Transcribe the audio in English, keeping the hesitations and marking sound events in square brackets, such as [noise] or [applause].",
+      "Write exactly what is said, \"uh\" and \"um\" included, and note laughter, music and noise in square brackets.",
+      "Word-for-word transcription, with hesitations, repetitions and tagged non-speech events ([laughter], [cough], [inaudible]...).",
+      "Can you transcribe this recording without removing the hesitations, also flagging non-speech sounds in square brackets?",
+      "Make a transcription faithful to the speech: hesitations included and noises written with tags such as [breath] or [noise].",
+      "Transcribe what the people say with the \"uh\"s, the \"um\"s and the sound event tags.",
+      "Give the verbatim transcription of the excerpt, hesitations and audio events in square brackets included."
+    ],
+    "0.05": [
+      "Transcrivez l'audio en anglais en gardant les hésitations comme « uh » ou « um » et en indiquant les événements non verbaux entre crochets comme [laughter].",
+      "Transcription verbatim en anglais, avec les hésitations, les répétitions et les événements sonores comme [noise] ou [music].",
+      "Transcrivez l'audio dans sa langue d'origine, en gardant les hésitations et en balisant les sons non verbaux entre crochets.",
+      "Transcribe el audio en inglés palabra por palabra, con las vacilaciones (\"uh\", \"um\") y los eventos sonoros entre corchetes como [laughter].",
+      "Trascrivi l'audio in inglese parola per parola, con le esitazioni (\"uh\", \"um\") e gli eventi sonori tra parentesi quadre come [laughter].",
+      "Transkribiere das Audio wortwörtlich auf Englisch, mit Zögerlauten (\"uh\", \"um\") und Geräuschen in eckigen Klammern wie [laughter].",
+      "Transcreva o áudio em inglês palavra por palavra, com as hesitações (\"uh\", \"um\") e os eventos sonoros entre colchetes como [laughter]."
+    ]
+  },
+  "no_events_no_disfluencies": {
+    "0.95": [
+      "Transcribe the audio in English without the hesitations or sound event tags.",
+      "Write what is said, without the \"uh\"s, without the \"um\"s and without square brackets for laughter or noise.",
+      "Transcribe only the speech: no hesitations, no tags such as [laughter] or [noise].",
+      "Make a clean transcription, without hesitation markers or non-speech events.",
+      "Can you transcribe this recording, removing the hesitations and without noting non-speech sounds?",
+      "Give the transcription of this excerpt without \"uh\" or \"um\", and without tags in square brackets."
+    ],
+    "0.05": [
+      "Transcrivez l'audio en anglais sans les hésitations comme « uh » ou « um » et sans balises pour les événements non verbaux.",
+      "Écrivez uniquement la parole, sans les hésitations ni les événements sonores entre crochets comme [laughter].",
+      "Transcrivez l'audio dans sa langue d'origine, sans hésitations et sans balises pour les sons non verbaux.",
+      "Transcribe el audio en inglés sin vacilaciones y sin etiquetas para los eventos sonoros.",
+      "Trascrivi l'audio in inglese senza esitazioni e senza etichette per gli eventi sonori.",
+      "Transkribiere das Audio auf Englisch ohne Zögerlaute und ohne Markierungen für Geräusche.",
+      "Transcreva o áudio em inglês sem hesitações e sem etiquetas para os eventos sonoros."
+    ]
   }
 }

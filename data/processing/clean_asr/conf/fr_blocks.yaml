@@ -1,0 +1,115 @@
+# Shared parts of fr.yaml: event tags, explicit-prompt fractions and blocks of filters.
+
+# Closed set of non-speech event tags, written [tag] in the text.
+# sigh -> breath and singing -> music: too rare in FR for a tag of their own (126 and 46 lines)
+tags: [laughter, applause, music, noise, cough, breath, inaudible, beep, silence]   # beep: anonymisation tone in the audio; silence: segment with no sound (GigaSpeech <SIL>)
+
+# Dataset markers -> canonical tags. `tags: []` removes the marker. Order matters: first match wins.
+tag_tables:
+  tedx:
+    - {pattern: '\(rires et applaudissements\)', tags: [laughter, applause], ignore_case: true}
+    - {pattern: '\((?:rires?|(?:il|elle) rit\.?|rit|en riant|en pouffant|sourires?[^)]*)\)', tags: [laughter], ignore_case: true}
+    - {pattern: '\((?:applaudissements|acclamations)[^)]*\)', tags: [applause], ignore_case: true}
+    - {pattern: '\(fin de la musique\)', tags: [], ignore_case: true}
+    - {pattern: '\((?:musique|guitare|piano)[^)]*\)', tags: [music], ignore_case: true}
+    - {pattern: '\((?:chant|chante|en chantant)\)', tags: [music], ignore_case: true}
+    - {pattern: '\((?:souffle|inspire|expire|respire|respiration[^)]*)\)', tags: [breath], ignore_case: true}
+    - {pattern: '\((?:soupir|soupire|en soupirant)\)', tags: [breath], ignore_case: true}
+    - {pattern: '\((?:toux|tousse)\)', tags: [cough], ignore_case: true}
+    - {pattern: '\((?:brouhaha|bruits?[^)]*)\)', tags: [noise], ignore_case: true}
+    # speaker labels / stage directions
+    - {pattern: '\((?:vidéo|public|morceau de rap|sans accent)\)', tags: [], ignore_case: true}
+  asterisk:    # subtitle sound notes "*rires*", "*soupir de soulagement*"
+    - {pattern: '\*\s*(?:rires?|rit|ricane|éclate de rire)[^*]{0,40}\*', tags: [laughter], ignore_case: true}
+    - {pattern: '\*\s*(?:soupir|soupire)[^*]{0,40}\*', tags: [breath], ignore_case: true}
+    - {pattern: '\*\s*musique[^*]{0,40}\*', tags: [music], ignore_case: true}
+    - {pattern: '\*\s*applaudissements?[^*]{0,40}\*', tags: [applause], ignore_case: true}
+    - {pattern: '\*\s*(?:tousse|toux)[^*]{0,40}\*', tags: [cough], ignore_case: true}
+    - {pattern: '\*\s*bips?\b[^*]{0,40}\*', tags: [beep], ignore_case: true}
+    - {pattern: '\*[^*]{1,80}\*', tags: []}     # stage directions, not spoken
+  youtube:     # YouTube subtitle markers
+    - {pattern: '\[(?:musique|music)\]', tags: [music], ignore_case: true}
+    - {pattern: '\[(?:applaudissements|applause)\]', tags: [applause], ignore_case: true}
+    - {pattern: '\[(?:rires?|laughter)\]', tags: [laughter], ignore_case: true}
+    - {pattern: '\[(?:bruits?|noise)\]', tags: [noise], ignore_case: true}
+
+# Base output (no marker kept): fraction of the lines whose prompt asks explicitly for no events /
+# no disfluencies; `with_output` when the dataset also has an output keeping them.
+explicit_fraction: {default: 0.02, with_output: 0.1}
+
+# Blocks: named lists of filters, used by name in a dataset's `filters` like a filter.
+blocks:
+  # Each dataset lists only the filters that change something in it (measured on the outputs):
+  #   normalize_unicode           NFC: "e" + combining accent -> "é" (CommonVoice)
+  #   join_split_compounds        "peut- être" -> "peut-être" (subtitle line breaks), before disfluencies
+  # tags of the rebuilt corpora merged into a frequent one; a repeated tag kept once
+  merge_rare_tags:
+    - replace: {rules: [{pattern: '\[sigh\]', repl: '[breath]'}, {pattern: '\[singing\]', repl: '[music]'},
+                        {pattern: '(\[[a-z ]+\])(?:\s*\1)+', repl: '\1'}]}
+
+  # --- event tags and hesitations: stripped, or kept in the outputs that keep them --------
+  markers:
+    - normalize_interjections    # bé/beh -> bah, bein -> ben, ahh -> ah... (words: kept everywhere)
+    - events
+    - disfluencies               # euh, hmm, cut-off words "j- je", "je je"
+  # spontaneous speech: the model removes the repeats and false starts first ("je vais je vais",
+  # "les de le"), seeing the hesitations as context; the rules then remove the hesitations
+  markers_model:
+    - normalize_interjections
+    - events
+    - disfluency_model
+    - disfluencies
+  markers_subtitles:             # "word-" is a split compound or a dash, not a cut-off
+    - normalize_interjections
+    - events
+    - disfluencies: {truncations: false}
+
+  # --- every dataset ends with ------------------------------------------------------------
+  finish:
+    - normalize_spacing
+    - normalize_punctuation      # "..", "?.", "??", leading punctuation, invisible characters
+    - fix_punctuation            # mid-sentence ".", lost sentence starts, case after ". ? !"
+    - french_typography          # ' only, "..." not "…", space before ; : ! ? and inside « »
+  finish_hand_punctuated:        # no fix_punctuation: its fixes only add errors ("J.-C. Lors")
+    - normalize_spacing
+    - normalize_punctuation
+    - french_typography
+
+  # --- shared by several datasets ---------------------------------------------------------
+  recased:                       # spontaneous speech punctuated by the recase model
+    - fix_spurious_caps
+    - no_exclamations
+  # the recase+punct model writes "!" after most short answers ("Ouais!"): 10-22 % of lines
+  # against 3 % in the hand-punctuated LINAGORA meetings
+  no_exclamations:
+    - replace: {rules: [{pattern: '\?!', repl: '?'}, {pattern: '!', repl: '.'}]}
+  # digits are kept as written ("1 roc", "CO2"); only subtitle file debris is dropped:
+  # SRT timecodes "00:45:20 -->", leftover markup "<", ">>"
+  drop_subtitle_junk:
+    - drop_if_match: {patterns: ['-->', '[<>]', '\b\d{1,2}:\d{2}:\d{2}']}
+  # subtitle leftovers: sung lyrics, censored words "put***", unmapped "*" notes
+  drop_subtitle_debris:
+    - drop_if_match: {patterns: ['[♪♫*]']}
+  # speech in another language, subtitled with its French translation ("(en arabe) : « Dieu vous a... »")
+  drop_foreign:
+    - drop_if_match:
+        patterns: ['[(\[*]\s*(?:en |parlée? en |chantée? en )?(?:anglais|arabe|espagnol|italien|allemand|néerlandais|portugais|créole|chinois|japonais|russe|wolof|lingala|hébreux?|turc|grec|latin|kabyle|breton|occitan|basque|corse|alsacien|swahili|bambara|polonais|roumain|coréen|langue étrangère|autre langue)\b[^)\]*]{0,30}[)\]*]']
+        ignore_case: true
+  # "(IDE)" spoken aside: keep the words; "(Viny)", "(Pour les sous-titres...)": speaker / credits
+  parentheses:
+    - replace: {rules: [{pattern: '\([A-ZÀ-Þ][^()]{0,80}\)', repl: ' '}, {pattern: '\(([^()]{0,80})\)', repl: ' \1 '},
+                        {pattern: '[()]', repl: ' '}]}
+  drop_stage_directions:         # unmapped "(Rires du public)"-like notes
+    - drop_if_match: {patterns: ['\([A-ZÀ-Þ][^)]{0,30}\)']}
+
+  join_elisions:                 # "l' amour" -> "l'amour"
+    - replace: {rules: [{pattern: "\\b((?:[cdjlmnst]|qu)['’])\\s+(?=[^\\W\\d_])", repl: '\1', ignore_case: true}]}
+  # literary text: ", Il ..." is a sentence boundary the recase model wrote as a comma;
+  # after a speech verb it is direct speech whose quotes were lost: "il dit, Soyez" -> "il dit : Soyez"
+  direct_speech:
+    - replace:
+        rules:
+          - pattern: '\b((?:dit|disait|disant|dis|dirent|disaient|ajoutèrent|répondirent|reprirent|crièrent|s[''’]écrièrent|demandèrent|ajouta|ajoutait|ajoute|répondit|répondait|répond|reprit|reprenait|reprend|cria|criait|s[''’]écria|s[''’]exclama|demanda|demandait|demande|murmura|murmurait|répéta|répétait|répète|continua|continuait|poursuivit|déclara|pensa|pensait|répliqua|interrompit|balbutia|hurla|soupira|lança)(?:-t)?(?:-(?:il|elle|ils|elles|on|je|tu|nous|vous))?),\s+(?=[A-ZÀ-Þ])'
+            repl: '\1 : '
+          - pattern: ',\s+(?=(?:Et|Mais|Donc|Alors|Puis|Je|Tu|Il|Ils|Elle|Elles|On|Nous|Vous|Ce|Cette|Ces|Le|La|Les|Un|Une|Des|Mon|Ma|Mes|Son|Sa|Ses|Leur|Leurs|Quand|Comme|Si)\b)'
+            repl: '. '

@@ -15,7 +15,9 @@ Expected layout:
 
 Produces three manifest families (each opt-in via a flag):
   - summary/      : one row per meeting (interaction.wav + abstractive summary text)
-  - asr/          : one row per segment (interaction.wav with offset + transcript)
+  - asr/          : one row per segment (interaction.wav with offset + transcript), written
+                    to nemo/asr/en/nocontext/ICSI; event markers kept raw (see meeting_asr.py),
+                    segments where the others speak more than --asr-max-other-speech dropped
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
                     variants, several output formats (RTTM, SRT, VTT, ...) and
                     with/without backchannels (written under a diarization-specific root)
@@ -40,6 +42,7 @@ from prompts_diarization import (
     clean_window_pieces,
     make_diar_lean_row,
 )
+from meeting_asr import OtherSpeakers, asr_text, dump_asr, split_long
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -151,8 +154,30 @@ SEG_HREF_RE = re.compile(
 )
 
 
-def load_words(xml_path: Path) -> dict:
-    """Parse a words.xml file into {nite_id: {'text': str|None, 'start': float|None, 'end': float|None}}."""
+# raw markers kept by load_words(markers=True), for clean_asr.py to map to [tag]s
+def _icsi_marker(tag: str, elem) -> str | None:
+    if tag in ("vocalsound", "nonvocalsound", "comment"):
+        return f"<{tag}:{elem.get('description', '')}>"
+    if tag == "pause":
+        return "<pause>"
+    return None     # disfmarker: no sound of its own
+
+
+# <w c="..."> token classes -> (join, lex); see meeting_asr.py
+_ICSI_W_CLASSES = {
+    ".": ("left", False), "CM": ("left", False),         # . ? !  and  ,
+    "APOSS": ("left", True),                              # 's
+    "HYPH": ("both", False),                              # Mm - hmm -> Mm-hmm
+    "LQUOTE": ("right", False), "RQUOTE": ("left", False),
+}
+
+
+def load_words(xml_path: Path, markers: bool = False) -> dict:
+    """Parse a words.xml file into {nite_id: {'text': str|None, 'start': float|None, 'end': float|None}}.
+
+    markers=True (ASR): vocalsound / nonvocalsound / comment / pause get a raw marker
+    text, "@" (unintelligible) becomes <unintelligible>, truncated words end with "-"
+    ("th-"), and each record gets the `join` / `lex` keys of meeting_asr.py."""
     tree = ET.parse(xml_path)
     root = tree.getroot()
     words = {}
@@ -173,6 +198,18 @@ def load_words(xml_path: Path) -> dict:
             end_f = None
         text = elem.text.strip() if (tag == "w" and elem.text) else None
         words[nite_id] = {"text": text, "start": start_f, "end": end_f}
+        if markers:
+            rec = words[nite_id]
+            c = elem.get("c")
+            rec["join"], rec["lex"] = _ICSI_W_CLASSES.get(c, (None, bool(text)))
+            if tag != "w":
+                rec["text"] = _icsi_marker(tag, elem)
+            elif c == "TRUNCW":
+                rec["text"] = text + "-"
+            elif c == "SYM":
+                rec["text"], rec["lex"] = ("<unintelligible>" if text == "@" else None), False
+            elif c == "QUOTE":
+                rec["text"], rec["lex"] = None, False      # unpaired quote, 72 in all
     return words
 
 
@@ -696,7 +733,10 @@ def build_turn_summary_rows(meeting_id: str, mix_audio: Path,
 
 def build_asr_rows(meeting_id: str, mix_audio: Path, words_dir: Path,
                    seg_dir: Path, mix_duration: float,
-                   min_duration: float, max_duration: float):
+                   min_duration: float, max_duration: float, max_other_speech: float):
+    """One row per segment on the mix; a segment longer than max_duration is cut at its
+    longest pauses (split_long), and a piece where the other speakers talk more than
+    max_other_speech seconds is dropped (their words would be missing from the text)."""
     rows = []
     speakers = collect_speaker_files(words_dir, meeting_id)
     if not speakers:
@@ -705,9 +745,12 @@ def build_asr_rows(meeting_id: str, mix_audio: Path, words_dir: Path,
     words_by_file = {}
     for letter, words_xml in speakers.items():
         try:
-            words_by_file[words_xml.name] = load_words(words_xml)
+            words_by_file[words_xml.name] = load_words(words_xml, markers=True)
         except ET.ParseError as e:
             logger.warning(f"{meeting_id}/{letter}: bad words.xml ({e}), skipping speaker")
+
+    others = OtherSpeakers({letter: list(words_by_file[x.name].values())
+                            for letter, x in speakers.items() if x.name in words_by_file})
 
     for letter in sorted(speakers):
         seg_xml = seg_dir / f"{meeting_id}.{letter}.segs.xml"
@@ -727,32 +770,40 @@ def build_asr_rows(meeting_id: str, mix_audio: Path, words_dir: Path,
                 continue
 
             word_records = resolve_segment_words(seg_data["word_refs"], words_by_file)
-            text = segment_text(word_records)
-            if not text:
+            if not any(w.get("lex") for w in word_records):
                 continue
 
             end = min(end, mix_duration)
-            duration = end - start
-            if duration <= 0 or duration < min_duration or duration > max_duration:
+            if end <= start:
                 continue
-
-            audio_turn = NemoTurn(
-                role="User", value=str(mix_audio), turn_type="audio",
-                duration=round(duration, 3), offset=round(start, 3),
-            )
-            text_turn = NemoTurn(role="Assistant", value=text, turn_type="text")
-            rows.append(NemoDatasetRow(
-                id=seg_id or f"{meeting_id}.{letter}.{len(rows)}",
-                dataset_name=DATASET_NAME,
-                split=split_for(meeting_id),
-                language="en",
-                speaker=f"{meeting_id}.{letter}",
-                turns=[audio_turn, text_turn],
-                custom_metadata={
-                    "meeting":        meeting_id,
-                    "speaker_letter": letter,
-                },
-            ))
+            seg_id = seg_id or f"{meeting_id}.{letter}.{len(rows)}"
+            pieces = split_long(word_records, start, end, max_duration)
+            for k, (p_start, p_end, p_records) in enumerate(pieces):
+                duration = p_end - p_start
+                text = asr_text(p_records)
+                if not text or duration < min_duration or duration > max_duration:
+                    continue
+                other_speech = others.time(letter, p_start, p_end)
+                if other_speech > max_other_speech:
+                    continue
+                audio_turn = NemoTurn(
+                    role="User", value=str(mix_audio), turn_type="audio",
+                    duration=round(duration, 3), offset=round(p_start, 3),
+                )
+                text_turn = NemoTurn(role="Assistant", value=text, turn_type="text")
+                rows.append(NemoDatasetRow(
+                    id=seg_id if len(pieces) == 1 else f"{seg_id}.{k}",
+                    dataset_name=DATASET_NAME,
+                    split=split_for(meeting_id),
+                    language="en",
+                    speaker=f"{meeting_id}.{letter}",
+                    turns=[audio_turn, text_turn],
+                    custom_metadata={
+                        "meeting":        meeting_id,
+                        "speaker_letter": letter,
+                        "other_speech":   round(other_speech, 2),
+                    },
+                ))
     return rows
 
 
@@ -1042,7 +1093,17 @@ def main():
     asr_group.add_argument("--asr", action="store_true",
                            help="Enable the per-segment ASR manifest (off by default).")
     asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
-    asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
+    asr_group.add_argument("--asr-max-duration", type=float, default=30.0,
+                           help="Longer segments are cut at their longest pauses.")
+    asr_group.add_argument("--asr-max-other-speech", type=float, default=0.5,
+                           help="Drop a segment when the other speakers talk more than this "
+                                "many seconds inside it (only the mix audio exists).")
+    asr_group.add_argument("--asr-raw-manifest-path", type=str, default=None,
+                           help="Raw ASR manifest folder (with custom_metadata). "
+                                "Default: $DATA_FOLDER/raw/summary/en/icsi/asr")
+    asr_group.add_argument("--asr-manifest-path", type=str, default=None,
+                           help="Training ASR manifest folder. "
+                                "Default: $DATA_FOLDER/nemo/asr/en/nocontext/ICSI")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -1137,6 +1198,14 @@ def main():
             parser.error("--manifest-path not set and DATA_FOLDER env var is missing")
         args.manifest_path = f"{data_dir}/nemo/summary/en/icsi"
 
+    if args.asr:
+        if not data_dir and (args.asr_raw_manifest_path is None or args.asr_manifest_path is None):
+            parser.error("--asr-raw-manifest-path / --asr-manifest-path not set and DATA_FOLDER env var is missing")
+        if args.asr_raw_manifest_path is None:
+            args.asr_raw_manifest_path = f"{data_dir}/raw/summary/en/icsi/asr"
+        if args.asr_manifest_path is None:
+            args.asr_manifest_path = f"{data_dir}/nemo/asr/en/nocontext/ICSI"
+
     if args.diarization:
         if args.diar_raw_manifest_path is None:
             if not data_dir:
@@ -1154,9 +1223,6 @@ def main():
     if args.summary:
         (raw_root / "summary").mkdir(parents=True, exist_ok=True)
         (out_root / "summary").mkdir(parents=True, exist_ok=True)
-    if args.asr:
-        (raw_root / "asr").mkdir(parents=True, exist_ok=True)
-        (out_root / "asr").mkdir(parents=True, exist_ok=True)
     diar_outputs = list(DIAR_VARIANTS) + (["mixed"] if (args.diarization and args.diar_mixed) else [])
     if args.diarization:
         for v in diar_outputs:
@@ -1256,7 +1322,7 @@ def main():
         if args.asr:
             rows = build_asr_rows(
                 meeting_id, mix, words_dir, seg_dir, mix_dur,
-                args.asr_min_duration, args.asr_max_duration,
+                args.asr_min_duration, args.asr_max_duration, args.asr_max_other_speech,
             )
             if rows:
                 raw, lean = get(asr_per_split, split)
@@ -1309,7 +1375,7 @@ def main():
     if args.summary:
         dump(summary_per_split, "summary")
     if args.asr:
-        dump(asr_per_split, "asr")
+        dump_asr(asr_per_split, Path(args.asr_raw_manifest_path), Path(args.asr_manifest_path), args.force)
     if args.diarization:
         for variant in diar_outputs:
             dump(diar_buckets[variant], variant,

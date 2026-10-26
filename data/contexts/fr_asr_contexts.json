@@ -115,7 +115,12 @@
       "Transcribe the audio in French and mark non-speech events in square brackets, such as [laughter], [applause] or [noise].",
       "Write exactly what is said in this French recording, including sound events in brackets.",
       "Transcribe in French with event tags like [laughter], [music], [cough] or [inaudible].",
-      "Give me the transcription including non-speech events like laughter, coughing, applause, music or any other sounds."
+      "Give me the transcription including non-speech events like laughter, coughing, applause, music or any other sounds.",
+      "Transcribe the audio in its source language and mark non-speech events in square brackets, such as [laughter] or [music].",
+      "Transcribe el audio en francés y marca entre corchetes los eventos no verbales, como [laughter] o [applause].",
+      "Trascrivi l'audio in francese e indica tra parentesi quadre gli eventi non verbali, come [laughter] o [music].",
+      "Transkribiere das Audio auf Französisch und markiere nicht-sprachliche Ereignisse in eckigen Klammern, z. B. [laughter] oder [noise].",
+      "Transcreva o áudio em francês e marque entre colchetes os eventos não verbais, como [laughter] ou [applause]."
     ]
   },
   "no_events": {
@@ -132,7 +137,12 @@
     "0.05": [
       "Transcribe only the speech in this French recording, without tags for laughter, music or noise.",
       "Write what is said in French, with no bracketed sound events.",
-      "Transcribe the audio without annotating non-speech events like [laughter] or [music]."
+      "Transcribe the audio without annotating non-speech events like [laughter] or [music].",
+      "Transcribe the speech in its source language, without any bracketed tags for laughter, music or noise.",
+      "Transcribe solo el habla en francés, sin etiquetas para risas, música o ruidos.",
+      "Trascrivi solo il parlato in francese, senza etichette per risate, musica o rumori.",
+      "Transkribiere nur das Gesprochene auf Französisch, ohne Markierungen für Lachen, Musik oder Geräusche.",
+      "Transcreva apenas a fala em francês, sem etiquetas para risos, música ou ruídos."
     ]
   },
   "events_nocasepunc": {
@@ -146,7 +156,12 @@
     ],
     "0.05": [
       "Transcribe in French, lowercase and without punctuation, marking non-speech events in square brackets such as [laughter] or [noise].",
-      "Write down what is said in lowercase and with no punctuation. Also, include any sound events like [music]."
+      "Write down what is said in lowercase and with no punctuation. Also, include any sound events like [music].",
+      "Transcribe the audio in its source language, lowercase and without punctuation, with sound events in square brackets like [noise].",
+      "Transcribe el audio en francés sin puntuación ni mayúsculas, marcando los eventos sonoros entre corchetes como [noise].",
+      "Trascrivi l'audio in francese senza punteggiatura e in minuscolo, indicando gli eventi sonori tra parentesi quadre come [noise].",
+      "Transkribiere das Audio auf Französisch ohne Satzzeichen und in Kleinbuchstaben und markiere Geräusche in eckigen Klammern wie [noise].",
+      "Transcreva o áudio em francês sem pontuação e em minúsculas, marcando os eventos sonoros entre colchetes como [noise]."
     ]
   },
   "no_events_nocasepunc": {
@@ -160,7 +175,12 @@
     ],
     "0.05": [
       "Transcribe only the speech in this French recording, lowercase and without punctuation, with no tags for laughter, music or noise.",
-      "Write down everything that is said, in lowercase and with no punctuation. Also, do not include any sound events like [music] or [applause]."
+      "Write down everything that is said, in lowercase and with no punctuation. Also, do not include any sound events like [music] or [applause].",
+      "Transcribe the speech in its source language, lowercase and without punctuation, with no tags for non-speech sounds.",
+      "Transcribe solo el habla en francés, sin puntuación ni mayúsculas y sin etiquetas de sonidos.",
+      "Trascrivi solo il parlato in francese, senza punteggiatura, in minuscolo e senza etichette per i suoni.",
+      "Transkribiere nur das Gesprochene auf Französisch, ohne Satzzeichen, in Kleinbuchstaben und ohne Geräuschmarkierungen.",
+      "Transcreva apenas a fala em francês, sem pontuação, em minúsculas e sem etiquetas de sons."
     ]
   },
   "disfluencies": {
@@ -181,7 +201,12 @@
       "Transcribe the audio in French, keeping hesitations such as \"euh\" or \"hmm\".",
       "Write down what is said, including filled pauses like \"euh\".",
       "Verbatim transcription in French, including hesitations, repetitions and false starts.",
-      "Transcribe word for word in French, keeping every \"euh\" and \"hmm\"."
+      "Transcribe word for word in French, keeping every \"euh\" and \"hmm\".",
+      "Transcribe the audio in its source language, keeping hesitations, repetitions and false starts.",
+      "Transcribe el audio en francés palabra por palabra, conservando las vacilaciones como \"euh\" o \"hmm\".",
+      "Trascrivi l'audio in francese parola per parola, mantenendo le esitazioni come \"euh\" o \"hmm\".",
+      "Transkribiere das Audio wortwörtlich auf Französisch, einschließlich Zögerlaute wie \"euh\" oder \"hmm\".",
+      "Transcreva o áudio em francês palavra por palavra, mantendo as hesitações como \"euh\" ou \"hmm\"."
     ]
   },
   "no_disfluencies": {
@@ -197,7 +222,12 @@
     ],
     "0.05": [
       "Transcribe the audio in French without hesitations such as \"euh\" or \"hmm\".",
-      "Write down what is said, leaving out filled pauses like \"euh\"."
+      "Write down what is said, leaving out filled pauses like \"euh\".",
+      "Transcribe the audio in its source language, leaving out hesitations and filled pauses.",
+      "Transcribe el audio en francés sin las vacilaciones como \"euh\" o \"hmm\".",
+      "Trascrivi l'audio in francese senza le esitazioni come \"euh\" o \"hmm\".",
+      "Transkribiere das Audio auf Französisch ohne Zögerlaute wie \"euh\" oder \"hmm\".",
+      "Transcreva o áudio em francês sem as hesitações como \"euh\" ou \"hmm\"."
     ]
   },
   "disfluencies_nocasepunc": {
@@ -215,7 +245,12 @@
     "0.05": [
       "Transcribe in French, lowercase and without punctuation, keeping hesitations such as \"euh\" or \"hmm\".",
       "Write down what is said in lowercase with no punctuation, including filled pauses like \"euh\".",
-      "Verbatim transcription in French, lowercase and without punctuation, including hesitations and false starts."
+      "Verbatim transcription in French, lowercase and without punctuation, including hesitations and false starts.",
+      "Transcribe the audio in its source language, lowercase and without punctuation, keeping hesitations such as \"euh\" or \"hmm\".",
+      "Transcribe el audio en francés sin puntuación ni mayúsculas, conservando las vacilaciones como \"euh\".",
+      "Trascrivi l'audio in francese senza punteggiatura e in minuscolo, mantenendo le esitazioni come \"euh\".",
+      "Transkribiere das Audio auf Französisch ohne Satzzeichen und in Kleinbuchstaben, mit Zögerlauten wie \"euh\".",
+      "Transcreva o áudio em francês sem pontuação e em minúsculas, mantendo as hesitações como \"euh\"."
     ]
   },
   "no_disfluencies_nocasepunc": {
@@ -229,7 +264,52 @@
     ],
     "0.05": [
       "Transcribe in French, lowercase and without punctuation, leaving out hesitations such as \"euh\" or \"hmm\".",
-      "Write down what is said in lowercase with no punctuation, leaving out filled pauses like \"euh\"."
+      "Write down what is said in lowercase with no punctuation, leaving out filled pauses like \"euh\".",
+      "Transcribe the audio in its source language, lowercase and without punctuation, leaving out hesitations.",
+      "Transcribe el audio en francés sin puntuación ni mayúsculas y sin las vacilaciones.",
+      "Trascrivi l'audio in francese senza punteggiatura, in minuscolo e senza le esitazioni.",
+      "Transkribiere das Audio auf Französisch ohne Satzzeichen, in Kleinbuchstaben und ohne Zögerlaute.",
+      "Transcreva o áudio em francês sem pontuação, em minúsculas e sem as hesitações."
+    ]
+  },
+  "events_disfluencies": {
+    "0.95": [
+      "Transcris tout ce qui est dit, avec les hésitations (euh, hmm) et les bruits entre crochets comme [laughter].",
+      "Transcrivez l'audio en français en gardant les hésitations et en indiquant les événements sonores entre crochets, comme [noise] ou [applause].",
+      "Écrivez exactement ce qui est dit, « euh » et « hmm » compris, et notez les rires, la musique et les bruits entre crochets.",
+      "Transcription mot pour mot, avec les hésitations, les répétitions et les événements non verbaux balisés ([laughter], [cough], [inaudible]…).",
+      "Peux-tu transcrire cet enregistrement sans enlever les hésitations, en signalant aussi les sons non verbaux entre crochets ?",
+      "Fais une transcription fidèle à l'oral : hésitations comprises et bruits notés avec des balises comme [breath] ou [noise].",
+      "Transcrivez ce que disent les personnes avec les « euh », les « hmm » et les balises d'événements sonores.",
+      "Donne la transcription verbatim de l'extrait, hésitations et événements audio entre crochets inclus."
+    ],
+    "0.05": [
+      "Transcribe the audio in French, keeping hesitations such as \"euh\" or \"hmm\" and marking non-speech events in square brackets like [laughter].",
+      "Verbatim transcription in French, with hesitations, repetitions and sound events such as [noise] or [music].",
+      "Transcribe the audio in its source language, keeping hesitations and tagging non-speech sounds in square brackets.",
+      "Transcribe el audio en francés palabra por palabra, con las vacilaciones (\"euh\", \"hmm\") y los eventos sonoros entre corchetes como [laughter].",
+      "Trascrivi l'audio in francese parola per parola, con le esitazioni (\"euh\", \"hmm\") e gli eventi sonori tra parentesi quadre come [laughter].",
+      "Transkribiere das Audio wortwörtlich auf Französisch, mit Zögerlauten (\"euh\", \"hmm\") und Geräuschen in eckigen Klammern wie [laughter].",
+      "Transcreva o áudio em francês palavra por palavra, com as hesitações (\"euh\", \"hmm\") e os eventos sonoros entre colchetes como [laughter]."
+    ]
+  },
+  "no_events_no_disfluencies": {
+    "0.95": [
+      "Transcrivez l'audio en français sans les hésitations ni les balises d'événements sonores.",
+      "Écrivez ce qui est dit, sans les « euh », sans les « hmm » et sans crochets pour les rires ou les bruits.",
+      "Transcris seulement la parole : pas d'hésitations, pas de balises comme [laughter] ou [noise].",
+      "Faites une transcription propre, sans marques d'hésitation ni événements non verbaux.",
+      "Peux-tu transcrire cet enregistrement en retirant les hésitations et sans noter les sons non verbaux ?",
+      "Donne la transcription de cet extrait sans « euh » ni « hmm », et sans balises entre crochets."
+    ],
+    "0.05": [
+      "Transcribe the audio in French without hesitations such as \"euh\" or \"hmm\" and without tags for non-speech events.",
+      "Write down only the speech, leaving out filled pauses and bracketed sound events like [laughter].",
+      "Transcribe the audio in its source language, with no hesitations and no tags for non-speech sounds.",
+      "Transcribe el audio en francés sin vacilaciones y sin etiquetas para los eventos sonoros.",
+      "Trascrivi l'audio in francese senza esitazioni e senza etichette per gli eventi sonori.",
+      "Transkribiere das Audio auf Französisch ohne Zögerlaute und ohne Markierungen für Geräusche.",
+      "Transcreva o áudio em francês sem hesitações e sem etiquetas para os eventos sonoros."
     ]
   }
 }
