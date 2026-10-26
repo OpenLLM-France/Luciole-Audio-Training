@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import shutil
 from collections import Counter, defaultdict
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -114,6 +113,10 @@ def match_leading_case(template: str, replacement: str) -> str:
     """Match ``replacement``'s first-letter case to ``template``'s (both directions)."""
     if not replacement:
         return replacement
+    if replacement.isupper() and len(replacement) >= 2:
+        # A clean acronym keeps its all-caps form even when the spoken occurrence is lower-case
+        # (the verb "cites" matching the convention "CITES" must stay "CYTES", never "cYTES").
+        return replacement
     if template[:1].isupper():
         return replacement[:1].upper() + replacement[1:]
     if template[:1].islower():
@@ -156,9 +159,10 @@ class RespellEngine:
         code = EPITRAN_CODES.get(self.lang)
         if not code:
             return False
-        # Epitran's English backend shells out to flite's "lex_lookup"; without it, every word
-        # logs "lex_lookup (from flite) is not installed" and the G2P is useless. Skip to rules.
-        if code == "eng-Latn" and shutil.which("lex_lookup") is None:
+        # Epitran's English grapheme<->phoneme alignment is unreliable (it mis-assigns phonemes to
+        # letters, e.g. "Sir" -> [('S','s'),('i','ɹ̩'),('r','')]), so the P2G swap yields non
+        # pronunciation-preserving spellings ("Sir" -> "Rir"). Use the rule engine for English.
+        if code == "eng-Latn":
             return False
         try:
             import warnings
@@ -293,7 +297,10 @@ class RespellEngine:
         # Casing variants.
         if " " not in surface:
             if surface.isupper() and len(surface) >= 2:
-                casings = [surface.capitalize(), surface.lower()]  # ZEP -> Zep, zep
+                # An acronym stays upper-case: do not fold its case ("PME" -> "Pme"/"pme"). Its only
+                # alternatives are the pronunciation-preserving, caps-keeping respellings above
+                # ("COVID" -> "KOVID"/"COVYD").
+                casings = []
             elif len(surface) <= self.casing_max_len and surface.lower() not in self.stopwords:
                 casings = [surface.upper()]  # Top -> TOP (but never shout a stopword: "de" -> "DE")
             else:
