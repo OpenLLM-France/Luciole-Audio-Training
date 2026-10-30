@@ -1,0 +1,126 @@
+{
+  "_doc": "Instructions written in German, for audio of any language (compose_asr_prompts.py; its docstring explains the fields). Informal register (du) throughout; no comma before the last und / oder of a list (serial_comma).",
+  "question_mark": "?",
+  "colon": ":",
+  "and": "und",
+  "or": "oder",
+  "serial_comma": false,
+  "quotes": "„{}“",
+  "bullets": ["- ", "- ", "* ", "{n}. "],
+  "language_names": {"fr": "Französisch", "en": "Englisch", "ar": "Arabisch", "de": "Deutsch", "nl": "Niederländisch",
+                     "es": "Spanisch", "it": "Italienisch", "pt": "Portugiesisch"},
+  "examples": {
+    "events": ["[laughter]", "[applause]", "[music]", "[noise]", "[cough]", "[breath]", "[inaudible]", "[beep]", "[silence]"]
+  },
+  "bases": {
+    "imperative": [
+      "Transkribiere das Audio so genau wie möglich",
+      "Schreibe genau auf, was in dieser Audioaufnahme gesagt wird",
+      "Transkribiere den gesamten hörbaren Inhalt, ohne etwas auszulassen",
+      "Erstelle eine vollständige Transkription der WAV-Datei",
+      "Transkribiere alles, was in dieser Aufnahme gesagt wird, getreu",
+      "Erstelle eine vollständige Transkription dieses Auszugs",
+      "Schreibe genau auf, was die Sprecher sagen",
+      "Transkribiere den gesamten gesprochenen Text, ohne etwas umzuschreiben",
+      "Schreibe alles auf, was du hörst",
+      "Transkribiere jedes Wort, das im Auszug ausgesprochen wird, getreu",
+      "Erstelle eine vollständige Transkription des Audiosegments",
+      "Transkribiere alles, was in diesem Audioclip gesagt wird",
+      "Erstelle eine wortwörtliche Transkription des gesprochenen Inhalts",
+      "Gib mir die schriftliche Version der MP3-Datei",
+      "Schreibe den Text auf, den du in dieser FLAC-Aufnahme gehört hast",
+      "Ich hätte gerne eine Transkription dieses Audios",
+      "Transkribiere, was gesagt wird",
+      "Wandle den gesprochenen Teil dieser Datei bitte in geschriebenen Text um",
+      "Transkribiere",
+      "Transkribiere die Rede",
+      "Hallo, schreibe auf, was im Audio gesagt wird",
+      "Schreibe alles auf, was im Audio gesagt wird",
+      "Wandle dieses Audio in Text um",
+      "Erstelle eine Transkription der Aufnahme",
+      "Transkribiere, was in diesem Clip gesagt wird",
+      "Wandle dieses Audio in geschriebenen Text um",
+      "Erstelle eine Transkription der Rede",
+      "Transkribiere die gesprochenen Worte aus dieser Datei",
+      "Schreibe den Dialog aus dem Audio auf",
+      "Erstelle eine vollständige Transkription dieser Aufnahme"
+    ],
+    "question": [
+      "Kannst du alles aufschreiben, was du in dieser Audiospur hörst",
+      "Kannst du mir die vollständige Transkription des Audioclips geben",
+      "Könntest du die Transkription dessen schreiben, was die Person sagt",
+      "Kannst du mir den Text dessen geben, was wir hören",
+      "Könntest du die schriftliche Version der Audiodatei bereitstellen",
+      "Kannst du den Text dieser Aufnahme aufschreiben",
+      "Kannst du eine wortgetreue Transkription für mich erstellen"
+    ],
+    "noun": [
+      "Transkription dieser Audiodatei",
+      "Transkript der Aufnahme",
+      "Transkription des Ausschnitts",
+      "Text dieser Aufnahme",
+      "Verschriftlichung dieser Audiodatei"
+    ]
+  },
+  "axes": {
+    "language": {
+      "explicit": {
+        "clause": ["auf {lang}", "direkt auf {lang}", "auf {lang}, ohne zu übersetzen"],
+        "sentence": ["Die Transkription muss auf {lang} sein.", "Schreib den Text auf {lang}.", "Die Aufnahme ist auf {lang}."],
+        "kv": [["Sprache: {lang}"], ["Transkriptionssprache: {lang}"]]
+      },
+      "source": {
+        "clause": ["in der Originalsprache", "in der gesprochenen Sprache", "in der Ausgangssprache, ohne zu übersetzen",
+                   "ohne zu übersetzen", "in der Ausgangssprache"],
+        "sentence": ["Behalte die Originalsprache bei, übersetze nicht.", "Schreib in der Sprache der Aufnahme.",
+                     "Keine Übersetzung: dieselbe Sprache wie in der Aufnahme.", "Transkribiere in der Ausgangssprache.",
+                     "Die Transkription muss in der Ausgangssprache sein."],
+        "kv": [["Sprache: wie in der Aufnahme"], ["Übersetzung: keine"], ["Sprache: Ausgangssprache"], ["Ausgabesprache: Ausgangssprache"]]
+      }
+    },
+    "nocasepunc": {
+      "yes": {
+        "clause": ["in Kleinbuchstaben und ohne Satzzeichen", "ohne Großbuchstaben und Satzzeichen",
+                   "komplett kleingeschrieben, ganz ohne Satzzeichen", "ohne jegliche Satzzeichen, in Kleinbuchstaben"],
+        "sentence": ["Verwende nur Kleinbuchstaben und keine Satzzeichen.", "Keine Großbuchstaben, keine Satzzeichen.",
+                     "Lass alle Satzzeichen und die Großschreibung weg.", "Der Text muss kleingeschrieben und ohne Satzzeichen sein."],
+        "kv": [["Schreibweise: Kleinbuchstaben", "Satzzeichen: keine"], ["Format: Kleinbuchstaben, ohne Satzzeichen"]]
+      },
+      "no": {
+        "clause": ["mit Groß- und Kleinschreibung und Satzzeichen", "mit korrekter Zeichensetzung und Großschreibung", "mit Satzzeichen und Großbuchstaben"],
+        "sentence": [
+          "Verwende korrekte Groß- und Kleinschreibung und Satzzeichen.",
+          "Behalte Großbuchstaben und Satzzeichen bei.",
+          "Der Text muss Satzzeichen und Großschreibung enthalten."
+        ],
+        "kv": [["Schreibweise: normal", "Satzzeichen: ja"], ["Format: mit Großschreibung und Satzzeichen"]]
+      }
+    },
+    "events": {
+      "yes": {
+        "clause": ["mit nichtsprachlichen Ereignissen in eckigen Klammern", "mit Geräuschen in Klammern wie {ex}",
+                   "einschließlich nonverbaler Laute in Klammern wie {ex}"],
+        "sentence": ["Markiere nichtsprachliche Ereignisse in eckigen Klammern, z. B. {ex}.",
+                     "Kennzeichne Lachen, Musik und Geräusche in Klammern.", "Gib auch Geräusche wie {ex} an."],
+        "kv": [["Geräusche: in Klammern"], ["Nichtsprachliche Tags: ja"]]
+      },
+      "no": {
+        "clause": ["ohne Tags für Lachen, Musik oder Geräusche", "ohne Geräusche in Klammern", "ohne nonverbale Laute zu markieren"],
+        "sentence": ["Markiere keine Geräusche.", "Keine Klammern für Geräusche oder Lachen.", "Lass nonverbale Ereignisse wie {ex} weg."],
+        "kv": [["Geräusche: keine"], ["Nichtsprachliche Tags: nein"]]
+      }
+    },
+    "disfluencies": {
+      "yes": {
+        "clause": ["mit Zögerlauten wie {ex}", "einschließlich Häsitationen wie {ex}", "mit allen Zögerlauten"],
+        "sentence": ["Behalte Zögerlaute wie {ex} bei.", "Entferne keine Häsitationen wie {ex}.", "Schreib jedes Zögern mit."],
+        "kv": [["Zögerlaute: behalten"], ["Häsitationen ({ex}): ja"]]
+      },
+      "no": {
+        "clause": ["ohne Zögerlaute wie {ex}", "ohne Häsitationen wie {ex}", "ohne Zögerlaute"],
+        "sentence": ["Entferne Zögerlaute wie {ex}.", "Lass Häsitationen weg.", "Keine Zögerlaute wie {ex}."],
+        "kv": [["Zögerlaute: entfernen"], ["Häsitationen: keine"]]
+      }
+    }
+  }
+}

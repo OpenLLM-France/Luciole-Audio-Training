@@ -1,0 +1,124 @@
+{
+  "_doc": "Instructions written in Dutch, for audio of any language (compose_asr_prompts.py; its docstring explains the fields). Informal register (je) throughout.",
+  "question_mark": "?",
+  "colon": ":",
+  "and": "en",
+  "or": "of",
+  "quotes": "“{}”",
+  "bullets": ["- ", "- ", "* ", "{n}. "],
+  "language_names": {"fr": "Frans", "en": "Engels", "ar": "Arabisch", "de": "Duits", "nl": "Nederlands",
+                     "es": "Spaans", "it": "Italiaans", "pt": "Portugees"},
+  "examples": {
+    "events": ["[laughter]", "[applause]", "[music]", "[noise]", "[cough]", "[breath]", "[inaudible]", "[beep]", "[silence]"]
+  },
+  "bases": {
+    "imperative": [
+      "Transcribeer de audio zo nauwkeurig mogelijk",
+      "Schrijf exact op wat er in deze audio-opname wordt gezegd",
+      "Transcribeer alle hoorbare inhoud zonder iets weg te laten",
+      "Maak een volledige transcriptie van het WAV-bestand",
+      "Transcribeer alles wat in deze opname wordt gezegd zo getrouw mogelijk",
+      "Maak een volledige transcriptie van dit fragment",
+      "Schrijf exact op wat de sprekers zeggen",
+      "Transcribeer alle gesproken tekst zonder iets te herformuleren",
+      "Schrijf alles op wat je hoort",
+      "Transcribeer elk woord dat in het fragment wordt uitgesproken getrouw",
+      "Schrijf een volledige transcriptie van het audiosegment",
+      "Transcribeer alles wat in deze audioclip wordt gezegd",
+      "Maak een woord-voor-woordtranscriptie van de gesproken inhoud",
+      "Geef mij de geschreven versie van het MP3-bestand",
+      "Schrijf de tekst uit die je hoort in deze FLAC-opname",
+      "Ik zou graag een transcriptie van deze audio willen",
+      "Transcribeer wat er wordt gezegd",
+      "Zet het gesproken deel van dit bestand om naar geschreven tekst",
+      "Transcribeer",
+      "Transcribeer de spraak",
+      "Hallo, typ wat er in de audio wordt gezegd",
+      "Schrijf alles op wat in de audio wordt gezegd",
+      "Zet deze audio om naar tekst",
+      "Maak een transcript van de opname",
+      "Transcribeer wat er in deze clip wordt gezegd",
+      "Zet deze audio om naar geschreven tekst",
+      "Maak een teksttranscriptie van de spraak",
+      "Transcribeer de gesproken woorden uit dit bestand",
+      "Schrijf de dialoog uit de audio uit",
+      "Geef een volledige transcriptie van deze opname"
+    ],
+    "question": [
+      "Kun je alles opschrijven wat je hoort in deze audiotrack",
+      "Kun je mij de volledige transcriptie van de audioclip geven",
+      "Zou je alsjeblieft de transcriptie kunnen opschrijven van wat de persoon zegt",
+      "Kun je mij de tekst geven van wat we horen",
+      "Zou je de geschreven versie van het audiobestand kunnen geven",
+      "Kun je de tekst uit deze opname opschrijven",
+      "Kun je een woordelijke transcriptie voor mij maken"
+    ],
+    "noun": [
+      "Transcriptie van deze audio",
+      "Transcriptie van de opname",
+      "Transcriptie van het fragment",
+      "Tekst van deze opname",
+      "Uitgeschreven tekst van deze audio"
+    ]
+  },
+  "axes": {
+    "language": {
+      "explicit": {
+        "clause": ["in het {lang}", "direct in het {lang}", "in het {lang}, zonder te vertalen"],
+        "sentence": ["De transcriptie moet in het {lang} zijn.", "Schrijf de tekst in het {lang}.", "De audio is in het {lang}."],
+        "kv": [["Taal: {lang}"], ["Transcriptietaal: {lang}"]]
+      },
+      "source": {
+        "clause": ["in de oorspronkelijke taal", "in de gesproken taal", "in de brontaal, zonder te vertalen", "zonder te vertalen",
+                   "in de brontaal"],
+        "sentence": ["Behoud de oorspronkelijke taal, vertaal niet.", "Schrijf in de taal van de opname.",
+                     "Geen vertaling: dezelfde taal als de audio.", "Transcribeer in de brontaal.", "De transcriptie moet in de brontaal zijn."],
+        "kv": [["Taal: dezelfde als de audio"], ["Vertaling: geen"], ["Taal: brontaal"], ["Uitvoertaal: brontaal"]]
+      }
+    },
+    "nocasepunc": {
+      "yes": {
+        "clause": ["in kleine letters en zonder leestekens", "zonder hoofdletters of leestekens",
+                   "helemaal in kleine letters, zonder enige interpunctie", "zonder interpunctie, in kleine letters"],
+        "sentence": ["Gebruik alleen kleine letters en geen leestekens.", "Geen hoofdletters, geen leestekens.",
+                     "Laat alle interpunctie en hoofdletters weg.", "De tekst moet in kleine letters en zonder leestekens zijn."],
+        "kv": [["Hoofdletters: nee", "Leestekens: geen"], ["Opmaak: kleine letters, geen leestekens"]]
+      },
+      "no": {
+        "clause": ["met hoofdletters en leestekens", "met correcte interpunctie en hoofdletters", "met de juiste hoofdletters en leestekens"],
+        "sentence": [
+          "Gebruik correcte hoofdletters en leestekens.",
+          "Behoud hoofdletters en leestekens.",
+          "De tekst moet hoofdletters en leestekens bevatten."
+        ],
+        "kv": [["Hoofdletters: ja", "Leestekens: ja"], ["Opmaak: met hoofdletters en leestekens"]]
+      }
+    },
+    "events": {
+      "yes": {
+        "clause": ["met niet-spraakgeluiden tussen vierkante haken", "met geluiden tussen haken zoals {ex}",
+                   "inclusief non-verbale geluiden gemarkeerd als {ex}"],
+        "sentence": ["Markeer niet-spraakgeluiden tussen vierkante haken, bijv. {ex}.", "Markeer gelach, muziek en geluiden tussen haken.",
+                     "Neem ook geluiden zoals {ex} op."],
+        "kv": [["Geluiden: tussen haken"], ["Non-verbale tags: ja"]]
+      },
+      "no": {
+        "clause": ["zonder tags voor gelach, muziek of geluiden", "zonder geluiden tussen haken", "zonder non-verbale geluiden te markeren"],
+        "sentence": ["Markeer geen geluiden.", "Geen haken voor geluiden of gelach.", "Laat non-verbale geluiden zoals {ex} weg."],
+        "kv": [["Geluiden: geen"], ["Non-verbale tags: nee"]]
+      }
+    },
+    "disfluencies": {
+      "yes": {
+        "clause": ["met aarzelingen zoals {ex}", "inclusief aarzelingen zoals {ex}", "met alle aarzelingen"],
+        "sentence": ["Behoud aarzelingen zoals {ex}.", "Verwijder geen aarzelingen zoals {ex}.", "Schrijf elke aarzeling op."],
+        "kv": [["Aarzelingen: behouden"], ["Aarzelingen ({ex}): ja"]]
+      },
+      "no": {
+        "clause": ["zonder aarzelingen zoals {ex}", "zonder de aarzelingen", "met weglating van aarzelingen"],
+        "sentence": ["Verwijder aarzelingen zoals {ex}.", "Laat aarzelingen weg.", "Geen aarzelingen zoals {ex}."],
+        "kv": [["Aarzelingen: verwijderen"], ["Aarzelingen: geen"]]
+      }
+    }
+  }
+}

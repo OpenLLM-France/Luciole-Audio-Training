@@ -1,0 +1,129 @@
+{
+  "_doc": "Instructions written in English, for audio of any language (compose_asr_prompts.py; its docstring explains the fields).",
+  "question_mark": "?",
+  "colon": ":",
+  "and": "and",
+  "or": "or",
+  "quotes": "\"{}\"",
+  "bullets": ["- ", "- ", "* ", "{n}. "],
+  "language_names": {"fr": "French", "en": "English", "ar": "Arabic", "de": "German", "nl": "Dutch",
+                     "es": "Spanish", "it": "Italian", "pt": "Portuguese"},
+  "examples": {
+    "events": ["[laughter]", "[applause]", "[music]", "[noise]", "[cough]", "[breath]", "[inaudible]", "[beep]", "[silence]"]
+  },
+  "bases": {
+    "imperative": [
+      "Transcribe the audio as accurately as possible",
+      "Write exactly what is uttered in this audio recording",
+      "Transcribe all audible content without omitting anything",
+      "Make a complete transcription of the WAV file",
+      "Faithfully transcribe everything that is said in this recording",
+      "Create a full transcription of this excerpt",
+      "Write exactly what the speakers are saying",
+      "Transcribe all spoken text without rephrasing anything",
+      "Write down everything you hear",
+      "Faithfully transcribe every word that is uttered in the excerpt",
+      "Write a full transcription of the audio segment",
+      "Transcribe everything that is said in this audio clip",
+      "Make a word-for-word transcription of the spoken content",
+      "Give me the written version of the MP3 file",
+      "Write out the text you heard from this FLAC recording",
+      "I'd like a transcription of this audio",
+      "Transcribe what's being said",
+      "Turn the spoken part of this file into written text",
+      "Transcribe",
+      "Transcribe what is said",
+      "Transcribe the speech",
+      "Hi, type what is said in the audio",
+      "Write down everything said in the audio",
+      "Convert this audio to text",
+      "Make a transcript of the recording",
+      "Transcribe what is being said in this clip",
+      "Turn this audio into written text",
+      "Create a text transcript of the speech",
+      "Transcribe the spoken words from this file",
+      "Write out the dialogue from the audio",
+      "Provide a full transcription of this recording",
+      "Transcribe the audio",
+      "Write exactly what is said in this audio recording"
+    ],
+    "question": [
+      "Can you write everything you hear in this audio track",
+      "Can you give me the full transcription of the audio clip",
+      "Could you please write the transcription of what the person is saying",
+      "Can you give me the text of what we hear",
+      "Could you provide the written version of the audio file",
+      "Can you write down the text from this recording",
+      "Can you produce a verbatim transcript for me",
+      "Can you write the text of this audio file"
+    ],
+    "noun": [
+      "Transcript of this audio",
+      "Transcription of the recording",
+      "Transcription of what is said",
+      "Text of this recording",
+      "Written version of this clip"
+    ]
+  },
+  "axes": {
+    "language": {
+      "explicit": {
+        "clause": ["in {lang}", "directly in {lang}", "in {lang}, without translating"],
+        "sentence": ["The transcript must be in {lang}.", "Write the text in {lang}.", "The audio is in {lang}."],
+        "kv": [["Language: {lang}"], ["Transcription language: {lang}"]]
+      },
+      "source": {
+        "clause": ["in its original language", "in the language spoken", "in the source language, without translating",
+                   "without translating", "in the source language"],
+        "sentence": ["Keep the original language, do not translate.", "Write in the language of the recording.",
+                     "No translation: same language as the audio.", "Transcribe in the source language.",
+                     "The transcript must be in the source language."],
+        "kv": [["Language: same as the audio"], ["Translation: none"], ["Language: source"], ["Output language: source language"]]
+      }
+    },
+    "nocasepunc": {
+      "yes": {
+        "clause": ["in lowercase and without punctuation", "with no capital letters or punctuation",
+                   "all lowercase, with no punctuation at all", "without any punctuation, in lowercase"],
+        "sentence": ["Use lowercase only and no punctuation.", "No capital letters, no punctuation.",
+                     "Leave out all punctuation and capitalization.", "The text must be lowercase with no punctuation."],
+        "kv": [["Case: lowercase", "Punctuation: none"], ["Format: lowercase, no punctuation"]]
+      },
+      "no": {
+        "clause": ["with punctuation and capitalization", "properly punctuated and capitalized", "with capital letters and punctuation"],
+        "sentence": [
+          "Use proper punctuation and capitalization.",
+          "Keep capital letters and punctuation.",
+          "The text must be punctuated and capitalized."
+        ],
+        "kv": [["Case: normal", "Punctuation: yes"], ["Format: cased, with punctuation"]]
+      }
+    },
+    "events": {
+      "yes": {
+        "clause": ["marking non-speech events in square brackets", "with sound events in brackets such as {ex}",
+                   "including non-verbal sounds tagged like {ex}"],
+        "sentence": ["Mark non-speech events in square brackets, e.g. {ex}.", "Tag laughter, music and noise in brackets.",
+                     "Include sound events like {ex}."],
+        "kv": [["Sound events: in brackets"], ["Non-speech tags: yes"]]
+      },
+      "no": {
+        "clause": ["without tags for laughter, music or noise", "with no bracketed sound events", "ignoring non-speech sounds"],
+        "sentence": ["Do not tag sound events.", "No brackets for noises or laughter.", "Leave out non-verbal events like {ex}."],
+        "kv": [["Sound events: none"], ["Non-speech tags: no"]]
+      }
+    },
+    "disfluencies": {
+      "yes": {
+        "clause": ["keeping hesitations such as {ex}", "including hesitations like {ex}", "with hesitations"],
+        "sentence": ["Keep hesitations such as {ex}.", "Do not remove hesitations like {ex}.", "Include every hesitation."],
+        "kv": [["Hesitations: keep"], ["Hesitations ({ex}): yes"]]
+      },
+      "no": {
+        "clause": ["without hesitations such as {ex}", "leaving out hesitations like {ex}", "with hesitations removed"],
+        "sentence": ["Remove hesitations such as {ex}.", "Leave out hesitations.", "No hesitations like {ex}."],
+        "kv": [["Hesitations: remove"], ["Hesitations: none"]]
+      }
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "_doc": "Instructions written in Spanish, for audio of any language (compose_asr_prompts.py; its docstring explains the fields). Informal register (tú) throughout; no clause starts with i- / hi- (the 'y' would become 'e').",
+  "question_mark": "?",
+  "colon": ":",
+  "and": "y",
+  "or": "o",
+  "quotes": "«{}»",
+  "bullets": ["- ", "- ", "* ", "{n}. "],
+  "language_names": {"fr": "francés", "en": "inglés", "ar": "árabe", "de": "alemán", "nl": "neerlandés",
+                     "es": "español", "it": "italiano", "pt": "portugués"},
+  "examples": {
+    "events": ["[laughter]", "[applause]", "[music]", "[noise]", "[cough]", "[breath]", "[inaudible]", "[beep]", "[silence]"]
+  },
+  "bases": {
+    "imperative": [
+      "Transcribe el audio con la mayor precisión posible",
+      "Escribe exactamente lo que se dice en esta grabación de audio",
+      "Transcribe todo el contenido audible sin omitir nada",
+      "Haz una transcripción completa del archivo WAV",
+      "Transcribe fielmente todo lo que se dice en esta grabación",
+      "Crea una transcripción completa de este extracto",
+      "Escribe exactamente lo que dicen los hablantes",
+      "Transcribe todo el texto hablado sin reformular nada",
+      "Escribe todo lo que escuchas",
+      "Transcribe fielmente cada palabra que se pronuncia en el extracto",
+      "Escribe una transcripción completa del segmento de audio",
+      "Transcribe todo lo que se dice en este clip de audio",
+      "Haz una transcripción palabra por palabra del contenido hablado",
+      "Dame la versión escrita del archivo MP3",
+      "Escribe el texto que escuchaste en esta grabación FLAC",
+      "Quisiera una transcripción de este audio",
+      "Transcribe lo que se dice",
+      "Convierte la parte hablada de este archivo en texto escrito",
+      "Transcribe",
+      "Transcribe el discurso",
+      "Hola, escribe lo que se dice en el audio",
+      "Escribe todo lo que se dice en el audio",
+      "Convierte este audio a texto",
+      "Haz una transcripción de la grabación",
+      "Transcribe lo que se está diciendo en este clip",
+      "Convierte este audio en texto escrito",
+      "Crea una transcripción del discurso",
+      "Transcribe las palabras habladas de este archivo",
+      "Escribe el diálogo del audio",
+      "Proporciona una transcripción completa de esta grabación",
+      "Transcribe el audio"
+    ],
+    "question": [
+      "¿Puedes escribir todo lo que escuchas en esta pista de audio",
+      "¿Puedes darme la transcripción completa del clip de audio",
+      "¿Podrías escribir la transcripción de lo que la persona está diciendo",
+      "¿Puedes darme el texto de lo que escuchamos",
+      "¿Podrías proporcionar la versión escrita del archivo de audio",
+      "¿Puedes escribir el texto de esta grabación",
+      "¿Puedes producir una transcripción literal para mí"
+    ],
+    "noun": [
+      "Transcripción de este audio",
+      "Transcripción de la grabación",
+      "Transcripción del fragmento",
+      "Texto de esta grabación",
+      "Transcripción de lo que se dice"
+    ]
+  },
+  "axes": {
+    "language": {
+      "explicit": {
+        "clause": ["en {lang}", "directamente en {lang}", "en {lang}, sin traducir"],
+        "sentence": ["La transcripción debe estar en {lang}.", "Escribe el texto en {lang}.", "El audio está en {lang}."],
+        "kv": [["Idioma: {lang}"], ["Idioma de la transcripción: {lang}"]]
+      },
+      "source": {
+        "clause": ["en su idioma original", "en el idioma hablado", "en el idioma de origen, sin traducir", "sin traducir",
+                   "en el idioma de origen"],
+        "sentence": ["Mantén el idioma original, no traduzcas.", "Escribe en el idioma de la grabación.",
+                     "Sin traducción: el mismo idioma que el audio.", "Transcribe en el idioma de origen.",
+                     "La transcripción debe estar en el idioma de origen."],
+        "kv": [["Idioma: el del audio"], ["Traducción: ninguna"], ["Idioma: original"], ["Idioma de salida: idioma de origen"]]
+      }
+    },
+    "nocasepunc": {
+      "yes": {
+        "clause": ["en minúsculas y sin puntuación", "sin mayúsculas ni puntuación", "todo en minúsculas, sin ningún signo de puntuación",
+                   "sin ninguna puntuación, en minúsculas"],
+        "sentence": ["Usa solo minúsculas y ninguna puntuación.", "Sin mayúsculas, sin puntuación.",
+                     "Quita toda la puntuación y las mayúsculas.", "El texto debe estar en minúsculas y sin puntuación."],
+        "kv": [["Mayúsculas: no", "Puntuación: ninguna"], ["Formato: minúsculas, sin puntuación"]]
+      },
+      "no": {
+        "clause": ["con puntuación y mayúsculas", "con la puntuación y las mayúsculas correctas", "respetando la puntuación y las mayúsculas"],
+        "sentence": [
+          "Usa la puntuación y las mayúsculas correctamente.",
+          "Mantén las mayúsculas y la puntuación.",
+          "El texto debe llevar puntuación y mayúsculas."
+        ],
+        "kv": [["Mayúsculas: sí", "Puntuación: sí"], ["Formato: con mayúsculas y puntuación"]]
+      }
+    },
+    "events": {
+      "yes": {
+        "clause": ["marcando los eventos no verbales entre corchetes", "con los sonidos entre corchetes como {ex}",
+                   "con los sonidos no verbales etiquetados como {ex}"],
+        "sentence": ["Marca los eventos no verbales entre corchetes, p. ej. {ex}.", "Etiqueta risas, música y ruidos entre corchetes.",
+                     "Incluye eventos sonoros como {ex}."],
+        "kv": [["Eventos sonoros: entre corchetes"], ["Etiquetas no verbales: sí"]]
+      },
+      "no": {
+        "clause": ["sin etiquetas de risas, música o ruidos", "sin eventos sonoros entre corchetes", "omitiendo los sonidos no verbales"],
+        "sentence": ["No etiquetes los eventos sonoros.", "Nada de corchetes para ruidos o risas.", "Omite los eventos no verbales como {ex}."],
+        "kv": [["Eventos sonoros: ninguno"], ["Etiquetas no verbales: no"]]
+      }
+    },
+    "disfluencies": {
+      "yes": {
+        "clause": ["manteniendo las vacilaciones como {ex}", "conservando las vacilaciones como {ex}", "con las vacilaciones"],
+        "sentence": ["Conserva las vacilaciones como {ex}.", "No quites vacilaciones como {ex}.", "Incluye todas las vacilaciones."],
+        "kv": [["Vacilaciones: conservar"], ["Vacilaciones ({ex}): sí"]]
+      },
+      "no": {
+        "clause": ["sin vacilaciones como {ex}", "omitiendo las vacilaciones como {ex}", "quitando las vacilaciones"],
+        "sentence": ["Elimina las vacilaciones como {ex}.", "Omite las vacilaciones.", "Nada de vacilaciones como {ex}."],
+        "kv": [["Vacilaciones: eliminar"], ["Vacilaciones: ninguna"]]
+      }
+    }
+  }
+}
