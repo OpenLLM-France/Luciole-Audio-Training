@@ -22,7 +22,7 @@ from common import first_tier, interval_at, manifest_windows, praat_chars  # noq
 from cuts import parent_id, run  # noqa: E402
 
 RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/PFC/2"
-FILES = ["train.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
+FILES = ["train.jsonl"]
 
 EVENTS = [
     (r"rires?.*|rit|sourire|en riant|rire de \w+", "[laughter]"),

@@ -17,9 +17,16 @@ Produces (each opt-in via a flag):
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
                     variants, several output formats (RTTM, SRT, VTT, ...).
 
-ASR is intentionally not wired up yet. The `--asr` flag and its dispatch hook are
-present so it can be filled in later without reshaping the CLI; for now passing it
-errors out.
+  - asr (--asr)   : clean/TCOF_{Adultes,Enfants}/intermediate/train_recasepunc.jsonl, from the .trs (the
+                    kaldi conversion lost the text between two <Event> of a chunk). TCOF conventions
+                    (TCOFConventions2017.pdf): no punctuation except "?" in the adult-child corpora,
+                    "*" / "***" unintelligible -> [inaudible], "###" untranscribed -> [inaudible],
+                    anonymised names "¤P1¤" (a tone in the audio) -> [beep], "/a, b/" -> a,
+                    "leur(s)" / "(n')" -> "leur" / "", pauses "+" "///", overlap "<" ">", liaisons
+                    "=z=", cuts "$$$" removed. Pronounce events keep the orthographic word, an
+                    unintelligible one alone -> [inaudible]; noise events -> tags. Some Enfants files
+                    carry "ï¿½" for lost accents: the word is restored from the corpus vocabulary,
+                    else "ï¿½" -> "é". Case and punctuation from context/TCOF_* (trs_asr.py).
 
 TCOF transcription conventions handled in `clean_text`: anonymised named-entity
 placeholders are written between '¤' markers (e.g. '¤Pren1¤', '¤N1¤', '¤T1¤');
@@ -44,6 +51,8 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+import trs_asr
+from trs_asr import BAD, NOISE_WORDS, alternatives, dump_trs_asr, noise_tag, repair
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
@@ -255,6 +264,63 @@ def discover_records(corpus_root: Path, include_corrupted: bool) -> list[tuple[s
         seen.add(rec_id)
         out.append((rec_id, audio, trs))
     return out
+
+
+# --------------------------- asr ---------------------------
+
+def inline_tag(desc):
+    """An event typed in the text ("[rire]"); others (SAMPA "[E]", "[sic]") removed."""
+    d = desc.strip().lower()
+    return (noise_tag(d) or "") if any(re.search(p, d) for p, _ in NOISE_WORDS) else ""
+
+
+def asr_clean_txt(t):
+    if BAD in t:
+        words = []
+        for w in t.split():
+            if BAD in w:
+                pre, core, suf = re.match(r"^(\W*)(.*?)([?\W]*)$", w).groups()
+                core = repair(core) if BAD in core else core
+                w = pre + core + suf
+            words.append(w)
+        t = " ".join(words)
+    t = re.sub(r"\[([^\]]*)\]", lambda m: f" {inline_tag(m[1])} ", t)
+    t = re.sub(r"\{[^}]*\}", " ", t)
+    t = re.sub(r"¤[A-Za-z]+\d*¤?|\*[A-Z][a-zA-Z]*\d*\*", " [beep] ", t).replace("¤", "")
+    t = alternatives(t)
+    t = re.sub(r"\*+|###", " [inaudible] ", t)
+    t = re.sub(r"=\w+=|\$\$\$|///|\++|[<>\"«»]|(?<!\S)[#=]+(?!\S)", " ", t)
+    t = re.sub(r"\([^)\s]*\)", "", t)
+    t = re.sub(r"(^|\s)[.,](?=\s|$)", " ", t)
+    return t
+
+
+def asr_event(type_, desc, extent):
+    if extent == "end":
+        return None
+    if type_ == "noise":
+        return noise_tag(desc)
+    if type_ == "pronounce" and extent == "instantaneous":
+        return "[inaudible]"          # a pronunciation with no orthographic word
+    return None
+
+
+def asr_comment(desc):
+    return "[laughter]" if re.search(r"\brires?\b", desc.lower()) else None
+
+def run_asr(args, corpus_root, data_dir):
+    clean_root = Path(args.asr_clean_root or f"{data_dir}/nemo/asr/fr/clean")
+    context_root = Path(args.asr_context_root or f"{data_dir}/nemo/asr/fr/context")
+    trs_asr.TCOF_CORPUS = corpus_root / "12" / "Corpus"
+    recordings = discover_records(corpus_root, args.include_corrupted)
+    name = "train_recasepunc.jsonl"
+    for part in ("Adultes", "Enfants"):
+        dataset = f"TCOF_{part}"
+        selected = [r for r in recordings if part in r[2].parts]
+        if args.limit:
+            selected = selected[:args.limit]
+        dump_trs_asr(dataset, selected, (asr_clean_txt, asr_event, asr_comment), context_root / dataset / name,
+                     str(clean_root / dataset / "intermediate" / name), keep_uncased=args.asr_keep_uncased, force=args.force)
 
 
 # --------------------------- diarization windowing ---------------------------
@@ -496,13 +562,17 @@ def main():
     io_group.add_argument("--test-ratio", type=float, default=0.05,
                           help="Fraction of recordings hashed into the test split.")
 
-    # --asr is declared so the CLI shape is final; the implementation is not wired
-    # up yet.
-    asr_group = parser.add_argument_group("asr manifest (not implemented yet)")
+    asr_group = parser.add_argument_group("asr manifest")
     asr_group.add_argument("--asr", action="store_true",
-                           help="[NOT IMPLEMENTED] ASR manifest.")
-    asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
-    asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
+                           help='ASR manifests from the .trs.')
+    asr_group.add_argument("--asr-clean-root", type=str, default=None,
+                           help="Written to <this>/<dataset>/intermediate/, read by clean_asr.py. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/clean.")
+    asr_group.add_argument("--asr-context-root", type=str, default=None,
+                           help="Recased manifests <this>/<dataset>/<file>: the source has no case nor punctuation. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/context.")
+    asr_group.add_argument("--asr-keep-uncased", action="store_true",
+                           help="Also write the chunks without a recased line (mostly overlapping speech), as in the source.")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -553,10 +623,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.asr:
-        parser.error("--asr is not implemented yet for TCOF; only --diarization is available.")
-    if not args.diarization:
-        parser.error("Nothing to do: pass --diarization.")
+    if not args.asr and not args.diarization:
+        parser.error("Nothing to do: pass --asr and/or --diarization.")
 
     data_dir = os.environ.get("DATA_FOLDER")
     if args.root is None:
@@ -568,6 +636,11 @@ def main():
     corpus_root = root / args.corpus_subdir
     if not corpus_root.is_dir():
         parser.error(f"Missing directory: {corpus_root}")
+
+    if args.asr:
+        run_asr(args, corpus_root, data_dir)
+        if not args.diarization:
+            return
 
     if args.diar_manifest_path is None:
         if not data_dir:

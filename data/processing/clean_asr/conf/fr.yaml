@@ -16,8 +16,9 @@
 #               written `name: {param: value}` (see each filter in clean_asr.py)
 # The prompt of each line is chosen last, from its final text.
 #
-# Run first the builders of clean/<Dataset>/intermediate/: build_yodas.py, rebuild/<dataset>.py,
-# build_silence.py ([silence] lines, read with the inputs).
+# Run first the builders of clean/<Dataset>/intermediate/: data/datasets2nemo/ when the converter is
+# there (fr/eslo2nemo.py, fr/tcof2nemo.py, fr/cfpp20002nemo.py --asr; multilang/mtedx2nemo.py --language fr),
+# otherwise rebuild/<dataset>.py; build_yodas.py; build_silence.py ([silence] lines, read with the inputs).
 
 include: [fr_blocks.yaml]
 root: ${DATA_FOLDER}/nemo/asr/fr
@@ -25,7 +26,7 @@ contexts: data/contexts/fr_asr_contexts.json   # relative to the repo
 seed: 1234
 
 datasets:
-  # --- text rebuilt from the raw corpus (rebuild/<name>.py) -------------------------------
+  # --- text rebuilt from the raw corpus (datasets2nemo/ or rebuild/<name>.py) --------------
   Multilingual_TEDx:
     input: clean/Multilingual_TEDx/intermediate/train*.jsonl
     output: clean/Multilingual_TEDx

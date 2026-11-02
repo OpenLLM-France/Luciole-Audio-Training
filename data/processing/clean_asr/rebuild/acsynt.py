@@ -25,7 +25,7 @@ from common import CONTEXT, assistant_text, first_tier, interval_at, manifest_wi
 from cuts import run  # noqa: E402
 
 RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/ACSYNT/FinalAcsynt"
-FILES = ["train.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
+FILES = ["train.jsonl"]
 LABEL_RE = re.compile(r"^\s*[A-Z]\w{0,3}\s*:\s*")      # "L: Ah je fais", "E : Et vos grand-parents ?"
 
 EVENTS = [

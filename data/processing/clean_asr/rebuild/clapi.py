@@ -23,8 +23,8 @@ import sys
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tcof import BAD, compounds, repair  # noqa: E402
-from transcriber import noise_tag  # noqa: E402
+from common import noise_tag  # noqa: E402
+from trs_asr import BAD, compounds, repair  # noqa: E402
 from windows import run  # noqa: E402
 
 ROOT = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/CLAPI/clapi/2/CorpusComplet"

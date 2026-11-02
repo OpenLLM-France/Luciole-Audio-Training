@@ -4,10 +4,10 @@
 `raw_text(audio, start, end, seg_id)` returns the raw text of a window (canonical
 tags, "?" tokens, truncations with "-") or (None, reason); `clean_current` can strip
 artefacts of the current text before the case/punctuation transfer. Case and punctuation
-come from the current text through `common.transfer_format`.
+come from the current text through `trs_asr.transfer_format`.
 
 - "<id>_cutNN" pieces (max30 manifests) get their share of the parent window's
-  raw text (`transcriber.split_by_cuts`).
+  raw text (`trs_asr.split_by_cuts`).
 - A window that matches no raw span keeps its current text.
 - A dash that transfer_format took from a compound of the current text onto a raw
   word that is not a truncation is removed ("dix- sept" -> "dix sept").
@@ -17,15 +17,24 @@ come from the current text through `common.transfer_format`.
   texts joined serve as the case/punctuation reference of the kept one.
 """
 import collections
-import difflib
 import json
 import os
-import re
 
-from common import CONTEXT, assistant_text, norm_word, rebuild_manifest, transfer_format
-from transcriber import cut_parent, segment_window, split_by_cuts
+from common import CONTEXT, assistant_text, audio_turn, rebuild_manifest
+from trs_asr import CUT_RE, _sort_key, casepunc_text, in_raw_order, split_by_cuts
 
-FILES = ["train_recasepunc.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
+FILES = ["train_recasepunc.jsonl"]  # max30 is rebuilt only for LesVocaux, LINAGORA_Meetings (their scripts list it)
+
+
+def cut_parent(rec_id):
+    m = CUT_RE.match(rec_id)
+    return (m.group(1), int(m.group(2))) if m else (None, None)
+
+
+def segment_window(rec):
+    a = audio_turn(rec)
+    s = a.get("offset", 0.0)
+    return a["value"], s, s + a["duration"]
 
 
 def _index(path):
@@ -35,39 +44,6 @@ def _index(path):
             rec = json.loads(line)
             segs[rec["id"]] = (*segment_window(rec), assistant_text(rec)["value"])
     return segs
-
-
-def _sort_key(seg_id):
-    return [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", seg_id)]
-
-
-def in_raw_order(raw, texts):
-    """Order partial texts by where their words start in the raw text."""
-    rkey = [norm_word(t) for t in raw.split()]
-
-    def pos(t):
-        sm = difflib.SequenceMatcher(None, rkey, [norm_word(w) for w in t.split()], autojunk=False)
-        blocks = [b for b in sm.get_matching_blocks() if b.size]
-        return max(blocks, key=lambda b: b.size).a - max(blocks, key=lambda b: b.size).b if blocks else len(rkey)
-    return sorted(texts, key=pos)
-
-
-def fix_dashes(raw, text):
-    """transfer_format keeps the dash of a compound of the current text ("dix-sept") on a raw
-    word written apart ("dix sept" -> "dix- sept"): only raw truncations keep a final dash."""
-    rw = [t for t in raw.split() if t not in {"?", "!", "."}]
-    tw = text.split()
-    if len(rw) != len(tw):
-        return text
-    return " ".join(re.sub(r"-(?=[,.;:!?…»\"”)]*$)", "", t) if "-" in t and not r.rstrip("?!.,").endswith("-") else t
-                    for r, t in zip(rw, tw))
-
-
-def punct_after_tags(text):
-    """"comme. [beep] tu" -> "comme [beep]. Tu": the punctuation transfer_format put on the
-    word before a tag goes after the tag."""
-    text = re.sub(r"([,.;:!?…]+)((?: \[[a-z]+\])+)(?= |$)", r"\2\1", text)
-    return re.sub(r"([.?!…] )([a-zà-ÿ])", lambda m: m[1] + m[2].upper(), text)
 
 
 def run(dataset, raw_text, files=FILES, clean_current=None, order=_sort_key):
@@ -117,11 +93,9 @@ def run(dataset, raw_text, files=FILES, clean_current=None, order=_sort_key):
                 return None, "empty"
             if cur is None:
                 cur = " ".join(in_raw_order(raw, [segs[i][3] for i in same]))
-            text, ratio = transfer_format(raw, clean_current(cur) if clean_current else cur)
-            stats["fallback" if ratio < 0.8 else "transferred"] += 1
-            if ratio < 0.8:                    # raw words as they are, "?" / "." tokens glued back
-                return re.sub(r"\s+([?!.])(?=\s|$)", r"\1", text)
-            return punct_after_tags(fix_dashes(raw, text))
+            text, transferred = casepunc_text(raw, cur, clean_current)
+            stats["transferred" if transferred else "fallback"] += 1
+            return text
         st = rebuild_manifest(dataset, name, fn)
         st.update(stats)
         print(f"  {dict(stats)}")

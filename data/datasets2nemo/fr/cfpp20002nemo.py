@@ -17,9 +17,15 @@ Produces (each opt-in via a flag):
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
                     variants, several output formats (RTTM, SRT, VTT, ...).
 
-ASR is intentionally not wired up yet. The `--asr` flag and its dispatch hook are
-present so it can be filled in later without reshaping the CLI; for now passing it
-errors out.
+  - asr (--asr)   : clean/CFPP2000/intermediate/train_recasepunc{,_max30}.jsonl, from the .trs. The
+                    kaldi conversion turned the pause events into "<noise>" and the alternatives
+                    "/a, b/" into "<unk>". Here: pause events and comments removed; rire -> [laughter],
+                    "suite de syllabes incompréhensibles" (event or comment) -> [inaudible], other
+                    noises -> tags; the "mm" / "mm mm" / "ouais" events and the "un autre locuteur dit
+                    (mm)" comments are speech, written as words; the "?" event and the "question"
+                    comment become "?". "/a, b/" -> a, "(n')" / "au(x)" -> "" / "au", "*Name*" -> Name,
+                    "s?ur" -> "sœur". Truncations "particuliè-" kept. Case and punctuation from
+                    context/CFPP2000 (trs_asr.py).
 
 Note on language: CFPP2000 is French (language="fr"), so rows draw the French
 prompts from prompts_diarization (including the French-only "Locuteur" formats); any
@@ -40,6 +46,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+from trs_asr import alternatives, dump_trs_asr, noise_tag
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
@@ -252,6 +259,63 @@ def discover_records(corpus_root: Path) -> list[tuple[str, Path, Path]]:
         rec_id = _TIER_RE.sub("", trs.stem) or d.name
         out.append((rec_id, audio, trs))
     return out
+
+
+# --------------------------- asr ---------------------------
+
+SPEECH_EVENTS = {"mm", "mm mm", "mm mm mm", "ouais", "hm", "euh"}
+
+
+def asr_clean_txt(t):
+    t = alternatives(t)
+    t = re.sub(r"(?<=\w)\?(?=\w)", "œ", t)
+    t = re.sub(r"\([^)\s]*\)", "", t)
+    t = re.sub(r"[*|\"«»()+]", " ", t)
+    t = re.sub(r"(^|\s)[.,](?=\s|$)", " ", t)
+    return t
+
+
+def asr_event(type_, desc, extent):
+    d = desc.strip().lower()
+    if extent == "end" or type_ in {"pronounce", "lexical", "language"}:
+        return None
+    if d in SPEECH_EVENTS:
+        return d
+    if d in {"?", "!"}:
+        return d
+    if d in {'"', "«", "»"}:
+        return None
+    return noise_tag(d)
+
+
+def asr_comment(desc):
+    d = desc.strip().lower()
+    m = re.match(r"un autre locuteur (?:dit|prononce) \(?([^)]*)\)?$", d)
+    if m:
+        return m[1]
+    if d == "question":
+        return "?"
+    if re.search(r"incompr[ée]hensible|rire|reniflement|r[aâ]clement", d):
+        return noise_tag(d)
+    return None
+
+
+def asr_clean_current(t):
+    """Drop the "noise" / "unk" left by the kaldi conversion before the transfer."""
+    t = re.sub(r"\bnoise\b|\bunk|unk\b", " ", t)
+    t = re.sub(r"\s+([,.;:!?])", r"\1", " ".join(t.split()))
+    return re.sub(r"([,.;:!?])[,.;:]+", r"\1", t).lstrip(",.;: ")
+
+def run_asr(args, corpus_root, data_dir):
+    clean_root = Path(args.asr_clean_root or f"{data_dir}/nemo/asr/fr/clean")
+    context_root = Path(args.asr_context_root or f"{data_dir}/nemo/asr/fr/context")
+    recordings = discover_records(corpus_root)
+    if args.limit:
+        recordings = recordings[:args.limit]
+    for name in ("train_recasepunc.jsonl", "train_recasepunc_max30.jsonl"):
+        dump_trs_asr("CFPP2000", recordings, (asr_clean_txt, asr_event, asr_comment), context_root / "CFPP2000" / name,
+                     str(clean_root / "CFPP2000" / "intermediate" / name), clean_current=asr_clean_current,
+                     keep_uncased=args.asr_keep_uncased, force=args.force)
 
 
 # --------------------------- diarization windowing ---------------------------
@@ -488,13 +552,17 @@ def main():
                           help="Root of the converted audio tree. Default: "
                                "$DATA_FOLDER/converted_audios.")
 
-    # --asr is declared so the CLI shape is final; the implementation is not wired
-    # up yet.
-    asr_group = parser.add_argument_group("asr manifest (not implemented yet)")
+    asr_group = parser.add_argument_group("asr manifest")
     asr_group.add_argument("--asr", action="store_true",
-                           help="[NOT IMPLEMENTED] ASR manifest.")
-    asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
-    asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
+                           help='ASR manifests from the .trs.')
+    asr_group.add_argument("--asr-clean-root", type=str, default=None,
+                           help="Written to <this>/<dataset>/intermediate/, read by clean_asr.py. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/clean.")
+    asr_group.add_argument("--asr-context-root", type=str, default=None,
+                           help="Recased manifests <this>/<dataset>/<file>: the source has no case nor punctuation. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/context.")
+    asr_group.add_argument("--asr-keep-uncased", action="store_true",
+                           help="Also write the chunks without a recased line (mostly overlapping speech), as in the source.")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -545,10 +613,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.asr:
-        parser.error("--asr is not implemented yet for CFPP2000; only --diarization is available.")
-    if not args.diarization:
-        parser.error("Nothing to do: pass --diarization.")
+    if not args.asr and not args.diarization:
+        parser.error("Nothing to do: pass --asr and/or --diarization.")
 
     data_dir = os.environ.get("DATA_FOLDER")
     if args.root is None:
@@ -560,6 +626,11 @@ def main():
     corpus_root = root / "CFPP2000"
     if not corpus_root.is_dir():
         parser.error(f"Missing directory: {corpus_root}")
+
+    if args.asr:
+        run_asr(args, corpus_root, data_dir)
+        if not args.diarization:
+            return
 
     if args.diar_manifest_path is None:
         if not data_dir:

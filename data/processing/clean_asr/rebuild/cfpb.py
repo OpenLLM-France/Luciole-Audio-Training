@@ -16,7 +16,7 @@ from common import manifest_windows  # noqa: E402
 from cuts import run  # noqa: E402
 
 RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/CFPB/data"
-FILES = ["train_recasepunc.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
+FILES = ["train_recasepunc.jsonl"]
 
 EVENTS = [
     (r"rires?|rire \w+|sourire", "[laughter]"),

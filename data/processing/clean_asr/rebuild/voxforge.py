@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import assistant_text, audio_turn, rebuild_manifest  # noqa: E402
 
 RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/VOXFORGE/VoxForge_FR_40H"
-FILES = ["train_recasepunc.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
+FILES = ["train_recasepunc.jsonl"]
 
 
 def load_prompts(session, cache={}):

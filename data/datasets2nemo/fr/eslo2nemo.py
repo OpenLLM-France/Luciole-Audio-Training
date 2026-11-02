@@ -20,10 +20,14 @@ Produces (each opt-in via a flag):
                     variants, several output formats (RTTM, SRT, VTT, ...) and
                     with/without backchannels.
 
-ASR (over *all* available ESLO audio-paired data: ESLO-md + ESLO-orleans, both
-`.trs` and `crdo*.xml`) is intentionally not wired up yet. The `--asr` flag and
-its dispatch hook are present so it can be filled in later without reshaping the
-CLI; for now passing it errors out.
+  - asr (--asr)   : clean/ESLO/intermediate/train_recasepunc.jsonl, from the .trs of
+                    ESLO_800H/2/<CAT>/<REC>/<REC>_C.trs. All speakers of an overlapping turn are
+                    kept (the old kaldi conversion kept one). Kept from raw: words with their case
+                    (proper nouns), "?", truncations "é-", hesitations; events become tags (rire ->
+                    [laughter], tx -> [cough], i/e/r/pf/n -> [breath], musique -> [music], chante ->
+                    [singing], pi/pif -> [inaudible], other noises such as bb, b, conv, mic ->
+                    [noise]). Removed: comments, "&" (non-standard form marker), "<ph_.../>",
+                    "{...}", trailing "*". Case and punctuation from context/ESLO (trs_asr.py).
 
 Note on language: ESLO is French (language="fr"), so rows draw the French
 prompts from prompts_diarization (including the French-only "Locuteur" formats); any
@@ -44,6 +48,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+from trs_asr import default_event, dump_trs_asr, noise_tag
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
@@ -257,6 +262,41 @@ def discover_orleans_trs(orleans_root: Path) -> list[tuple[str, Path, Path]]:
         rec_id = _TIER_RE.sub("", trs.stem) or d.name
         out.append((rec_id, audio, trs))
     return out
+
+
+# --------------------------- asr ---------------------------
+
+def asr_clean_txt(t):
+    t = re.sub(r"<[^>]*>|\{[^}]*\}", " ", t)
+    t = re.sub(r"\[([^\]]*)\]", lambda m: f" {noise_tag(m[1])} ", t)
+    t = t.replace("&", "").replace("??", "?")
+    t = re.sub(r"(?<=\w)\*", "", t)
+    t = re.sub(r"(^|\s)(\+|\.\.\.|\.|,)(?=\s|$)", " ", t)
+    return t
+
+
+def asr_comment(desc):
+    return "[laughter]" if re.search(r"\brires?\b", desc.lower()) else None
+
+
+def discover_asr_trs(corpus_root: Path) -> list[tuple[str, Path, Path]]:
+    """[(rec_id, audio_path, trs_path)] of the <CAT>/<REC>/<REC>_C.trs of ESLO_800H."""
+    out = []
+    for folder in sorted({t.parent for t in corpus_root.rglob("*.trs") if "@eaDir" not in t.parts}):
+        trs, audio = pick_trs(folder), find_audio(folder)
+        if audio is not None:
+            out.append((_TIER_RE.sub("", trs.stem), audio, trs))
+    return out
+
+def run_asr(args, root, data_dir):
+    clean_root = Path(args.asr_clean_root or f"{data_dir}/nemo/asr/fr/clean")
+    context_root = Path(args.asr_context_root or f"{data_dir}/nemo/asr/fr/context")
+    recordings = discover_asr_trs(root / "ESLO_800H" / "2")
+    if args.limit:
+        recordings = recordings[:args.limit]
+    name = "train_recasepunc.jsonl"
+    dump_trs_asr("ESLO", recordings, (asr_clean_txt, default_event, asr_comment), context_root / "ESLO" / name,
+                 str(clean_root / "ESLO" / "intermediate" / name), keep_uncased=args.asr_keep_uncased, force=args.force)
 
 
 # --------------------------- diarization windowing ---------------------------
@@ -480,13 +520,17 @@ def main():
                           help="Root of the converted audio tree. Default: "
                                "$DATA_FOLDER/converted_audios.")
 
-    # --asr is declared so the CLI shape is final; the implementation (over all
-    # ESLO audio-paired data) is not wired up yet.
-    asr_group = parser.add_argument_group("asr manifest (not implemented yet)")
+    asr_group = parser.add_argument_group("asr manifest")
     asr_group.add_argument("--asr", action="store_true",
-                           help="[NOT IMPLEMENTED] ASR manifest over all ESLO data.")
-    asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
-    asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
+                           help='ASR manifest from the .trs of ESLO_800H.')
+    asr_group.add_argument("--asr-clean-root", type=str, default=None,
+                           help="Written to <this>/<dataset>/intermediate/, read by clean_asr.py. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/clean.")
+    asr_group.add_argument("--asr-context-root", type=str, default=None,
+                           help="Recased manifests <this>/<dataset>/<file>: the source has no case nor punctuation. "
+                                "Default: $DATA_FOLDER/nemo/asr/fr/context.")
+    asr_group.add_argument("--asr-keep-uncased", action="store_true",
+                           help="Also write the chunks without a recased line (mostly overlapping speech), as in the source.")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -534,10 +578,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.asr:
-        parser.error("--asr is not implemented yet for ESLO; only --diarization is available.")
-    if not args.diarization:
-        parser.error("Nothing to do: pass --diarization.")
+    if not args.asr and not args.diarization:
+        parser.error("Nothing to do: pass --asr and/or --diarization.")
 
     data_dir = os.environ.get("DATA_FOLDER")
     if args.root is None:
@@ -546,6 +588,11 @@ def main():
         args.root = f"{data_dir}/raw/transcript/fr/ESLO"
         print(f"Input path not specified, using default: {args.root}")
     root = Path(args.root)
+    if args.asr:
+        run_asr(args, root, data_dir)
+        if not args.diarization:
+            return
+
     orleans_root = root / "ESLO-orleans"
     if not orleans_root.is_dir():
         parser.error(f"Missing directory: {orleans_root}")
