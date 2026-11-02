@@ -1,0 +1,88 @@
+# Text cleaning of the English ASR manifests: context/<Dataset>/ -> cleaned/<Dataset>/, same file names.
+#   python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/en.yaml --datasets VoxPopuli [--dry-run --limit 10000]
+# The dataset entries are written as in conf/fr.yaml (its header says how). Each one lists only the
+# filters that change something in it. The disfluency model is French: hesitations go by the rules.
+# Text kept from context/: Yodas is the Granary text as is, punctuation included (no rebuild as in fr).
+# AMI and ICSI come from their raw transcripts: datasets2nemo/en/meetings_asr_en.sh writes cleaned/<Dataset>/intermediate/.
+# GigaSpeech: datasets2nemo/jz/gigaspeech2nemo.slurm (on JZ) writes cleaned/GigaSpeech/intermediate/, then runs this config.
+
+include: [en_blocks.yaml]
+root: ${DATA_FOLDER}/nemo/asr/en
+prompts: compositional                         # or fixed (--prompts overrides)
+contexts: data/contexts/en_asr_contexts.json   # relative to the repo
+compositional:
+  dir: data/contexts/compositional             # one instruction file per language
+  audio_language: en
+  # instructions in another language than the audio's: fr 2.5 %, the 6 others 2.5 %
+  foreign_fraction: 0.05
+  favored_languages: [fr, en]
+  language_mention: {none: 0.8, explicit: 0.1, source: 0.1}   # English instructions
+seed: 1234
+# lines left with no word once the hesitations are stripped (only "Um."): this fraction is kept
+# with an empty text, so that the model learns to write nothing
+empty_fraction: 0.1
+
+datasets:
+  AMI:                             # per-speaker headsets, verbatim
+    input: cleaned/AMI/intermediate/*.jsonl
+    output: cleaned/AMI
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [meetings]
+
+  ICSI:                            # the mix, verbatim; 6 % of lines are digits read aloud, written in words
+    input: cleaned/ICSI/intermediate/*.jsonl
+    output: cleaned/ICSI
+    outputs: [base, events, disfluencies, events_disfluencies]
+    filters: [meetings]
+
+  CommonVoice:                     # one full sentence per line, hand-punctuated
+    input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
+    output: cleaned/CommonVoice
+    outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
+    output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
+    filters: [add_final_period, speech_rate, finish_hand_punctuated]
+
+  FLEURS:                          # hand-punctuated
+    input: [context/FLEURS/train.jsonl, context/FLEURS/dev.jsonl, context/FLEURS/test.jsonl]
+    output: cleaned/FLEURS
+    filters: [add_final_period, finish_hand_punctuated]
+
+  Multilingual_LibriSpeech:        # lowercase, no punctuation
+    input: [context/Multilingual_LibriSpeech/train.jsonl, context/Multilingual_LibriSpeech/dev.jsonl,
+            context/Multilingual_LibriSpeech/test.jsonl]
+    output: cleaned/Multilingual_LibriSpeech
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing]   # read speech: no events nor disfluencies
+
+  VoxPopuli:                       # European Parliament reports, segments cut mid-sentence: no final period to add
+    input: [context/VoxPopuli/train.jsonl, context/VoxPopuli/dev.jsonl, context/VoxPopuli/test.jsonl]
+    output: cleaned/VoxPopuli
+    nocasepunc: true               # 6 % of lines fell back to the lowercase normalized text (no raw text)
+    # no hesitation in the text; hand-punctuated but for those lines, which lose the recase model's punctuation
+    filters: [speech_rate, finish_hand_punctuated, uncased_no_punctuation]
+
+  GigaSpeech:                      # lowercase with punctuation (text_tn is all caps: no case to recover); no event in train
+    input: cleaned/GigaSpeech/intermediate/train.jsonl
+    output: cleaned/GigaSpeech     # no disfluencies output: most hesitations of the audio are not written
+    nocasepunc: true               # the lines with no punctuation
+    lowercase: true                # the others
+    filters: [gigaspeech]
+
+  GigaSpeech_dev_test:             # the event markers are here
+    input: [cleaned/GigaSpeech/intermediate/dev.jsonl, cleaned/GigaSpeech/intermediate/test.jsonl]
+    output: cleaned/GigaSpeech
+    outputs: [base, events]
+    nocasepunc: true               # the lines with no punctuation
+    lowercase: true                # the others
+    filters: [gigaspeech]
+
+  Yodas:                           # no event tag in the Granary text
+    input: context/Yodas/train.jsonl
+    output: cleaned/Yodas
+    outputs: [base, disfluencies]  # subtitles leave out part of the hesitations: 1.5 % of lines have some
+    nocasepunc: 8                  # 2 % of lines of 8+ words with capitals but no punctuation: never punctuated
+    filters:
+      - drop_subtitle_debris       # censored words "f***ing"
+      - speech_rate
+      - disfluencies: {lang: en, truncations: false}   # "word-" is mostly a word cut by the cue
+      - finish

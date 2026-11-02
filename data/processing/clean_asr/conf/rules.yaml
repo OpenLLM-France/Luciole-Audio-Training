@@ -226,13 +226,42 @@ fr:
         - {pattern: '(?<![\w''-])M\.? ?M(?![\w''-])', repl: 'mm'}
 
 en:
+  # the words lowercase mid-sentence (build_common_words.py --lang en)
+  common_words: en_common_words.txt
+
   # same role as fr no_end_words, for the "." moved off a removed hesitation
   no_end_words: the a an of to for with from and or but my your our their i
+  # with no_end_words: capitalised after a lowercase word with a lowercase word next, a cue start
+  # ("the boy Of the", "and Which is")
+  function_words: >-
+    in on at by as than into about over under through between against during without
+    which who whom whose his her its these those some any each every both all
   disfluencies:
-    # en "er": not "ER" (emergency room)
+    # hesitations: {written form: [spellings]}, the compounds first ("uh huh" as a whole). "mm-hmm",
+    # "uh-huh", "uh-uh", "mm-mm" too: their yes / no cannot be told from a mere hesitation. Not "uh-oh".
+    # Not "hum" (a word: "the hum of the engine"), "err" ("err on the side of caution"), "ER"
+    # (emergency room). "HM" is one ("HM Treasury": rare in Yodas, and VoxPopuli has no disfluencies filter)
     hesitations:
-      uh: ['[Uu]+h+', 'UU*H+']
+      hmm: ['[Mm]m+[- ]?[Hh]m+', 'M+-?HM+', '[Mm]m+-[Mm]m+', '[Hh]m+', '[Mm]h+(?:m+)?', '[Mm]m+h*', 'HM+', 'M[Mm]*[Hh]+M*', 'MMM+']
+      uh: ['[Uu]h+[- ]?[Hh]uh', 'UH+-?HUH', '[Uu]h+-[Uu]h+', '[Uu]+h+', 'UU*H+']
       um: ['[Uu]+h*m+', 'UU*H*M+']
-      er: ['[Ee]r+m*']
+      er: ['[Ee]r', '[Ee]rr*m+']
     # not "that that", "had had", "is is" ("what it is is"), "in"/"on" ("come in in")
     repeatable_not: the a an of to for with from and or but I he she we they my your his our their
+
+  fix_punctuation:
+    # English has stranded prepositions ("what it's for. We", "the people I work with. They"): a "."
+    # after a word is never removed
+    no_period_after: ''
+    # title case is common ("What Is It", "It Girl"): no fix next to a capitalised word
+    title_case: true
+    # capitalised after a lowercase word: a "." is inserted before ("now We haven't" -> "now. We haven't").
+    # Not "I" and its contractions, capitalised anyway.
+    starters: we you he she they it and but so then now okay yeah yes well
+    interjections: oh ah uh um hmm hey wow
+    # the same, only when the next word is lowercase ("above The price", not "The Hague"). Not his / her
+    # ("keep His commandments") nor how / why / where ("is called Where is the", "are How does")
+    cue_starts: the this that these those there here if when while because what after before since maybe
+    # no capital after an abbreviation's period: "e.g. this", "vs. them" (initials "U.S." are handled by the code)
+    abbreviations: >-
+      etc vs e.g i.e a.m p.m mr mrs ms dr prof st jr sr inc ltd co corp no fig approx dept ave

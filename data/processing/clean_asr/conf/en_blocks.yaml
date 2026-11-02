@@ -1,0 +1,61 @@
+# Shared parts of en.yaml: explicit-prompt fractions and blocks of filters.
+
+# Closed set of non-speech event tags (as in fr_blocks.yaml): only AMI, ICSI and GigaSpeech (dev, test) have events.
+tags: [laughter, applause, music, noise, cough, breath, inaudible, beep, silence]
+
+# Dataset markers -> canonical tags (MapTags). `tags: []` removes the marker. Order matters: first match wins.
+tag_tables:
+  meetings:    # the raw markers of ami2nemo.py / icsi2nemo.py --asr
+    - {pattern: '<vocalsound:[^>]*laugh[^>]*>', tags: [laughter]}
+    - {pattern: '<vocalsound:(?:[^>]*cough[^>]*|clears? throat|sneeze)>', tags: [cough]}
+    - {pattern: '<vocalsound:[^>]*(?:breath|exhale|inhal|inhale|sigh|gasp|intake)[^>]*>', tags: [breath]}
+    - {pattern: '<vocalsound:(?:singing|humming)>', tags: [music]}
+    - {pattern: '<vocalsound:[^>]*>', tags: []}       # other, mouth, tongue clicks, imitations
+    - {pattern: '<nonvocalsound:[^>]*>', tags: [noise]}
+    - {pattern: '<(?:gap(?::[^>]*)?|unintelligible)>', tags: [inaudible]}
+    # <pause> and <comment:...> (Digits, quietly, rising...) describe the speech: nothing to write
+    - {pattern: '<(?:pause|comment:[^>]*)>', tags: []}
+  gigaspeech:  # <OTHER> is not here: the block `gigaspeech` drops its lines
+    - {pattern: '<SIL>', tags: [silence]}
+    - {pattern: '<MUSIC>', tags: [music]}
+    - {pattern: '<NOISE>', tags: [noise]}
+
+# Fraction of the lines whose prompt states what the text does not have (see fr_blocks.yaml).
+explicit_fraction: {default: 0.2, with_output: 0.25}
+
+blocks:
+  finish:
+    - normalize_spacing
+    - normalize_punctuation      # "..", "?.", "??", leading punctuation, invisible characters
+    - fix_punctuation: {lang: en}   # lost sentence starts, case after ". ? !"
+    - english_typography         # ' only, "..." not "…", no space before ; : ! ?
+  finish_hand_punctuated:        # no fix_punctuation: its fixes only add errors
+    - normalize_spacing
+    - normalize_punctuation
+    - english_typography
+  # verbatim meeting transcripts: hand-punctuated, cut-off words are real ("th- the")
+  meetings:
+    - map_tags: {tables: [meetings]}
+    - replace:
+        rules:
+          - {pattern: '(\[[a-z ]+\])(?:\s*\1)+', repl: '\1'}   # a repeated tag kept once
+          - {pattern: '(?<=[A-Z])_', repl: ''}                  # spelled letters: "X_M_L_", "T_V_s" -> "XML", "TVs"
+    - speech_rate
+    - events
+    - disfluencies: {lang: en}
+    - finish_hand_punctuated
+  gigaspeech:
+    # <OTHER>: unknown audio, must not become an empty text (empty_fraction)
+    - drop_if_match: {patterns: ['<OTHER>']}
+    - map_tags: {tables: [gigaspeech]}
+    - replace:
+        rules:
+          # the corpus seems to write "uh" as "ah": in 518k lines sampled, no "uh", "ah" ~20k times, "um" ~14k
+          - {pattern: "(?<![\\w'-])ah(?![\\w'-])", repl: 'uh'}
+    - speech_rate
+    - events
+    - disfluencies: {lang: en}
+    - finish_hand_punctuated     # no fix_punctuation: it works from the case
+  # subtitle leftovers: sung lyrics, censored words "f***"
+  drop_subtitle_debris:
+    - drop_if_match: {patterns: ['[♪♫*]']}

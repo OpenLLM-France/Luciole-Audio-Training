@@ -6,6 +6,7 @@ Each dataset of the config (conf/fr.yaml, its header says how to write one) has:
   outputs     the files written per input: base (event tags and hesitations removed),
               events, disfluencies, events_disfluencies (kept, in the subdirectory of that name)
   nocasepunc  which lines get a prompt asking for no case nor punctuation
+  lowercase   true: the lines with punctuation and no uppercase get a prompt asking for lowercase with punctuation
   output_lines  the lines of each output but base, drawn at random (default: all)
   filters     filters and blocks (named lists of filters, `blocks` of the config), in order
 A filter rewrites the text of the Assistant turn or drops the line; lines left with no letter
@@ -66,10 +67,11 @@ CHUNK_SIZE = 1024          # lines per batch of the filters with a `prepare` (mo
 class Sample:
     """One manifest line: the Assistant text, the prompt turn and the record."""
 
-    def __init__(self, rec, rng, nocasepunc=False):
+    def __init__(self, rec, rng, nocasepunc=False, lowercase=False):
         self.rec = rec
         self.rng = rng
         self.nocasepunc = nocasepunc      # the dataset's `nocasepunc` (see ChoosePrompt)
+        self.lowercase = lowercase        # the dataset's `lowercase` (see ChoosePrompt)
         turns = rec.get("conversations")
         if turns is None:
             self._text_holder, self._prompt_turn = rec, None
@@ -97,7 +99,11 @@ class Sample:
 
     @prompt.setter
     def prompt(self, value):
-        if self._prompt_turn is not None:
+        if self._prompt_turn is None and self.rec.get("conversations") is not None:
+            # an input with no prompt yet (AMI, ICSI: built from the raw transcripts)
+            self._prompt_turn = {"from": "User", "value": value, "type": "text"}
+            self.rec["conversations"].insert(0, self._prompt_turn)
+        elif self._prompt_turn is not None:
             self._prompt_turn["value"] = value
 
 
@@ -509,6 +515,17 @@ def is_uncased(s):
     return bool(s.nocasepunc) and not PUNCT_RE.search(text) and not has_case(text)
 
 
+def stays_lowercase(s):
+    """True when no capital must be added to the line: its prompt asks for lowercase."""
+    return is_uncased(s) or (s.lowercase and not has_case(s.text))
+
+
+def is_lowercase_punctuated(text):
+    """True when the line has punctuation and no uppercase letter (ChoosePrompt, `lowercase`)."""
+    text = TAG_RE.sub(" ", text)
+    return bool(PUNCT_RE.search(text)) and not has_case(text)
+
+
 def is_long_unpunctuated(s):
     """True when the line has no punctuation and at least `nocasepunc` words (a number):
     ChoosePrompt lowercases it and gives it a prompt asking for no case nor punctuation."""
@@ -703,7 +720,7 @@ class Disfluencies(_MarkerFilter):
             before = TAG_RE.sub(" ", s.text[:m.start()]).rstrip()   # "? [silence] Euh": a sentence start
             starts = not before or before[-1] in ".?!…\"«“"
             return form.capitalize() if starts and cased else form
-        cased = not is_uncased(s)
+        cased = not stays_lowercase(s)
         s.text = self.word_re.sub(repl, s.text)
 
     def keep(self, s):
@@ -711,7 +728,7 @@ class Disfluencies(_MarkerFilter):
         return True
 
     def strip(self, s):
-        cased = not is_uncased(s)
+        cased = not stays_lowercase(s)
         text = self.strip_re.sub(self._replace, s.text)
         if "\x01" in text:
             text = self.MOVED_END_RE.sub(self._move_end, text)
@@ -1368,6 +1385,29 @@ class FrenchTypography(Filter):
         return True
 
 
+@register
+class EnglishTypography(Filter):
+    """The typography of french_typography with the English spacing: "'" for every apostrophe, '"'
+    for “ ” „, "..." for "…", plain spaces, and no space before ; : ! ? ("The species ?" -> "The species?").
+    """
+    name = "english_typography"
+    RULES = [
+        (re.compile("[’‘ʼ]"), "'"),
+        (re.compile("[“”„‟]"), '"'),
+        (re.compile("…"), "..."),
+        (re.compile("[\u00a0\u202f\u2009]"), " "),
+        (re.compile(r"\s+([;:!?]+)(?=\s|$)"), r"\1"),
+        (re.compile(r"\s+"), " "),
+    ]
+
+    def __call__(self, s):
+        text = s.text
+        for pattern, repl in self.RULES:
+            text = pattern.sub(repl, text)
+        s.text = text.strip()
+        return True
+
+
 class PromptPool:
     """The prompts of a context category, drawn with the category's group weights."""
 
@@ -1415,12 +1455,17 @@ class ChoosePrompt:
         true  -- lines with no uppercase letter and no punctuation;
         N     -- those, and lines of N words or more with no punctuation but some capitals ("ces quatre dernières années la Guyane n'a pas connu..."):
                  unpunctuated subtitles whose proper nouns kept their case. They are lowercased.
+    lowercase: true -- the lines with punctuation and no uppercase letter (a corpus with no case to
+        recover) get a prompt asking for lowercase with punctuation. Compositional prompts only.
     Fixed prompts: a line whose category has no _nocasepunc version (events_disfluencies) is
     dropped. Compositional prompts (ctx["composer"]) exist for every category: none is dropped.
     """
     label = "prompt"
 
-    def __init__(self, ctx, keep=(), explicit=None, favored=(), nocasepunc=False):
+    def __init__(self, ctx, keep=(), explicit=None, favored=(), nocasepunc=False, lowercase=False):
+        if lowercase and not ctx.get("composer"):
+            raise ValueError("lowercase needs compositional prompts: the fixed lists have no such prompt")
+        self.lowercase = lowercase
         if nocasepunc is not False and nocasepunc is not True and not isinstance(nocasepunc, int):
             raise ValueError(f"nocasepunc must be true, false or a number of words, got {nocasepunc!r}")
         self.keep, self.nocasepunc = keep, nocasepunc
@@ -1443,7 +1488,8 @@ class ChoosePrompt:
         and casepunc, or none."""
         dropped = [m for m in MARKERS if m not in self.keep] if self.composer or not self.keep else []
         text = TAG_RE.sub(" ", s.text)
-        cased = self.composer and not nocase and (has_case(text) or PUNCT_RE.search(text))
+        cased = self.composer and not nocase and (has_case(text) or PUNCT_RE.search(text)) \
+            and not (self.lowercase and is_lowercase_punctuated(s.text))
         possible = dropped + (["casepunc"] if cased else [])
         combos = [c for n in range(1, len(possible) + 1) for c in itertools.combinations(possible, n)]
         rate = self.explicit["with_output" if self.favored & set(possible) else "default"]
@@ -1466,6 +1512,8 @@ class ChoosePrompt:
             constraints = category_constraints(category)
             if "casepunc" in blocks:
                 constraints["nocasepunc"] = False
+            elif self.lowercase and is_lowercase_punctuated(s.text):
+                constraints["nocasepunc"] = "lowercase"
             s.prompt = self.composer.compose(s.rng, **constraints)
             return True
         pool = self.pools.get(category)
@@ -1544,7 +1592,7 @@ def process(path, out, filters, prompt, seed, dry_run, limit, n_examples, empty_
             alive = []
             for lineno, line in chunk:
                 rec = json.loads(line)
-                alive.append(Sample(rec, record_rng(seed, rec, lineno), prompt.nocasepunc))
+                alive.append(Sample(rec, record_rng(seed, rec, lineno), prompt.nocasepunc, prompt.lowercase))
             for f in filters:
                 if hasattr(f, "prepare"):
                     f.prepare(alive)
@@ -1597,7 +1645,7 @@ OUTPUTS = {"base": (), "events": ("events",), "disfluencies": ("disfluencies",),
            "events_disfluencies": ("events", "disfluencies")}
 # filters whose mode an output sets: the marker they handle
 MARKER_FILTERS = {"events": "events", "disfluencies": "disfluencies", "disfluency_model": "disfluencies"}
-DATASET_KEYS = {"input", "output", "outputs", "output_lines", "nocasepunc", "filters"}
+DATASET_KEYS = {"input", "output", "outputs", "output_lines", "nocasepunc", "lowercase", "filters"}
 
 
 def load_config(path):
@@ -1675,7 +1723,7 @@ def main():
             # more when another output keeps the markers or some lines are lowercase unpunctuated
             favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
             prompt = ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
-                                  nocasepunc=dcfg.get("nocasepunc", False))
+                                  nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
             # output_lines: an output but base takes that many lines at random, other ones than the
             # other outputs while there are enough: the outputs of read speech, only there to show
             # that a prompt asking for markers may get none (the filters may drop a few)
