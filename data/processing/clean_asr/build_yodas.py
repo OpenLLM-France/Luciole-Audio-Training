@@ -46,8 +46,8 @@ import soundfile as sf
 from tqdm import tqdm
 
 
-YODAS = "/data-server/datasets/audio/raw/transcript/fr/YODAS"
-OUTPUT = "/data-server/datasets/audio/nemo/asr/fr/clean/Yodas/intermediate/train.jsonl"
+YODAS = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/YODAS"
+OUTPUT = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/clean/Yodas/intermediate/train.jsonl"
 CONTEXTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "contexts",
                         "fr_asr_contexts.json")
 

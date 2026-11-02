@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import rebuild_manifest  # noqa: E402
 
-RAW = "/data-server/datasets/audio/raw/transcript/fr/TEDX/fr-fr/data"
+RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/TEDX/fr-fr/data"
 LANGS = (r"anglais|arabe|néerlandais|flamand|créole|allemand|espagnol|italien|grec|chinois|portugais|russe|"
          r"tibétain|japonais|latin|wolof|lingala|bambara|kabyle|berbère|hébreu|turc|swahili|hindi|polonais|"
          r"breton|occitan|basque|corse|alsacien|catalan|roumain|persan|coréen|vietnamien|langue des signes")

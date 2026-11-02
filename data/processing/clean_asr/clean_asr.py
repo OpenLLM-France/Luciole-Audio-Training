@@ -1553,7 +1553,9 @@ def main():
         contexts = json.load(f)
     ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", []),
            "contexts": contexts, "contexts_path": contexts_path}
-    root, seed, blocks = args.root or cfg["root"], cfg.get("seed", 0), cfg.get("blocks") or {}
+    root, seed, blocks = os.path.expandvars(args.root or cfg["root"]), cfg.get("seed", 0), cfg.get("blocks") or {}
+    if "$" in root:
+        raise SystemExit(f"root {root!r}: set the variable")
     if set(blocks) & set(FILTERS):
         raise SystemExit(f"blocks named like a filter: {sorted(set(blocks) & set(FILTERS))}")
     explicit = cfg.get("explicit_fraction", {"default": 0.02, "with_output": 0.1})

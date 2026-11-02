@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from transcriber import NOISE_WORDS, alternatives, noise_tag, render, trs_chunks, trs_for_audio, window_items  # noqa: E402
 from windows import run  # noqa: E402
 
-CORPUS = "/data-server/datasets/audio/raw/transcript/fr/TCOF/tcof/12/Corpus"
+CORPUS = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/TCOF/tcof/12/Corpus"
 BAD = "ï¿½"
 ACCENTS = "àâäçéèêëîïôöùûüœÀÂÇÉÈÊÎÔ"
 _vocab = None

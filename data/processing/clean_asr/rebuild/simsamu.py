@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import CONTEXT, assistant_text  # noqa: E402
 from cuts import run  # noqa: E402
 
-RAW = "/data-server/datasets/audio/raw/transcript/fr/SimSamu/annotations/normalized/text_raw"
+RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/SimSamu/annotations/normalized/text_raw"
 
 
 def main():

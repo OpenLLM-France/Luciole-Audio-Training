@@ -654,7 +654,7 @@ global _augmenter8k, _augmenter16k
 _augmenter8k = _augmenter16k = None
 
 def reverberation_factory(
-    path_parent: str= "/data-server/datasets/audio/noise",
+    path_parent: str= None,   # default: $DATA_FOLDER/noise
     path_dir_16k: str= "simulated_rirs_16k.small", # NOCOMMIT .small
     path_dir_8k: str= "simulated_rirs_8k",
     rir_lists: list= ["smallroom/rir_list", "mediumroom/rir_list", "largeroom/rir_list"],
@@ -662,6 +662,8 @@ def reverberation_factory(
     verbose=True,
     ):
     global _augmenter8k, _augmenter16k
+    if path_parent is None:
+        path_parent = f"{os.environ['DATA_FOLDER']}/noise"
     if sampling_rate <= 10_000:
         if _augmenter8k is None:
             if verbose: print("Loading augmenter for 8kHz...")
@@ -683,7 +685,7 @@ if __name__ == "__main__":
 
     # Input file
     import pandas as pd
-    parquet_file = "/data-server/datasets/audio/instruct/music-genre/MusicGenre--ylacombe--music_genres_Punk--train--000000-000200.parquet"
+    parquet_file = f"{os.environ['DATA_FOLDER']}/instruct/music-genre/MusicGenre--ylacombe--music_genres_Punk--train--000000-000200.parquet"
     df = pd.read_parquet(parquet_file)
 
     import tqdm

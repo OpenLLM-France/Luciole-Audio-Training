@@ -143,7 +143,7 @@ SRC_DIR=../../../../../assets/
 # single metadata CSV (samples / duration / sub-task / language / dataset name).
 # This is the slow step (reads every manifest); the workers flag parallelises it.
 python $SRC_DIR/generate_csv_metadata.py input_cfg_train.yaml \
-    --data_root /data-server/datasets/audio --output_dir . --workers 24
+    --data_root $DATA_FOLDER --output_dir . --workers 24
 
 # Step 2 — given the metadata CSV and the original (hand-written) YAML, walk
 # the tree and emit a fully-weighted YAML where every leaf has an explicit

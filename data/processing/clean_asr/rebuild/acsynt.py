@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import CONTEXT, assistant_text, first_tier, interval_at, manifest_windows, praat_chars  # noqa: E402
 from cuts import run  # noqa: E402
 
-RAW = "/data-server/datasets/audio/raw/transcript/fr/ACSYNT/FinalAcsynt"
+RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/ACSYNT/FinalAcsynt"
 FILES = ["train.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
 LABEL_RE = re.compile(r"^\s*[A-Z]\w{0,3}\s*:\s*")      # "L: Ah je fais", "E : Et vos grand-parents ?"
 

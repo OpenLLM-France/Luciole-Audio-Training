@@ -190,7 +190,7 @@ It performs three steps (equivalent to the commands below, with
 # parsed; existing rows are reused and task_type/sub_task are refreshed from
 # the YAML. Delete metadata.csv (or pass --force_overwrite) to recompute all.
 python $SRC_DIR/generate_csv_metadata.py input_cfg_train.yaml \
-    --data_root /data-server/datasets/audio --output_dir . --workers 24
+    --data_root $DATA_FOLDER --output_dir . --workers 24
 
 # Step 2 — walk the tree and emit a fully-weighted YAML with an explicit
 # weight on every leaf; done for each of the four hand-written configs, plus a

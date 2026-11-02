@@ -21,8 +21,8 @@ import os
 import re
 import unicodedata
 
-CLEAN = "/data-server/datasets/audio/nemo/asr/fr/clean"
-CONTEXT = "/data-server/datasets/audio/nemo/asr/fr/context"
+CLEAN = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/clean"
+CONTEXT = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/context"
 
 TAGS = {"laughter", "applause", "music", "noise", "cough", "breath", "sigh", "singing", "inaudible", "beep"}
 TAG_RE = re.compile(r"^\[[a-z]+\]$")

@@ -481,11 +481,10 @@ def main():
                                "(--no-prefer-converted to always use the raw audio).")
     io_group.add_argument("--raw-audio-root", type=str, default=None,
                           help="Root of the raw audio tree, for raw->converted path mapping. "
-                               "Default: $DATA_FOLDER/raw or /data-server/datasets/audio/raw.")
+                               "Default: $DATA_FOLDER/raw.")
     io_group.add_argument("--converted-audio-root", type=str, default=None,
                           help="Root of the converted audio tree. Default: "
-                               "$DATA_FOLDER/converted_audios or "
-                               "/data-server/datasets/audio/converted_audios.")
+                               "$DATA_FOLDER/converted_audios.")
     io_group.add_argument("--force", action="store_true",
                           help="Overwrite existing manifest .jsonl files.")
     io_group.add_argument("--limit", type=int, default=None,
@@ -574,10 +573,9 @@ def main():
         args.diar_manifest_path = f"{data_dir}/nemo/diarization/fr/tcof"
 
     raw_audio_root = Path(args.raw_audio_root
-                          or (f"{data_dir}/raw" if data_dir else "/data-server/datasets/audio/raw"))
+                          or f"{os.environ['DATA_FOLDER']}/raw")
     conv_audio_root = Path(args.converted_audio_root
-                           or (f"{data_dir}/converted_audios" if data_dir
-                               else "/data-server/datasets/audio/converted_audios"))
+                           or f"{os.environ['DATA_FOLDER']}/converted_audios")
     conv_dataset_dir = (Path(str(root).replace(str(raw_audio_root), str(conv_audio_root), 1))
                         if str(root).startswith(str(raw_audio_root)) else conv_audio_root)
     conv_index = build_converted_index(conv_dataset_dir) if args.prefer_converted else {}

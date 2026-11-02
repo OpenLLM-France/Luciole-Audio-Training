@@ -153,6 +153,6 @@ def scan_and_update(root_dir):
         add_dataset_entry(jsonl_path, task_type, sub_task.lower(), language)
 
 if __name__ == "__main__":
-    scan_and_update("/data-server/datasets/audio/nemo/single-turn")
-    scan_and_update("/data-server/datasets/audio/nemo/multi-turn")
+    scan_and_update(f"{os.environ['DATA_FOLDER']}/nemo/single-turn")
+    scan_and_update(f"{os.environ['DATA_FOLDER']}/nemo/multi-turn")
     print(f"✅ CSV generated: {CSV_FILE}")

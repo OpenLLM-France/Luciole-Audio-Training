@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import CONTEXT, TAGS, assistant_text, audio_turn, norm_word, rebuild_manifest, transfer_format  # noqa: E402
 
 DATASET = "LINAGORA_Meetings"
-TRS = "/data-server/datasets/audio/raw/transcript/fr/LINAGORA/Corpus_linagora_interne/Corrections-v3_utf8"
+TRS = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/LINAGORA/Corpus_linagora_interne/Corrections-v3_utf8"
 EVENTS = {"rire": "laughter", "rire en fond": "laughter", "tx": "cough", "b": "breath", "pf": "breath",
           "conv": "noise", "bg": "noise", "mic": "noise", "bb": "noise", "pi": "inaudible"}
 ID_RE = re.compile(r"_Turn-(\d+)_seg-\d+(?:_cut\d+)?$")

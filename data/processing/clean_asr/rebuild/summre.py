@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import CONTEXT, assistant_text, audio_turn, norm_word, rebuild_manifest, transfer_format  # noqa: E402
 
 DATASET = "SUMM-RE"
-WHISPER = ("/data-server/datasets/audio/raw/transcript/fr/SUMM-RE/full_corpus/individual/archive/transcript/"
+WHISPER = (f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/SUMM-RE/full_corpus/individual/archive/transcript/"
            "automatic/whisper/unfiltered/v1/json/train")
 NUMBERS = (r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|"
            r"vingt|trente|quarante|cinquante|soixante|cent")

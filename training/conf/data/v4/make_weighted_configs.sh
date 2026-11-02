@@ -9,7 +9,7 @@ SRC_DIR="../../../../assets/"
 # metadata.csv is seeded from v3; only the six manifests new in v4 are parsed
 # (existing rows are kept, and task_type/sub_task are refreshed from the YAML).
 # Delete metadata.csv (or pass --force_overwrite) to recompute everything.
-python $SRC_DIR/generate_csv_metadata.py  input_cfg_train.yaml --data_root /data-server/datasets/audio --output_dir . --workers 24
+python $SRC_DIR/generate_csv_metadata.py  input_cfg_train.yaml --data_root $DATA_FOLDER --output_dir . --workers 24
 
 # Step 2 — CSV + original YAML → suggested YAML  (instant)
 # Step 3 — same weights, pointing at the shuffled manifests

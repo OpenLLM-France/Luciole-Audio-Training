@@ -64,7 +64,7 @@ ratios, and the hotword list with per-hotword usage counts).
 Example::
 
     python data/generation/generate_contextual_biasing.py \\
-        /data-server/datasets/audio/nemo/asr/fr/context/ACSYNT/train.jsonl \\
+        $DATA_FOLDER/nemo/asr/fr/context/ACSYNT/train.jsonl \\
         --lid-model lid.176.ftz
 
 Language identification uses a fastText model. To enable it::

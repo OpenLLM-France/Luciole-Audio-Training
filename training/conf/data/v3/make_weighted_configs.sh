@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 SRC_DIR="../../../../../assets/"
 
 # Step 1 — parse YAML(s) → CSV  (slow, reads all JSONL files)
-python $SRC_DIR/generate_csv_metadata.py  input_cfg_train.yaml --data_root /data-server/datasets/audio --output_dir . --workers 24
+python $SRC_DIR/generate_csv_metadata.py  input_cfg_train.yaml --data_root $DATA_FOLDER --output_dir . --workers 24
 
 # Step 2 — CSV + original YAML → suggested YAML  (instant)
 # Step 3 — same weights, pointing at the shuffled manifests

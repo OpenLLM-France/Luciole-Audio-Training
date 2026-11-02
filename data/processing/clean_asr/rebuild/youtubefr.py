@@ -26,7 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import audio_turn, assistant_text, rebuild_manifest  # noqa: E402
 
-KALDI = "/data-server/datasets/audio/kaldi/fr/YouTubeFr/casepunc"
+KALDI = f"{os.environ['DATA_FOLDER']}/kaldi/fr/YouTubeFr/casepunc"
 PUNCT = set(string.punctuation) | {"…", "»", "«", "”", "“", "’"}
 EPS = 0.002
 ASTERISK = re.compile(r"\*([^*]{2,40})\*")   # "*rires*", "*Tousse*": sound notes of the subtitles

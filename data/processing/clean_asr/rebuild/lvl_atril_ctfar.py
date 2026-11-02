@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import audio_turn, rebuild_manifest  # noqa: E402
 
 DATASET = "LVL-Atril-CTFAR"
-KALDI = "/data-server/datasets/audio/raw/transcript/fr/LVL-Atril-CTFAR/kaldi/complete_raw"
+KALDI = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/LVL-Atril-CTFAR/kaldi/complete_raw"
 TAGS = {"rire": "[laughter]", "bruit": "[noise]", "inaudible": "[inaudible]",
         "répétition": "", "répétitions": "", "repetition": "", "hésitation": "", "hesitation": ""}
 FILLERS = {"euh", "eu", "hum", "uh", "um", "ah"}

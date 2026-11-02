@@ -689,7 +689,7 @@ def reverberation_factory(
         path_parent = os.environ.get("RIR_PATH")
         if path_parent is None:
             for rir_path in [
-                "/data-server/datasets/audio/noise",
+                f"{os.environ.get('DATA_FOLDER', '')}/noise",
                 "/media/storage1/audio/noise",
                 "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise",
                 "/lustre/fsn1/projects/rech/qgz/commun/audio/noise",
@@ -728,7 +728,7 @@ class SpeechAugment:
             noise_dir = os.environ.get("NOISE_PATH")
             if noise_dir is None:
                 for noise_path in [
-                    "/data-server/datasets/audio/noise/distant_noises",
+                    f"{os.environ.get('DATA_FOLDER', '')}/noise/distant_noises",
                     "/media/storage1/audio/noise/distant_noises",
                     "/media/nas/CORPUS_FINAL/Corpus_audio/Corpus_noise/distant_noises",
                     "/lustre/fsn1/projects/rech/qgz/commun/audio/noise/distant_noises",

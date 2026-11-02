@@ -2,7 +2,7 @@
 ```bash
 python generate_csv_metadata.py \
     ../training/conf/data/v3/input_cfg_train.yaml \
-    --data_root /data-server/datasets/audio --workers 8 \
+    --data_root $DATA_FOLDER --workers 8 \
     --output_dir dataset_analysis 
 ```
 

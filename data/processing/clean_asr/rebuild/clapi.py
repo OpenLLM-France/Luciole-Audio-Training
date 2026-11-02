@@ -27,7 +27,7 @@ from tcof import BAD, compounds, repair  # noqa: E402
 from transcriber import noise_tag  # noqa: E402
 from windows import run  # noqa: E402
 
-ROOT = "/data-server/datasets/audio/raw/transcript/fr/CLAPI/clapi/2/CorpusComplet"
+ROOT = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/CLAPI/clapi/2/CorpusComplet"
 NS = "{http://www.tei-c.org/ns/1.0}"
 TERMINATORS = {"?": "?", "!": "!", ".": ".", "+..?": "?", "+/?": "?", "+/.": ".", "+...": "."}
 

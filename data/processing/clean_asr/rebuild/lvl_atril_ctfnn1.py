@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import audio_turn, rebuild_manifest  # noqa: E402
 
 DATASET = "LVL-Atril-CTFNN1"
-SRT = "/data-server/datasets/audio/raw/transcript/fr/LVL-Atril-CTFNN1/Livraison1.2"
+SRT = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/LVL-Atril-CTFNN1/Livraison1.2"
 TAGS = {"laugh": "[laughter]", "cough": "[cough]", "caugh": "[cough]", "breath": "[breath]", "noise": "[noise]",
         "inaudible": "[inaudible]", "no-speech": "", "no-speeche": "", "other-speech": ""}
 # [beep] cues where a steady tone (> 350 Hz, > 80 ms) is in the role channel: kept as [beep];

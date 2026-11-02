@@ -33,7 +33,7 @@ from template_commonvoice_multiturn import (  # noqa: E402
     GENDER_ANSWERS, VOICE_QUALIFIER,
 )
 
-ROOT = "/data-server/datasets/audio/nemo/misc/multilang/context/CVMultiTurn"
+ROOT = f"{os.environ['DATA_FOLDER']}/nemo/misc/multilang/context/CVMultiTurn"
 SPLITS = ("train", "dev", "test")
 
 

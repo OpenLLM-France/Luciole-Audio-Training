@@ -22,8 +22,8 @@ Outputs are written next to the inputs, with `_fixcaps` inserted after
     train_recasepunc_max30.jsonl -> train_recasepunc_fixcaps_max30.jsonl
 
 Usage:
-    python fix_spurious_caps.py --dry-run /data-server/.../fr/context/ESLO/*.jsonl
-    python fix_spurious_caps.py /data-server/.../fr/{context,nocontext}/{ESLO,TCOF_*}/*.jsonl
+    python fix_spurious_caps.py --dry-run $DATA_FOLDER/nemo/asr/fr/context/ESLO/*.jsonl
+    python fix_spurious_caps.py $DATA_FOLDER/nemo/asr/fr/{context,nocontext}/{ESLO,TCOF_*}/*.jsonl
 """
 import argparse
 import json

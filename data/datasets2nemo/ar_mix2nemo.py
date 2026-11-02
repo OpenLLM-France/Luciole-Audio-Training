@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Convert the curated Arabic ASR mix (kaldi -> NeMo multiturn) into
-/data-server/datasets/audio/nemo/asr/ar/{nocontext,context}/<Name>/<split>.jsonl
+$DATA_FOLDER/nemo/asr/ar/{nocontext,context}/<Name>/<split>.jsonl
 
 Uses the ssak NemoDataset/KaldiDataset machinery:
   KaldiDataset.load        -> reads kaldi dir (sox-pipe wav.scp, segments->offset)
@@ -12,7 +12,7 @@ Uses the ssak NemoDataset/KaldiDataset machinery:
   set_context              -> add natural-language prompts (context variant)
 
 The kaldi wav.scp paths are stale (/media/nas, /media/storage0). We remap each
-audio turn to the real file on /data-server by basename lookup (build_audio_index),
+audio turn to the real file on $DATA_FOLDER by basename lookup (build_audio_index),
 which is robust to the sub-directory layout differences between machines.
 
 Usage:
@@ -35,16 +35,16 @@ from set_context import set_context
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ar_mix2nemo")
 
-KALDI = "/data-server/datasets/audio/kaldi/ar/raw"
-RAW = "/data-server/datasets/audio/raw/transcript/ar"
-OUT = "/data-server/datasets/audio/nemo/asr/ar"
-CONVERTED = "/data-server/datasets/audio/converted_audios/transcript/ar"
+KALDI = f"{os.environ['DATA_FOLDER']}/kaldi/ar/raw"
+RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/ar"
+OUT = f"{os.environ['DATA_FOLDER']}/nemo/asr/ar"
+CONVERTED = f"{os.environ['DATA_FOLDER']}/converted_audios/transcript/ar"
 DEFAULT_FILTER_DIR = "/tmp/claude-1005/-home-abert-airflow/07599129-18b1-4367-86b9-623d318594b2/scratchpad/mix"
 
 CTX_CATEGORY = "nocasepunc"    # category in contexts/ar_asr_contexts.json
 MASC_MAX_DUR = 60.0            # drop MASC segments with corrupt (>60s) durations
 
-# split -> list of kaldi dirs to merge. audio_root = /data-server tree indexed by
+# split -> list of kaldi dirs to merge. audio_root = $DATA_FOLDER tree indexed by
 # basename. convert=True -> resample to 16k. filter -> {split: utt2dur/list file}.
 DATASETS = {
     "MGB2": dict(
@@ -204,7 +204,7 @@ def _best_suffix_match(stale, candidates):
 
 
 def remap_audio(nd, audio_index):
-    """Repoint each audio turn to the real /data-server file.
+    """Repoint each audio turn to the real $DATA_FOLDER file.
 
     Match by basename; when several files share that basename (e.g. train
     WAV_dir/ vs test_set/WAV_dir/), pick the one whose path best matches the
@@ -292,7 +292,7 @@ def process(name, spec, filter_dir):
         n0 = len(nd)
 
         missing = remap_audio(nd, audio_index)
-        nd.filter(lambda r: r.audio_filepath.startswith("/data-server"))   # drop unmatched audio
+        nd.filter(lambda r: r.audio_filepath.startswith(os.environ["DATA_FOLDER"]))   # drop unmatched audio
 
         filt = spec.get("filter", {}).get(split)
         if filt:

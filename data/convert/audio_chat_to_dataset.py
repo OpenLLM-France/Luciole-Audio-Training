@@ -341,7 +341,7 @@ if __name__ == "__main__":
     # Initialize model and tokenizer
     tokenizer = set_tokenizer(model_config)
 
-    parquet_dir = "/home/hnaouara/data-server/datasets/audio/instruct/audio-context"
+    parquet_dir = f"{os.environ['DATA_FOLDER']}/instruct/audio-context"
     ds = get_dataset(parquet_dir, tokenizer, model_config, train_config, split="test")
     print("Dataset size:", len(ds))
     # Create DataLoader

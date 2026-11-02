@@ -20,7 +20,7 @@
 # build_silence.py ([silence] lines, read with the inputs).
 
 include: [fr_blocks.yaml]
-root: /data-server/datasets/audio/nemo/asr/fr
+root: ${DATA_FOLDER}/nemo/asr/fr
 contexts: data/contexts/fr_asr_contexts.json   # relative to the repo
 seed: 1234
 

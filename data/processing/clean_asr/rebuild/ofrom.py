@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import first_tier, interval_at, manifest_windows  # noqa: E402
 from cuts import run  # noqa: E402
 
-RAW = "/data-server/datasets/audio/raw/transcript/fr/OFROM"
+RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/OFROM"
 FILES = ["train_recasepunc.jsonl"]  # max30 only for LesVocaux, LINAGORA_Meetings, CFPP2000
 
 

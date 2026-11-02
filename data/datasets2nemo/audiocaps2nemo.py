@@ -56,7 +56,7 @@ if __name__ == "__main__":
                         help="Only process this many rows per split (debug).")
     args = parser.parse_args()
 
-    data_folder = os.environ.get("DATA_FOLDER", "/data-server/datasets/audio")
+    data_folder = os.environ["DATA_FOLDER"]
     if args.raw_input is None:
         args.raw_input = f"{data_folder}/raw/sounds/AudioCaps"
     if args.resampled_dir is None:

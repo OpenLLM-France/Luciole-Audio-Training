@@ -42,7 +42,7 @@ Usage
     python assets/export_hf_dataset.py \
         adapter_training/training/conf/data/v3/input_cfg_train.yaml \
         /data-server/public_future/datasets/OpenLLM-France/Luciole-Audio-Training-Dataset \
-        --data-root /data-server/datasets/audio
+        --data-root $DATA_FOLDER
 
     # quick test without touching anything:
     python assets/export_hf_dataset.py INPUT.yaml OUTPUT_ROOT --dry-run --limit-rows 5
@@ -1218,8 +1218,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("input_yaml", help="input_cfg_*.yaml training mix")
     p.add_argument("output_root", help="HF dataset root (e.g. .../Luciole-Audio-Training-Dataset)")
-    p.add_argument("--data-root", default=os.environ.get("DATA_FOLDER", "/data-server/datasets/audio"),
-                   help="Value substituted for ${oc.env:DATA_FOLDER} (default: $DATA_FOLDER or /data-server/datasets/audio)")
+    p.add_argument("--data-root", default=os.environ.get("DATA_FOLDER"), required="DATA_FOLDER" not in os.environ,
+                   help="Value substituted for ${oc.env:DATA_FOLDER} (default: $DATA_FOLDER)")
     p.add_argument("--env", action="append", metavar="VAR=VALUE",
                    help="Extra ${oc.env:VAR} substitutions (repeatable)")
     p.add_argument("--hf_repo", default=None, metavar="OWNER/NAME",

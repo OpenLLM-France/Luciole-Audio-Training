@@ -14,8 +14,8 @@ import os
 import re
 from collections import Counter
 
-CLEAN = "/data-server/datasets/audio/nemo/asr/fr/clean"
-CONTEXT = "/data-server/datasets/audio/nemo/asr/fr/context"
+CLEAN = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/clean"
+CONTEXT = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/context"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conf", "fr_common_words.txt")
 WORD_RE = re.compile(r"(\S+)\s+([^\W\d_][\w'’-]*)")
 MIN_COUNT, MIN_LOWER_RATIO = 5, 0.8   # seen 5+ times after a lowercase word, 80 %+ lowercase
