@@ -53,7 +53,7 @@ import random
 
 AXES = {"language": ("explicit", "source"), "nocasepunc": ("yes", "no"), "events": ("yes", "no"),
         "disfluencies": ("yes", "no")}
-FORMATS = {"fused": 0.35, "sentences": 0.25, "lines": 0.15, "bullets": 0.15, "kv": 0.1}
+FORMATS = {"fused": 0.3, "sentences": 0.25, "lines": 0.15, "bullets": 0.15, "kv": 0.15}
 LANGUAGE_MENTION = {"none": 0.8, "explicit": 0.1, "source": 0.1}
 FORMS = ("clause", "sentence", "kv")
 MIN_PER_REGISTER = 2       # in a list with tu / vous entries, at least this many of each

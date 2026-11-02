@@ -6,10 +6,14 @@ Each dataset of the config (conf/fr.yaml, its header says how to write one) has:
   outputs     the files written per input: base (event tags and hesitations removed),
               events, disfluencies, events_disfluencies (kept, in the subdirectory of that name)
   nocasepunc  which lines get a prompt asking for no case nor punctuation
+  output_lines  the lines of each output but base, drawn at random (default: all)
   filters     filters and blocks (named lists of filters, `blocks` of the config), in order
 A filter rewrites the text of the Assistant turn or drops the line; lines left with no letter
-nor digit are dropped. Then the prompt (first User text turn) is chosen from the final text
-(ChoosePrompt): one asking for the markers the output keeps, or for none of them.
+nor digit (only "euh", "[laughter]" in an output without tags, a [silence] line) are dropped, but
+for `empty_fraction` of them (config), kept with an empty text: nothing to transcribe. Then the prompt (first User text turn) is chosen from the final text
+(ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
+(config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
+(composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says).
 
 The words and spellings the filters use, per language, are in conf/rules.yaml, not in the code.
 
@@ -25,6 +29,8 @@ Usage:
     python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/fr.yaml --datasets CFPP2000 Multilingual_TEDx
 """
 import argparse
+import collections
+import difflib
 import functools
 import glob
 import hashlib
@@ -34,6 +40,7 @@ import json
 import os
 import random
 import re
+import sys
 import unicodedata
 from collections import Counter, defaultdict
 
@@ -47,6 +54,8 @@ from rules import as_words, rules as language_rules, words
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 CONF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conf")
 TAG_RE = re.compile(r"\[[^\[\]]+\]")
+# a word with a [tag], "[inaudible].", "l'[inaudible]": kept out of disfluency_model's input
+TAG_WORD_RE = re.compile(r"\S*\[[^\[\]]+\]\S*")
 TRAILING_TAGS_RE = re.compile(r"(?:\s*\[[^\[\]]+\])+\s*$")
 LETTER_RE = re.compile(r"[^\W\d_]")
 WORD_CHAR_RE = re.compile(r"[^\W_]")      # a letter or a digit: digits are kept as written
@@ -70,6 +79,8 @@ class Sample:
                 (t for t in reversed(turns) if t.get("from") == "Assistant" and t.get("type") == "text"), None)
             self._prompt_turn = next(
                 (t for t in turns if t.get("from") == "User" and t.get("type") == "text"), None)
+            if self._prompt_turn is not None and turns[0] is not self._prompt_turn:
+                raise ValueError(f"{rec.get('id')}: the prompt must come before the audio (no randomorder input)")
             self._text_key = "value"
 
     @property
@@ -555,7 +566,6 @@ class Events(_MarkerFilter):
 NO_END_WORDS = words("fr", "no_end_words")            # "avec le. Les deux": the "." is a pause
 ELISION_RE = re.compile(r"^(?:%s)['’]" % "|".join(sorted(words("fr", "elided"), key=len, reverse=True)),
                         re.IGNORECASE)
-FUNCTION_WORDS = NO_END_WORDS | words("fr", "function_words")   # "des tablettes Qui sont"
 
 
 def _bare(word):
@@ -567,9 +577,17 @@ def _bare(word):
 PRONOUN_SUFFIX_RE = re.compile(r"(?:-t)?-(?:%s)$" % "|".join(sorted(words("fr", "inverted_pronouns"))))
 
 
-def _is_common(word, common):
+def _is_common(word, common, no_end=NO_END_WORDS):
     bare = _bare(word)
-    return bare in common or bare in NO_END_WORDS or PRONOUN_SUFFIX_RE.sub("", bare) in common
+    return bare in common or bare in no_end or PRONOUN_SUFFIX_RE.sub("", bare) in common
+
+
+@functools.lru_cache(maxsize=None)
+def elision_re(lang):
+    """The elided words of a language with their apostrophe ("l'", "qu'"); en has none: never matches."""
+    elided = words(lang, "elided")
+    return re.compile(r"^(?:%s)['’]" % "|".join(sorted(elided, key=len, reverse=True)) if elided else r"(?!)",
+                      re.IGNORECASE)
 
 
 def _lower_first(word):
@@ -585,9 +603,10 @@ class Disfluencies(_MarkerFilter):
     keep:  normalised to one spelling per sound (`hesitations` of conf/rules.yaml, per `lang`):
            fr: "euh" (euh, heu, euhm, eum, ehum, uh) and "hmm" (hum, hm, hmm, mh, mm, mmm, mmh, mhm,
                mm-hum, and the MH/MMh/MMM/HM of the recase model);
-           en: "uh" (uh, uhh, uuh), "um" (um, umm, uhm), "er" (er, erm) and "hmm" (same forms as fr).
-    strip: removed. Discourse words (fr: ben, bah, hein, ah, oh; en: eh, oh, ah, huh) are words
-           and stay, as do the hyphenated yes/no "mm-hmm", "uh-huh", "uh-uh", "mm-mm" in en.
+           en: "uh" (uh, uhh, uuh), "um" (um, umm, uhm), "er" (er, erm) and "hmm" (the forms of fr but "hum", a word).
+    strip: removed. Discourse words (fr: ben, bah, hein, ah, oh; en: eh, oh, ah, huh, uh-oh) are
+           words and stay. In en, "mm-hmm", "uh-huh", "uh-uh", "mm-mm" are hesitations too: their
+           yes / no cannot be told from a mere hesitation.
            Cut-off words ("L- la fin") go too (`truncations`), and repeated function words
            are collapsed ("je je" -> "je", `repetitions`); other repetitions are not touched. A comma or "..." right after
            the hesitation goes with it; a sentence end after it (". ? !") moves to the
@@ -622,6 +641,7 @@ class Disfluencies(_MarkerFilter):
         self.word_re = re.compile(r"(?<![\w'’-])(?:%s)(?![\w'’-])" % "|".join(f"({r})" for _, r in forms))
         self.word_forms = [f for f, _ in forms]
         self.no_end = words(lang, "no_end_words")
+        self.elision_re = elision_re(lang)
         if cut_after_no_end not in ("drop", "ellipsis"):
             raise ValueError(f"disfluencies: cut_after_no_end must be drop or ellipsis, got {cut_after_no_end!r}")
         self.cut_after_no_end = cut_after_no_end
@@ -673,14 +693,14 @@ class Disfluencies(_MarkerFilter):
         word = m[1]
         if word.isupper() and sum(c.isalpha() for c in word) > 1:   # "ONU", "ILS SONT"; not "À."
             return word
-        if ELISION_RE.match(word) or _is_common(word, self.common):
+        if self.elision_re.match(word) or _is_common(word, self.common, self.no_end):
             return _lower_first(word)
         return word
 
     def normalize(self, s):
         def repl(m):
             form = self.word_forms[m.lastindex - 1]
-            before = s.text[:m.start()].rstrip()
+            before = TAG_RE.sub(" ", s.text[:m.start()]).rstrip()   # "? [silence] Euh": a sentence start
             starts = not before or before[-1] in ".?!…\"«“"
             return form.capitalize() if starts and cased else form
         cased = not is_uncased(s)
@@ -708,55 +728,54 @@ class Disfluencies(_MarkerFilter):
 
 @register
 class DisfluencyModel(Filter):
-    """Disfluencies detected by a token classifier: linagora/flaubert_disfluency_detector, run by
-    the code of its repository (trained on transcripts of spontaneous speech: hesitations,
-    repeats, false starts "je vais je vais", "les de le").
+    """Disfluencies removed by linagora/flaubert_disfluency_detector and the code of its
+    repository (src/detect_disfluencies.py), with no rule of ours on top: hesitations,
+    repetitions, false starts ("je vais je vais", "les de le") and cut-off words ("bonj-").
 
-    mode: strip -- the words detected are removed (see below).
-          drop  -- lines with a word detected are dropped.
-          keep  -- nothing done, the model is not loaded (outputs that keep the disfluencies).
-    The model also flags words that are not disfluent ("Aucun effet ta- thérapeutique" ->
-    "effet ta-"), so a run of detected words is removed only when it is repeated right after or
-    before: the next word repeats its first word ("on tente, | on tente là", "de... de... | de
-    faire", "les de | le") or the previous word its last one ("En | les en | appliquant"); the
-    hesitations between them are left out of the comparison and removed with the run ("ce sont
-    euh, | ce sont des textes"). Never removed: the hesitations (`keep_hesitations`), the
-    discourse words (ben, bah, hein...), which are words, nor a word said twice on purpose
-    ("vous vous croyez", "très très"). Mid-line, the removed run takes its punctuation with it
-    and a capital it leaves on a common word is lowercased; at the end of the line its final
-    . ? ! moves to the previous word. Run it before `disfluencies`: it sees the hesitations as
-    context, and the rules then remove them with their punctuation.
-    The lines of a chunk are classified in one batch (`prepare`). [tags] are left out of the
-    model input and never removed.
+    mode: strip -- the model's removal: hmm / pff and cut-off words first (`strip_fillers` of the
+                   repository), then the words the model flags (euh, repeats, false starts), a
+                   whole word at a time, and the hesitations it left ("goodies euh...": an output
+                   without disfluencies has none); the repository renders the text (spacing, punctuation and
+                   capital left by a removed word). The discourse words (ben, bah, hein...) are
+                   added to the repository's protect list: never removed, unless repeated.
+          drop  -- lines with a word flagged are dropped.
+          keep  -- the hesitations are normalised to one spelling (`Disfluencies` keep), the model
+                   is not loaded (outputs that keep the disfluencies).
+    In every mode the hesitations are first written "euh" / "hmm" (`hesitations` of
+    conf/rules.yaml), the spellings the repository knows. [tags] are left out of the model input
+    and stay where they are. The lines of a chunk are classified in one batch (`prepare`).
     """
     name = "disfluency_model"
-    END_RE = re.compile(r"[.?!…]+$")
     DISCOURSE_WORDS = words("fr", "disfluency_model", "discourse_words")
-    REPEATED_ON_PURPOSE = words("fr", "disfluency_model", "repeated_on_purpose")   # "vous vous croyez"
+    # names of the repository code used here, checked at load: a new revision may change them
+    REPO_API = ("annotate", "strip_fillers", "strip_disfluency_tags", "_FILLER_WORD_RE", "_PROTECT_WORDS")
 
-    def __init__(self, ctx, mode="strip", model="linagora/flaubert_disfluency_detector", threshold=0.5,
-                 lowercase=False, keep_hesitations=True, device="cpu", threads=32, batch_size=64, **params):
-        """model: Hugging Face id or local copy of linagora/flaubert_disfluency_detector; its own code
-        (src/detect_disfluencies.py) loads it and labels the characters of each line.
-        threshold: probability over which a token is disfluent; a word is disfluent when most of
-        its letters are.
-        lowercase: lowercase the model input (it was trained on cased text, part of it lowercased).
-        keep_hesitations: leave euh / hmm to the `disfluencies` rules run after, which handle the
-        punctuation around them ("appelé euh. L'éditrice" -> "appelé, l'éditrice")."""
+    def __init__(self, ctx, mode="strip", model="linagora/flaubert_disfluency_detector",
+                 revision="4307de6b425f153b7b82fe181eef190d05443197", threshold=0.55, truncations=True,
+                 device="cpu", threads=32, batch_size=64, **params):
+        """model: Hugging Face id or local copy of linagora/flaubert_disfluency_detector.
+        revision: commit of the repository (weights and code), so that an update does not change
+        the outputs unnoticed.
+        threshold: probability over which a token is disfluent (0.55: 0.5 removes "pour cent" of
+        "cent pour cent", "Suisse" of "Suisse Allemande").
+        truncations: also remove the cut-off words "bonj-" (off for subtitles, where "anti- " is a
+        split compound)."""
         super().__init__(ctx)
         if mode not in ("keep", "strip", "drop"):
             raise ValueError(f"disfluency_model: mode must be keep, strip or drop, got {mode!r}")
-        self.mode, self.threshold, self.lowercase, self.batch_size = mode, threshold, lowercase, batch_size
-        forms = "|".join(r for _, r in Disfluencies.forms("fr"))
-        self.hesitation_re = re.compile(rf"\W*(?:{forms})\W*") if keep_hesitations else None
-        self.common = load_common_words("fr")
+        self.mode, self.threshold, self.truncations, self.batch_size = mode, threshold, truncations, batch_size
+        self.hesitations = Disfluencies(ctx, lang="fr", mode="keep")
+        # a hesitation word, as normalize() writes it, with its punctuation: "euh,"
+        forms = "|".join(re.escape(form) for form, _ in Disfluencies.forms("fr"))
+        self.hesitation_re = re.compile(rf"(\W*)({forms})\W*", re.IGNORECASE)
         if mode != "keep":
-            self.detector, self.model = self._load(model, device, threads)
+            self.detector, self.model = self._load(model, revision, device, threads)
+            self.detector._PROTECT_WORDS = self.detector._PROTECT_WORDS | self.DISCOURSE_WORDS
             self.gpu = int(device.split(":")[1]) if device.startswith("cuda:") else 0 if device == "cuda" else None
 
-    @staticmethod
+    @classmethod
     @functools.lru_cache(maxsize=None)
-    def _load(model_id, device, threads):
+    def _load(cls, model_id, revision, device, threads):
         """(detect_disfluencies module of the model repository, loaded model), once per run."""
         import importlib
         import sys
@@ -765,118 +784,129 @@ class DisfluencyModel(Filter):
         path = model_id
         if not os.path.isdir(path):
             from huggingface_hub import snapshot_download
-            path = snapshot_download(model_id)
+            path = snapshot_download(model_id, revision=revision)
         sys.path.insert(0, os.path.join(path, "src"))
         detector = importlib.import_module("detect_disfluencies")
+        missing = [a for a in cls.REPO_API if not hasattr(detector, a)]
+        if missing:
+            raise RuntimeError(f"disfluency_model: {path} has no {', '.join(missing)} (another revision?)")
         return detector, detector.load_model(path, device=device)
 
-    def predict(self, texts):
-        """Per text, per whitespace word: True when the model finds it disfluent."""
-        inputs = [t.lower() if self.lowercase and len(t.lower()) == len(t) else t for t in texts]
-        annotations = self.detector.annotate(self.model, inputs, threshold=self.threshold,
-                                             batch_size=self.batch_size, gpu=self.gpu, progress=False)
-        out = []
-        for text, a in zip(texts, annotations):
-            flags = []
-            for m in re.finditer(r"\S+", text):
-                # punctuation ("," of "je,") does not count; "qu'il": 2 letters of 4 -> fluent
-                letters = [p for p in range(m.start(), m.end()) if WORD_CHAR_RE.match(text[p])]
-                hits = sum(a.covered[p] and a.char_label[p] for p in letters)
-                flags.append(a.ok and bool(letters) and 2 * hits > len(letters))
-            out.append(flags)
-        return out
+    def strip_fillers(self, text):
+        """hmm / pff (and the cut-off words with `truncations`) removed, by the repository code."""
+        if self.truncations:
+            return self.detector.strip_fillers(text)
+        return self.detector.strip_disfluency_tags(
+            self.detector._FILLER_WORD_RE.sub(lambda m: "<dsf>" + m[0] + "</dsf>", text))
 
     @staticmethod
-    def _same(a, b):
-        """The same word, or one a cut-off start of the other ("les" / "le", "des" / "de")."""
-        if not a or not b:                                  # punctuation alone ("?")
-            return False
-        return a == b or (min(len(a), len(b)) >= 2 and (a.startswith(b) or b.startswith(a)))
+    def model_input(text):
+        return " ".join(w for w in text.split() if not TAG_WORD_RE.fullmatch(w))
 
-    def _repeated_unit(self, bare, i, j, reach=2):
-        """[start, end) of the smallest stretch around the detected words bare[i:j] (up to `reach`
-        words more on each side) that is repeated right after it ("On tente, | on tente là"), or
-        whose first word is said again right after it ("les de | le"); None when there is none."""
-        n = len(bare)
-        for size in range(j - i, j - i + 2 * reach + 1):
-            for p in range(max(i - reach, 0), i + 1):
-                q = p + size
-                if q < j or q > min(j + reach, n) or q >= n:
-                    continue
-                if size == 1 and bare[p] in self.REPEATED_ON_PURPOSE:
-                    continue
-                if bare[q:q + size] == bare[p:q] or (q == j and self._same(bare[q], bare[p])):
-                    return p, q
-        return None
+    def model_text(self, s):
+        """s.text with its hesitations normalised and its fillers removed (s left unchanged)."""
+        text = s.text
+        self.hesitations.normalize(s)
+        s.text, out = text, self.strip_fillers(s.text)
+        # the repository capitalises what follows a removed filler, a [tag] too ("hmm [noise]." ->
+        # "[Noise]."): the tags are lowercase
+        return TAG_RE.sub(lambda m: m[0].lower(), out)
 
     def prepare(self, samples):
-        """Classify the chunk's lines. The predictions of a dataset are cached by text without its
-        [tags] (the model never sees them): the outputs and the max30 files share most lines."""
+        """The chunk's lines classified in one batch. The annotations of a dataset are cached by
+        text without its [tags] (the model never sees them): the outputs and the max30 files
+        share most lines."""
         if self.mode == "keep":
             return
         cache = self.ctx.setdefault("disfluency_model_cache", {})
-        keys = [" ".join(w for w in s.text.split() if not TAG_RE.fullmatch(w)) for s in samples]
-        todo = sorted({k for k in keys if k not in cache})
-        for k, flags in zip(todo, self.predict(todo)):
-            cache[k] = flags
-        for s, k in zip(samples, keys):
-            it = iter(cache[k])
-            s.disfluent_words = (s.text, [False if TAG_RE.fullmatch(w) else next(it) for w in s.text.split()])
+        texts = [self.model_text(s) for s in samples]
+        keys = [self.model_input(t) for t in texts]
+        todo = sorted({k for k in keys if k and k not in cache})
+        annotations = self.detector.annotate(self.model, todo, threshold=self.threshold, batch_size=self.batch_size,
+                                             gpu=self.gpu, progress=False, word_level=True, protect=True)
+        for k, a in zip(todo, annotations):
+            cache[k] = a
+        for s, t, k in zip(samples, texts, keys):
+            s.disfluency_annotation = (s.text, t, cache.get(k))
+
+    @staticmethod
+    def flags(text, a):
+        """Per word of the model input (text without its [tags]): its flagged characters."""
+        out, pos = [], 0
+        for w in text.split():
+            if TAG_WORD_RE.fullmatch(w):
+                continue
+            out.append([a.covered[p] and a.char_label[p] == 1 for p in range(pos, pos + len(w))])
+            pos += len(w) + 1
+        return out
+
+    def flag_hesitations(self, text, flags):
+        """flags with the hesitations the model left flagged too (their letters, not their
+        punctuation); None when there are no flags and no hesitation."""
+        plain = [w for w in text.split() if not TAG_WORD_RE.fullmatch(w)]
+        out = None
+        for i, w in enumerate(plain):
+            m = self.hesitation_re.fullmatch(w)
+            if m is None:
+                continue
+            if out is None:
+                out = [list(f) for f in flags] if flags is not None else [[False] * len(x) for x in plain]
+            out[i][m.start(2):m.end(2)] = [True] * (m.end(2) - m.start(2))
+        return flags if out is None else out
+
+    def render(self, text, flags):
+        """text with the flagged characters removed by the repository code. It renders the text
+        without its [tags] (a tag is no sentence start for it: "âge ? [silence] Euh, là" would
+        keep "là"), then each tag goes back after the last word kept before it."""
+        words = text.split()
+        plain = [w for w in words if not TAG_WORD_RE.fullmatch(w)]
+        marked = []
+        for w, f in zip(plain, flags):
+            word, k = "", 0
+            while k < len(w):
+                j = k
+                while j < len(w) and f[j] == f[k]:
+                    j += 1
+                word += f"<dsf>{w[k:j]}</dsf>" if f[k] else w[k:j]
+                k = j
+            marked.append(word)
+        out = self.detector.strip_disfluency_tags(" ".join(marked)).split()
+        if len(plain) == len(words):
+            return " ".join(out)
+        # plain word i -> its word in out, matched on the letters it keeps
+        key = lambda w: "".join(c for c in w.lower() if c.isalnum())
+        kept = [key("".join(c for c, x in zip(w, f) if not x)) for w, f in zip(plain, flags)]
+        to_out = {}
+        for i, j, n in difflib.SequenceMatcher(None, kept, [key(o) for o in out], autojunk=False).get_matching_blocks():
+            to_out.update((i + d, j + d) for d in range(n))
+        after = collections.defaultdict(list)               # out index (-1: line start) -> its tags
+        last, i = -1, 0
+        for w in words:
+            if TAG_WORD_RE.fullmatch(w):
+                after[last].append(w)
+            else:
+                last = to_out.get(i, last)
+                i += 1
+        res = after[-1][:]
+        for j, o in enumerate(out):
+            res += [o] + after[j]
+        return " ".join(res)
 
     def __call__(self, s):
         if self.mode == "keep":
+            self.hesitations.normalize(s)
             return True
-        text, flags = getattr(s, "disfluent_words", (None, None))
-        if text != s.text:                                  # not prepared: one line alone
-            flags = self.predict([s.text])[0]
-        if not any(flags):
-            return True
-        words = s.text.split()
-        # the repeat is looked for without the hesitations: "ce sont euh, ce sont des textes"
-        idx = [k for k, w in enumerate(words) if not (self.hesitation_re and self.hesitation_re.fullmatch(w))]
-        bare = [_bare(words[k]) for k in idx]
-        flags = [flags[k] and b not in self.DISCOURSE_WORDS for k, b in zip(idx, bare)]
-        runs, i = [], 0                                     # [start, end) of the repeated units removed
-        while i < len(bare):
-            if not flags[i]:
-                i += 1
-                continue
-            j = i
-            while j < len(bare) and flags[j]:
-                j += 1
-            unit = self._repeated_unit(bare, i, j)
-            if unit:                                        # with the hesitations up to the repeat
-                runs.append((idx[unit[0]], idx[unit[1]]))
-            i = max(j, unit[1] if unit else j)
-        if not runs:
-            return True
+        before, text, a = getattr(s, "disfluency_annotation", (None, None, None))
+        if before != s.text:                                # not prepared: one line alone
+            self.prepare([s])
+            before, text, a = s.disfluency_annotation
+        flags = self.flags(text, a) if a is not None and a.ok else None   # not ok: tokens not aligned on the text
+        flags = self.flag_hesitations(text, flags)
+        flagged = flags is not None and any(map(any, flags))
         if self.mode == "drop":
-            return False
-        removed = set(k for a, b in runs for k in range(a, b))
-        out, lower_next, cap_next = [], False, False
-        for k, w in enumerate(words):
-            if k in removed:
-                starts = not out or self.END_RE.search(out[-1])
-                if all(x in removed for x in range(k, len(words))):
-                    end = self.END_RE.search(w)               # end of line: its . ? ! stays
-                    if end and out and not starts:
-                        out[-1] = out[-1].rstrip(",;:") + end[0]
-                elif w[:1].isupper() and starts:
-                    cap_next = True                           # the next word starts the sentence
-                elif self.END_RE.search(w) and not starts:
-                    lower_next = True                         # the next word lost its sentence start
-                continue
-            if not is_uncased(s):
-                if cap_next and w[:1].islower():
-                    w = w[0].upper() + w[1:]
-                elif lower_next and (ELISION_RE.match(w) or _is_common(w, self.common)):
-                    w = _lower_first(w)
-            lower_next = cap_next = False
-            out.append(w)
-        if not out or not WORD_CHAR_RE.search(" ".join(out)):
-            return False
-        s.text = " ".join(out)
-        return True
+            return not flagged and text == before
+        s.text = self.render(text, flags) if flagged else text
+        return True                         # a line left empty: process() keeps a few
 
 
 @register
@@ -927,25 +957,32 @@ class FixPunctuation(Filter):
         unless the next word is capitalised too (proper noun: "à La Réunion", "Le Pen");
       - a lowercase word after ". ? !" is capitalised ("le sens. d'accord" -> "le sens. D'accord").
     `common_words`: the list of words lowercase mid-sentence (build_common_words.py), used to
-    tell common words from proper nouns.
+    tell common words from proper nouns. The words are those of `lang` in conf/rules.yaml.
     """
     name = "fix_punctuation"
-    # the word lists of `fix_punctuation` in conf/rules.yaml
-    STARTERS = words("fr", "fix_punctuation", "starters")           # "très bien Bon" -> "très bien. Bon"
-    INTERJECTIONS = words("fr", "fix_punctuation", "interjections")
-    CUE_STARTS = words("fr", "fix_punctuation", "cue_starts")       # "est absurde Si ça arrive"
-    CUE_ELIDED = words("fr", "fix_punctuation", "cue_elided")
-    # no capital after an abbreviation's period: "356 avant J.-C. lors", "Piquet Jr. a été", "M. Dupont"
-    ABBREV_RE = re.compile(r"^\(?(?:[A-ZÀ-Þ]\.-?)+$|^\(?(?i:%s)\.$"
-                           % "|".join(map(re.escape, sorted(words("fr", "fix_punctuation", "abbreviations")))))
 
-    def __init__(self, ctx, insert_periods=True, **params):
+    def __init__(self, ctx, lang="fr", insert_periods=True, **params):
         super().__init__(ctx)
-        self.common = load_common_words("fr")
+        self.common = load_common_words(lang)
         self.insert_periods = insert_periods
+        self.no_end = words(lang, "no_end_words")
+        self.function_words = self.no_end | words(lang, "function_words")
+        self.elision_re = elision_re(lang)
+        # the word lists of `fix_punctuation` in conf/rules.yaml
+        r = language_rules(lang)["fix_punctuation"]
+        self.starters = as_words(r["starters"])           # "très bien Bon" -> "très bien. Bon"
+        self.interjections = as_words(r["interjections"])
+        self.cue_starts = as_words(r["cue_starts"])       # "est absurde Si ça arrive"
+        self.cue_elided = as_words(r.get("cue_elided"))
+        # a "." after these is removed: no_end_words, or the list of the language
+        self.no_period_after = as_words(r["no_period_after"]) if "no_period_after" in r else self.no_end
+        self.title_case = r.get("title_case", False)
+        # no capital after an abbreviation's period: "356 avant J.-C. lors", "Piquet Jr. a été", "M. Dupont"
+        self.abbrev_re = re.compile(r"^\(?(?:[A-ZÀ-Þ]\.-?)+$|^\(?(?i:%s)\.$"
+                                    % "|".join(map(re.escape, sorted(as_words(r["abbreviations"])))))
 
     def _is_common(self, word):
-        return _is_common(word, self.common) or _bare(word) in self.STARTERS
+        return _is_common(word, self.common, self.no_end) or _bare(word) in self.starters
 
     _lower_first = staticmethod(_lower_first)
 
@@ -961,9 +998,14 @@ class FixPunctuation(Filter):
 
     def _starter(self, word):
         bare = _bare(word)
-        if ELISION_RE.match(bare):
-            return bare.split("'")[0] + "'" in self.STARTERS or bare == "d'accord"
-        return bare in self.STARTERS
+        if self.elision_re.match(bare):
+            return bare.split("'")[0] + "'" in self.starters or bare == "d'accord"
+        return bare in self.starters
+
+    def _in_title(self, prev, nxt):
+        """Title case ("What Is It", "It Girl"; `title_case`, en): no sentence start, whatever the
+        word. Not before the pronoun "I", capitalised anyway ("now So I went")."""
+        return self.title_case and (prev[:1].isupper() or nxt[:1].isupper() and not re.match(r"I\b", nxt))
 
     def __call__(self, s):
         if not is_uncased(s) and not is_long_unpunctuated(s):   # those stay as they are, lowercased at the end
@@ -974,10 +1016,10 @@ class FixPunctuation(Filter):
         if not word[:1].isalpha():                      # ':«Maintenant', '"Pour une'
             return False
         bare = _bare(word)
-        elided = ELISION_RE.match(bare)
+        elided = self.elision_re.match(bare)
         if elided:
-            return bare[:elided.end()] in self.CUE_ELIDED and word[elided.end():][:1].islower()
-        return bare in self.CUE_STARTS
+            return bare[:elided.end()] in self.cue_elided and word[elided.end():][:1].islower()
+        return bare in self.cue_starts
 
     def _fix_case(self, text):
         tokens = text.split()
@@ -988,36 +1030,38 @@ class FixPunctuation(Filter):
             first = next((c for c in cur if c.isalpha()), "")
             # "avec le. Les deux" -> "avec le les deux"
             if prev.endswith(".") and not prev.endswith("..") and prev[:-1].isalpha() \
-                    and prev[:-1].lower() in NO_END_WORDS:
+                    and prev[:-1].lower() in self.no_period_after:
                 tokens[i - 1] = prev = prev[:-1]
                 if first.isupper() and self._is_common(cur):
                     tokens[i] = cur = self._lower_first(cur)
                 continue
             last = prev[-1]
             nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
-            capitalised = first.isupper() and (self._capitalised(cur) or ELISION_RE.match(cur) or cur == "À")
+            capitalised = first.isupper() and (self._capitalised(cur) or self.elision_re.match(cur) or cur == "À")
             if last == "," and capitalised and (self._starter(cur) or self._cue_start(cur) and nxt[:1].islower()
-                                                or _bare(cur) in FUNCTION_WORDS and not nxt[:1].isupper()):
+                                                or _bare(cur) in self.function_words and not nxt[:1].isupper()):
                 tokens[i] = self._lower_first(cur)     # "l'infrarouge, Donc, qui" -> "l'infrarouge, donc, qui"
                 continue
             if last.isalpha() and last.islower():
                 if not capitalised:
                     continue
-                if _bare(prev) in NO_END_WORDS or _bare(prev) in self.INTERJECTIONS:
+                if self._in_title(prev, nxt):
+                    continue
+                if _bare(prev) in self.no_end or _bare(prev) in self.interjections:
                     # "les Les zoos", "que Je", "pour L'ascension"; not "à La Rascasse" (next word
                     # capitalised) nor "des Maires" (nouns are left to the source)
-                    elided = ELISION_RE.match(cur)
+                    elided = self.elision_re.match(cur)
                     if elided and cur[elided.end():][:1].islower() \
-                            or not elided and (_bare(cur) in FUNCTION_WORDS or self._starter(cur)) \
+                            or not elided and (_bare(cur) in self.function_words or self._starter(cur)) \
                             and not nxt[:1].isupper():
                         tokens[i] = self._lower_first(cur)
                 elif self.insert_periods and (self._starter(cur) or self._cue_start(cur) and nxt[:1].islower()
                                               and len(_bare(prev)) > 1):
                     tokens[i - 1] = prev + "."
-                elif _bare(cur) in FUNCTION_WORDS and not nxt[:1].isupper():
+                elif _bare(cur) in self.function_words and not nxt[:1].isupper():
                     tokens[i] = self._lower_first(cur)     # "des tablettes Qui sont" -> "qui sont"
             elif last in ".?!" and not prev.endswith("...") and first.islower() \
-                    and not self.ABBREV_RE.match(prev):
+                    and not self.abbrev_re.match(prev):
                 tokens[i] = self._upper_first(cur)
         return " ".join(tokens)
 
@@ -1225,7 +1269,7 @@ class NormalizeSpacing(Filter):
         (re.compile(r"([,;:])(?:\s*[,;:])+"), r"\1"),       # ", ," -> ","
         (re.compile(r"[,;:]\s*(?=[.?!…])"), ""),            # ",." -> "."
         (re.compile(r"(?<!\.)([.?!…])\s+\.(?!\.)"), r"\1"),  # ". ." / "? ." -> "." / "?" (keeps "...")
-        (re.compile(r"\s+([,.])"), r"\1"),                 # "pense ." -> "pense."
+        (re.compile(r"\s+(,|\.(?![^\W_]))"), r"\1"),      # "pense ." -> "pense."; keeps "with .NET"
         (re.compile(r"\(\s*\)"), ""),                       # empty parentheses
         (re.compile(r"^(?:[\s,;:]|\.(?!\w))+"), ""),         # leading debris (keeps ".eu")
         (re.compile(r"\s+$"), ""),
@@ -1343,29 +1387,46 @@ class PromptPool:
 MARKERS = ("events", "disfluencies")      # the kinds of marker an output keeps or strips
 
 
+def category_constraints(category):
+    """The constraints a context category asks for, as compose_asr_prompts.py takes them:
+    no_events_nocasepunc -> {nocasepunc: True, events: False}."""
+    found = {marker: not neg for neg, marker in re.findall(r"(no_)?(events|disfluencies)", category)}
+    return {"nocasepunc": category == "nocasepunc" or category.endswith("_nocasepunc") or None, **found}
+
+
 class ChoosePrompt:
     """Last step of every output: the prompt of each line, chosen from its final text.
 
     keep: the markers the output keeps. Every line gets a prompt asking for them
         (events, disfluencies or events_disfluencies).
-    explicit: in an output keeping none, {marker: fraction of the lines} whose prompt asks
-        explicitly for none of that marker (no_events, no_disfluencies); half the lines drawn
-        for no_events ask for no disfluencies either (no_events_no_disfluencies).
+    explicit: {default, with_output}: the fraction of the lines whose prompt states explicitly
+        what the text does not have, as one combination of these blocks, all possible ones equally
+        likely but twice as likely when they hold a `favored` block:
+            no_events, no_disfluencies  the markers the output drops (compositional prompts; in
+                                        fixed ones, only in an output keeping no marker);
+            casepunc                    compositional prompts, cased lines with some uppercase
+                                        letter or punctuation: case and punctuation.
+        with_output when some block is favored, default otherwise.
+    favored: the blocks worth stating more often: the markers another output of the dataset keeps,
+        casepunc when the dataset has nocasepunc lines.
     nocasepunc: which lines get the _nocasepunc version of their category (asks for no case
         nor punctuation; the base one is nocasepunc instead of default_contexts):
         false -- none: lowercase fragments of a cased corpus keep the usual prompts;
         true  -- lines with no uppercase letter and no punctuation;
         N     -- those, and lines of N words or more with no punctuation but some capitals ("ces quatre dernières années la Guyane n'a pas connu..."):
                  unpunctuated subtitles whose proper nouns kept their case. They are lowercased.
-    A line whose category has no _nocasepunc version (events_disfluencies) is dropped.
+    Fixed prompts: a line whose category has no _nocasepunc version (events_disfluencies) is
+    dropped. Compositional prompts (ctx["composer"]) exist for every category: none is dropped.
     """
     label = "prompt"
 
-    def __init__(self, ctx, keep=(), explicit=None, nocasepunc=False):
+    def __init__(self, ctx, keep=(), explicit=None, favored=(), nocasepunc=False):
         if nocasepunc is not False and nocasepunc is not True and not isinstance(nocasepunc, int):
             raise ValueError(f"nocasepunc must be true, false or a number of words, got {nocasepunc!r}")
-        self.keep, self.explicit, self.nocasepunc = keep, explicit or {}, nocasepunc
-        self.pools = {name: PromptPool(ctx, name) for name in ctx["contexts"]}
+        self.keep, self.nocasepunc = keep, nocasepunc
+        self.explicit, self.favored = explicit or {"default": 0.0, "with_output": 0.0}, set(favored)
+        self.composer = ctx.get("composer")
+        self.pools = {} if self.composer else {name: PromptPool(ctx, name) for name in ctx["contexts"]}
 
     def _nocase(self, s):
         if not self.nocasepunc:
@@ -1377,20 +1438,36 @@ class ChoosePrompt:
             return True
         return False
 
-    def category(self, s, nocase):
-        if self.keep:
-            return "_".join(m for m in MARKERS if m in self.keep)
-        if s.rng.random() < self.explicit.get("events", 0):
-            return "no_events_no_disfluencies" if s.rng.random() < 0.5 else "no_events"
-        if s.rng.random() < self.explicit.get("disfluencies", 0):
-            return "no_disfluencies"
-        return "nocasepunc" if nocase else "default_contexts"
+    def blocks(self, s, nocase):
+        """The explicit blocks of the line's prompt: a combination of no_events, no_disfluencies
+        and casepunc, or none."""
+        dropped = [m for m in MARKERS if m not in self.keep] if self.composer or not self.keep else []
+        text = TAG_RE.sub(" ", s.text)
+        cased = self.composer and not nocase and (has_case(text) or PUNCT_RE.search(text))
+        possible = dropped + (["casepunc"] if cased else [])
+        combos = [c for n in range(1, len(possible) + 1) for c in itertools.combinations(possible, n)]
+        rate = self.explicit["with_output" if self.favored & set(possible) else "default"]
+        if not combos or s.rng.random() >= rate:
+            return ()
+        return s.rng.choices(combos, weights=[2 if self.favored & set(c) else 1 for c in combos])[0]
+
+    def category(self, s, nocase, blocks):
+        """events, no_events, events_no_disfluencies..."""
+        parts = [m for m in MARKERS if m in self.keep] + [f"no_{m}" for m in MARKERS if m in blocks]
+        return "_".join(parts) or ("nocasepunc" if nocase else "default_contexts")
 
     def __call__(self, s):
         nocase = self._nocase(s)
-        category = self.category(s, nocase)
+        blocks = self.blocks(s, nocase)
+        category = self.category(s, nocase, blocks)
         if nocase and category != "nocasepunc":
             category += "_nocasepunc"
+        if self.composer:
+            constraints = category_constraints(category)
+            if "casepunc" in blocks:
+                constraints["nocasepunc"] = False
+            s.prompt = self.composer.compose(s.rng, **constraints)
+            return True
         pool = self.pools.get(category)
         if pool is None:
             if not self.keep:              # no_events_no_disfluencies_nocasepunc: the no_events one
@@ -1439,21 +1516,14 @@ def output_path(path, output_dir, subdir=""):
     return os.path.join(output_dir, subdir, os.path.basename(path))
 
 
-def prompt_first(rec):
-    """The User prompt turn moved before the audio turn (the outputs always put it first)."""
-    turns = rec.get("conversations")
-    if turns:
-        prompt = [t for t in turns if t.get("from") == "User" and t.get("type") == "text"]
-        rec["conversations"] = prompt + [t for t in turns if t not in prompt]
-    return rec
-
-
 def record_rng(seed, rec, lineno):
     key = f"{seed}:{rec.get('id', lineno)}".encode()
     return random.Random(int.from_bytes(hashlib.md5(key).digest()[:8], "little"))
 
 
-def process(path, out, filters, prompt, seed, dry_run, limit, n_examples):
+def process(path, out, filters, prompt, seed, dry_run, limit, n_examples, empty_fraction=0.0, select=None):
+    """empty_fraction: the lines left with no letter nor digit kept, with an empty text.
+    select: the numbers of the only input lines read."""
     stats = defaultdict(Counter)
     examples = defaultdict(list)
     n = n_kept = 0
@@ -1463,6 +1533,8 @@ def process(path, out, filters, prompt, seed, dry_run, limit, n_examples):
         fout = open(out + ".tmp", "w", encoding="utf-8")
     with open(path, encoding="utf-8") as fin:
         lines = enumerate(tqdm(fin, desc=os.path.basename(path), unit=" lines", leave=False))
+        if select:
+            lines = (x for x in lines if x[0] in select)
         if limit:
             lines = itertools.islice(lines, limit)
         # chunks of lines go through the filters one filter at a time, so that a filter with a
@@ -1493,14 +1565,17 @@ def process(path, out, filters, prompt, seed, dry_run, limit, n_examples):
                 alive = kept
             for s in alive:
                 if not WORD_CHAR_RE.search(s.text):     # a line of tags only stays where tags are kept
-                    stats["(empty)"]["dropped"] += 1
-                    continue
+                    if s.rng.random() >= empty_fraction:
+                        stats["(empty)"]["dropped"] += 1
+                        continue
+                    stats["(empty)"]["changed"] += 1     # kept: nothing to transcribe
+                    s.text = ""
                 if not prompt(s):
                     stats[prompt.label]["dropped"] += 1
                     continue
                 n_kept += 1
                 if fout is not None:
-                    fout.write(json.dumps(prompt_first(s.rec), ensure_ascii=False) + "\n")
+                    fout.write(json.dumps(s.rec, ensure_ascii=False) + "\n")
     if fout is not None:
         fout.close()
         os.replace(out + ".tmp", out)
@@ -1522,7 +1597,7 @@ OUTPUTS = {"base": (), "events": ("events",), "disfluencies": ("disfluencies",),
            "events_disfluencies": ("events", "disfluencies")}
 # filters whose mode an output sets: the marker they handle
 MARKER_FILTERS = {"events": "events", "disfluencies": "disfluencies", "disfluency_model": "disfluencies"}
-DATASET_KEYS = {"input", "output", "outputs", "nocasepunc", "filters"}
+DATASET_KEYS = {"input", "output", "outputs", "output_lines", "nocasepunc", "filters"}
 
 
 def load_config(path):
@@ -1545,20 +1620,31 @@ def main():
     p.add_argument("--output-dir", help="write <dir>/<dataset>/ instead of each dataset's output (e.g. to test in a scratch dir)")
     p.add_argument("--overwrite", action="store_true", help="overwrite existing outputs")
     p.add_argument("--root", help="override the config's root (e.g. to test on a local copy)")
+    p.add_argument("--prompts", choices=["fixed", "compositional"], help="override the config's prompts")
     args = p.parse_args()
 
     cfg = load_config(args.config)
-    contexts_path = os.path.join(REPO_ROOT, cfg["contexts"])
-    with open(contexts_path, encoding="utf-8") as f:
-        contexts = json.load(f)
-    ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", []),
-           "contexts": contexts, "contexts_path": contexts_path}
+    ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", [])}
+    prompts = args.prompts or cfg.get("prompts", "fixed")
+    if prompts == "compositional":
+        sys.path.insert(0, os.path.join(REPO_ROOT, "data", "contexts"))
+        from compose_asr_prompts import PromptComposer
+        comp = dict(cfg["compositional"])
+        hesitations = [form for form, _ in Disfluencies.forms(comp["audio_language"])]   # conf/rules.yaml
+        ctx["composer"] = PromptComposer(os.path.join(REPO_ROOT, comp.pop("dir")), hesitations=hesitations, **comp)
+    elif prompts == "fixed":
+        ctx["contexts_path"] = os.path.join(REPO_ROOT, cfg["contexts"])
+        with open(ctx["contexts_path"], encoding="utf-8") as f:
+            ctx["contexts"] = json.load(f)
+    else:
+        raise SystemExit(f"prompts: {prompts!r}, expected fixed or compositional")
     root, seed, blocks = os.path.expandvars(args.root or cfg["root"]), cfg.get("seed", 0), cfg.get("blocks") or {}
     if "$" in root:
         raise SystemExit(f"root {root!r}: set the variable")
     if set(blocks) & set(FILTERS):
         raise SystemExit(f"blocks named like a filter: {sorted(set(blocks) & set(FILTERS))}")
-    explicit = cfg.get("explicit_fraction", {"default": 0.02, "with_output": 0.1})
+    explicit = cfg.get("explicit_fraction", {"default": 0.05, "with_output": 0.15})
+    empty_fraction = cfg.get("empty_fraction", 0.0)
 
     datasets = cfg["datasets"]
     if args.datasets:
@@ -1585,18 +1671,32 @@ def main():
             keep = OUTPUTS[output]
             overrides = {f: {"mode": "keep"} for f, m in MARKER_FILTERS.items() if m in keep}
             filters = build_filters(specs, dctx, overrides)
-            # the base output: a few prompts ask explicitly for no markers, more when another
-            # output of the dataset keeps them
-            prompt = ChoosePrompt(dctx, keep, nocasepunc=dcfg.get("nocasepunc", False), explicit={
-                m: explicit["with_output" if m in kept_somewhere else "default"] for m in MARKERS})
+            # a few prompts state what the text does not have (no markers, case and punctuation),
+            # more when another output keeps the markers or some lines are lowercase unpunctuated
+            favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
+            prompt = ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
+                                  nocasepunc=dcfg.get("nocasepunc", False))
+            # output_lines: an output but base takes that many lines at random, other ones than the
+            # other outputs while there are enough: the outputs of read speech, only there to show
+            # that a prompt asking for markers may get none (the filters may drop a few)
+            lines = dcfg.get("output_lines") if output != "base" else None
             for path in paths:
+                select = None
+                if lines:
+                    with open(path, "rb") as f:
+                        order = list(range(sum(1 for _ in f)))
+                    random.Random(f"{seed}:{path}").shuffle(order)
+                    rank = [o for o in outputs if o != "base"].index(output)
+                    start = rank * lines if (rank + 1) * lines <= len(order) else 0
+                    select = set(order[start:start + lines])
                 out = output_path(path, output_dir, "" if output == "base" else output)
                 if os.path.abspath(out) == os.path.abspath(path):
                     raise SystemExit(f"{name}: output {out} would overwrite its input")
                 if not args.dry_run and os.path.exists(out) and not args.overwrite:
                     print(f"skip {path}: {out} exists (use --overwrite)")
                     continue
-                process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples)
+                process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples, empty_fraction,
+                        select)
 
 
 if __name__ == "__main__":

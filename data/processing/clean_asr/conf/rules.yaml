@@ -5,13 +5,7 @@
 # A word list is a list or a string of words separated by spaces; words are lowercase, apostrophes
 # are ' (the text is normalised to it). Regexes are Python `re`; in YAML, write them in '...'.
 
-common:
-  disfluencies:
-    # hesitations: {written form: [spellings]}. Each spelling is a whole word: the hyphenated
-    # "mm-hmm" (yes) is not "mm" + "hmm". Capital on the first letter or on the whole word only:
-    # "MM." (messieurs) is not a hesitation.
-    hesitations:
-      hmm: ['[Hh]u+m+', '[Hh]m+', '[Mm]h+(?:m+)?', '[Mm]m+h*', 'HU+M+', 'HM+', 'M[Mm]*[Hh]+M*', 'MMM+']
+common: {}
 
 fr:
   # the words lowercase mid-sentence (build_common_words.py), relative to this directory:
@@ -39,12 +33,16 @@ fr:
   inverted_pronouns: moi toi le la les nous vous lui leur il ils elle elles on y en ce je tu
 
   disfluencies:
+    # hesitations: {written form: [spellings]}. Each spelling is a whole word: the hyphenated
+    # "mm-hmm" (yes) is not "mm" + "hmm". Capital on the first letter or on the whole word only:
+    # "MM." (messieurs) is not a hesitation.
     hesitations:
+      hmm: ['[Hh]u+m+', '[Hh]m+', '[Mm]h+(?:m+)?', '[Mm]m+h*', 'HU+M+', 'HM+', 'M[Mm]*[Hh]+M*', 'MMM+',
+            '[Mm]m+-[Hh]u*m+']            # "Mm-hum", "mm-hmm" (CTFAR)
       euh: ['[Ee]u+h+m*', '[Hh]eu+h*', 'EU+H+M*', 'HEU+H*',
             '[Ee]u+m+', 'EU+M+',          # "Eum" (PFC)
             '[Ee]h+u+m+', 'EH+U+M+',      # "Ehum" (CTFAR)
             '[Uu]+h+', 'UU*H+']           # "uh", "uh uh" (CTFNN1, CTFAR, LINAGORA)
-      hmm: ['[Mm]m+-[Hh]u*m+']            # "Mm-hum", "mm-hmm" (CTFAR)
     # function words never correct twice in a row ("je je", "le le", "et et et"). Not "nous nous"
     # / "vous vous" (pronominal verbs), "elle elle" / "ça ça" ("Elle, elle est..."), "oui oui",
     # "si si", "très très" (emphasis), "la la la" (singing)
@@ -53,10 +51,8 @@ fr:
       et ou mais que qui je tu il ils on ce cette ces mon ma mes ton ta tes son sa ses ne se me te y
 
   disfluency_model:
-    # words, never removed by the model
+    # words, added to the protect list of the model's repository: never removed, unless repeated
     discourse_words: ben bah bé hein ah oh eh bon ouais oui non voilà quoi enfin bref alors donc
-    # a word said twice on purpose: "vous vous croyez" (pronominal), "très très", "plein plein de bisous"
-    repeated_on_purpose: nous vous elle ça très oui non si bien plein la na
 
   normalize_interjections:
     # {written form: spelling regex}, any case: one spelling per interjection. They are words,

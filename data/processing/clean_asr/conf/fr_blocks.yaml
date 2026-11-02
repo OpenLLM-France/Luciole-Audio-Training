@@ -33,9 +33,13 @@ tag_tables:
     - {pattern: '\[(?:rires?|laughter)\]', tags: [laughter], ignore_case: true}
     - {pattern: '\[(?:bruits?|noise)\]', tags: [noise], ignore_case: true}
 
-# Base output (no marker kept): fraction of the lines whose prompt asks explicitly for no events /
-# no disfluencies; `with_output` when the dataset also has an output keeping them.
-explicit_fraction: {default: 0.02, with_output: 0.1}
+# Fraction of the lines whose prompt states what the text does not have: one combination of
+# no events / no disfluencies (the markers the output drops; with fixed prompts, only in the base
+# output) / case and punctuation (compositional prompts, lines with some case or punctuation), the
+# combinations holding a favored block twice as likely; `with_output` when a block is favored: a
+# marker another output of the dataset keeps, case and punctuation when the dataset has nocasepunc
+# lines (ChoosePrompt in clean_asr.py).
+explicit_fraction: {default: 0.2, with_output: 0.25}
 
 # Blocks: named lists of filters, used by name in a dataset's `filters` like a filter.
 blocks:
@@ -52,13 +56,12 @@ blocks:
     - normalize_interjections    # bé/beh -> bah, bein -> ben, ahh -> ah... (words: kept everywhere)
     - events
     - disfluencies               # euh, hmm, cut-off words "j- je", "je je"
-  # spontaneous speech: the model removes the repeats and false starts first ("je vais je vais",
-  # "les de le"), seeing the hesitations as context; the rules then remove the hesitations
+  # spontaneous speech: the model and the code of its repository remove all the disfluencies
+  # (euh, hmm, repeats, false starts "je vais je vais", cut-off words "bonj-"), no rule of ours
   markers_model:
     - normalize_interjections
     - events
     - disfluency_model
-    - disfluencies
   markers_subtitles:             # "word-" is a split compound or a dash, not a cut-off
     - normalize_interjections
     - events

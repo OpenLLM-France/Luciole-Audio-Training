@@ -45,6 +45,8 @@ from concurrent.futures import ThreadPoolExecutor
 import soundfile as sf
 from tqdm import tqdm
 
+from rebuild.common import audio_turn
+
 
 YODAS = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/YODAS"
 OUTPUT = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/clean/Yodas/intermediate/train.jsonl"
@@ -142,10 +144,10 @@ def main():
         })
 
     with ThreadPoolExecutor(args.workers) as pool:
-        durations = list(tqdm(pool.map(lambda r: sf.info(r["conversations"][1]["value"]).duration, records),
+        durations = list(tqdm(pool.map(lambda r: sf.info(audio_turn(r)["value"]).duration, records),
                               total=len(records), desc="durations", leave=False))
     for rec, d in zip(records, durations):
-        rec["conversations"][1]["duration"] = round(d, 2)
+        audio_turn(rec)["duration"] = round(d, 2)
 
     random.Random(args.seed).shuffle(records)
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -154,7 +156,7 @@ def main():
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     os.replace(out + ".tmp", out)
 
-    hours = sum(r["conversations"][1]["duration"] for r in records) / 3600
+    hours = sum(audio_turn(r)["duration"] for r in records) / 3600
     print(f"{out}\n  {len(records)}/{len(segs)} segments ({hours:,.1f} h), no cue text: {n_empty}, "
           f"spanning two videos: {n_cross}, "
           f"first cue != id cue: {n_first_mismatch}")
