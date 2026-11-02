@@ -28,6 +28,7 @@ import logging
 import os
 import random
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -35,6 +36,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
     _DIAR_FORMATS,

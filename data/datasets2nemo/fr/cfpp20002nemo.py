@@ -1,17 +1,17 @@
-"""Convert the TCOF corpus (Traitement de Corpus Oraux en Français) into NeMo manifests.
+"""Convert the CFPP2000 corpus (Corpus de Français Parlé Parisien) into NeMo manifests.
 
-TCOF ships one folder per recording, each holding a Transcriber `.trs` transcript
-(UTF-8, turn-level timing + speaker labels + overlap markers) next to its audio
-(`.wav`) and an `.xml` metadata file — the same Transcriber format as CFPP2000 /
-the ESLO-orleans `.trs` subset. Recordings are nested several levels deep under a
-Corpus/ tree (Adultes/Enfants × genre/type × recording).
+CFPP2000 is distributed as one folder per recording, each holding a Transcriber
+`.trs` transcript (UTF-8, turn-level timing + speaker labels + overlap markers)
+next to its audio (.mp3) and a metadata.xml — the same format as the ESLO-orleans
+`.trs` subset.
 
 Expected layout:
 
     <root>/
-        tcof/<...>/Corpus/<...>/<REC>/<REC>.trs   <REC>.wav   <REC>.xml
-        ...
-        tcof/<...>/Corpus/corrupted_folders/...   (skipped)
+        CFPP2000/
+            record-1/   <NAME>.trs   <NAME>.mp3   metadata.xml
+            record-2/   ...
+            ...
 
 Produces (each opt-in via a flag):
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
@@ -21,13 +21,9 @@ ASR is intentionally not wired up yet. The `--asr` flag and its dispatch hook ar
 present so it can be filled in later without reshaping the CLI; for now passing it
 errors out.
 
-TCOF transcription conventions handled in `clean_text`: anonymised named-entity
-placeholders are written between '¤' markers (e.g. '¤Pren1¤', '¤N1¤', '¤T1¤');
-the '¤' delimiters are stripped but the placeholder is kept. Overlap/uncertain
-inline markers ('<', '>', '*') and standalone '+' are removed.
-
-Note on language: TCOF is French (language="fr"). prompts_diarization provides French
-prompts (incl. the 'Locuteur' formats), so rows draw French prompts.
+Note on language: CFPP2000 is French (language="fr"), so rows draw the French
+prompts from prompts_diarization (including the French-only "Locuteur" formats); any
+prompt list French is missing falls back to English automatically.
 """
 
 import argparse
@@ -36,6 +32,7 @@ import logging
 import os
 import random
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -43,6 +40,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
     choose_format,
@@ -54,14 +52,16 @@ from prompts_diarization import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATASET_NAME = "TCOF"
+DATASET_NAME = "CFPP2000"
 LANGUAGE = "fr"
 
-AUDIO_EXTS = (".wav", ".mp3", ".mp4", ".flac", ".m4a", ".ogg")
+AUDIO_EXTS = (".mp3", ".wav", ".mp4", ".flac", ".m4a", ".ogg")
+# Trailing transcription-tier marker on the .trs basename (e.g. ..._C.trs).
+_TIER_RE = re.compile(r"_[A-Z]$")
 
 
-# TCOF has no canonical train/dev/test split, so we derive a deterministic one by
-# hashing the recording id (stable across runs and independent of file order).
+# CFPP2000 has no canonical train/dev/test split, so we derive a deterministic one
+# by hashing the recording id (stable across runs and independent of file order).
 def split_for(rec_id: str, val_ratio: float, test_ratio: float) -> str:
     h = (int(hashlib.md5(rec_id.encode("utf-8")).hexdigest(), 16) % 1000) / 1000.0
     if h < test_ratio:
@@ -106,21 +106,15 @@ def resolve_audio(audio: Path, conv_index: dict, prefer: bool) -> Path:
 
 # --------------------------- text cleanup ---------------------------
 
-# Anonymised entities are written '¤Pren1¤' etc.; keep the placeholder, drop '¤'.
-_ANON_RE = re.compile(r"¤\s*([^¤]*?)\s*¤")
-# Inline overlap/uncertain markers and stray transcription symbols.
-_MARKER_RE = re.compile(r"[<>*]")
-_PLUS_RE = re.compile(r"(?<!\S)\+(?!\S)")  # standalone '+'
+# Transcriber events are separate <Event> elements, so .trs tail text is mostly
+# clean; this just normalises whitespace and drops any stray inline [..] markers.
 _INLINE_TAG_RE = re.compile(r"\[[^\]]*\]")
 _WS_RE = re.compile(r"\s+")
 _DETOK_RE = re.compile(r"\s+([,.;:!?])")
 
 
 def clean_text(text: str) -> str:
-    text = _ANON_RE.sub(r"\1", text)
     text = _INLINE_TAG_RE.sub(" ", text)
-    text = _MARKER_RE.sub(" ", text)
-    text = _PLUS_RE.sub(" ", text)
     text = _WS_RE.sub(" ", text).strip()
     return _DETOK_RE.sub(r"\1", text)
 
@@ -225,39 +219,44 @@ def iter_trs_utterances(root, speakers: dict):
 
 # --------------------------- discovery ---------------------------
 
-def discover_records(corpus_root: Path, include_corrupted: bool) -> list[tuple[str, Path, Path]]:
-    """Return [(rec_id, audio_path, trs_path)] for every .trs with a sibling audio.
+def find_audio(folder: Path) -> Path | None:
+    for fp in sorted(folder.iterdir()):
+        if fp.suffix.lower() in AUDIO_EXTS:
+            return fp
+    return None
 
-    Walks the Corpus/ tree recursively; skips the 'corrupted_folders' bucket
-    (unless include_corrupted) and Synology '@eaDir' sidecars."""
+
+def pick_trs(folder: Path) -> Path | None:
+    trs = sorted(folder.glob("*.trs"))
+    if not trs:
+        return None
+    for t in trs:
+        if t.stem.endswith("_C"):
+            return t
+    return trs[0]
+
+
+def discover_records(corpus_root: Path) -> list[tuple[str, Path, Path]]:
+    """Return [(rec_id, audio_path, trs_path)] for records with both."""
     out = []
-    seen: set[str] = set()
-    for trs in sorted(corpus_root.rglob("*.trs")):
-        parts = set(trs.parts)
-        if "@eaDir" in parts:
+    for d in sorted(corpus_root.glob("record-*")):
+        if not d.is_dir():
             continue
-        if not include_corrupted and "corrupted_folders" in parts:
+        trs = pick_trs(d)
+        if trs is None:
             continue
-        audio = None
-        for ext in AUDIO_EXTS:
-            cand = trs.with_suffix(ext)
-            if cand.exists():
-                audio = cand
-                break
+        audio = find_audio(d)
         if audio is None:
-            logger.debug(f"{trs}: no sibling audio, skipping")
+            logger.debug(f"{d.name}: .trs but no audio, skipping")
             continue
-        rec_id = trs.stem
-        if rec_id in seen:
-            rec_id = f"{trs.parent.name}/{rec_id}"  # disambiguate rare stem clashes
-        seen.add(rec_id)
+        rec_id = _TIER_RE.sub("", trs.stem) or d.name
         out.append((rec_id, audio, trs))
     return out
 
 
 # --------------------------- diarization windowing ---------------------------
-# (Shared shape with ami2nemo.py / icsi2nemo.py / cfpp20002nemo.py; kept local per
-# the per-converter convention. The only corpus-specific part is how `units` are
+# (Shared shape with ami2nemo.py / icsi2nemo.py / eslo2nemo.py; kept local per the
+# per-converter convention. The only corpus-specific part is how `units` are
 # built, above.)
 
 def build_units(root, speakers: dict, merge_gap: float | None,
@@ -464,17 +463,20 @@ def build_diar_rows(meeting_id: str, mix_audio: Path, units: list[dict],
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert TCOF to NeMo manifests.")
+    parser = argparse.ArgumentParser(description="Convert CFPP2000 to NeMo manifests.")
 
     io_group = parser.add_argument_group("input/output")
     io_group.add_argument("--root", type=str, default=None,
-                          help="TCOF dataset root (contains tcof/). "
-                               "Default: $DATA_FOLDER/raw/transcript/fr/TCOF.")
-    io_group.add_argument("--corpus-subdir", type=str, default="tcof",
-                          help="Sub-directory under --root to scan recursively for "
-                               ".trs/.wav pairs (default: 'tcof'; use 'tcof-v1' for v1).")
-    io_group.add_argument("--include-corrupted", action="store_true",
-                          help="Include recordings under 'corrupted_folders' (skipped by default).")
+                          help="CFPP2000 dataset root (contains CFPP2000/record-*). "
+                               "Default: $DATA_FOLDER/raw/transcript/fr/CFPP2000.")
+    io_group.add_argument("--force", action="store_true",
+                          help="Overwrite existing manifest .jsonl files.")
+    io_group.add_argument("--limit", type=int, default=None,
+                          help="Process at most N recordings (debug).")
+    io_group.add_argument("--val-ratio", type=float, default=0.05,
+                          help="Fraction of recordings hashed into the validation split.")
+    io_group.add_argument("--test-ratio", type=float, default=0.05,
+                          help="Fraction of recordings hashed into the test split.")
     io_group.add_argument("--prefer-converted", action=argparse.BooleanOptionalAction, default=True,
                           help="Prefer the converted (wav/flac, 16 kHz mono) audio mirroring the "
                                "raw path under --converted-audio-root when present "
@@ -485,14 +487,6 @@ def main():
     io_group.add_argument("--converted-audio-root", type=str, default=None,
                           help="Root of the converted audio tree. Default: "
                                "$DATA_FOLDER/converted_audios.")
-    io_group.add_argument("--force", action="store_true",
-                          help="Overwrite existing manifest .jsonl files.")
-    io_group.add_argument("--limit", type=int, default=None,
-                          help="Process at most N recordings (debug).")
-    io_group.add_argument("--val-ratio", type=float, default=0.05,
-                          help="Fraction of recordings hashed into the validation split.")
-    io_group.add_argument("--test-ratio", type=float, default=0.05,
-                          help="Fraction of recordings hashed into the test split.")
 
     # --asr is declared so the CLI shape is final; the implementation is not wired
     # up yet.
@@ -547,12 +541,12 @@ def main():
                                  "many seconds. Negative disables merging.")
     diar_group.add_argument("--diar-manifest-path", type=str, default=None,
                             help="Training diarization manifest folder. "
-                                 "Default: $DATA_FOLDER/nemo/diarization/fr/tcof.")
+                                 "Default: $DATA_FOLDER/nemo/diarization/fr/cfpp2000.")
 
     args = parser.parse_args()
 
     if args.asr:
-        parser.error("--asr is not implemented yet for TCOF; only --diarization is available.")
+        parser.error("--asr is not implemented yet for CFPP2000; only --diarization is available.")
     if not args.diarization:
         parser.error("Nothing to do: pass --diarization.")
 
@@ -560,17 +554,17 @@ def main():
     if args.root is None:
         if not data_dir:
             parser.error("--root not set and DATA_FOLDER env var is missing")
-        args.root = f"{data_dir}/raw/transcript/fr/TCOF"
+        args.root = f"{data_dir}/raw/transcript/fr/CFPP2000"
         print(f"Input path not specified, using default: {args.root}")
     root = Path(args.root)
-    corpus_root = root / args.corpus_subdir
+    corpus_root = root / "CFPP2000"
     if not corpus_root.is_dir():
         parser.error(f"Missing directory: {corpus_root}")
 
     if args.diar_manifest_path is None:
         if not data_dir:
             parser.error("--diar-manifest-path not set and DATA_FOLDER env var is missing")
-        args.diar_manifest_path = f"{data_dir}/nemo/diarization/fr/tcof"
+        args.diar_manifest_path = f"{data_dir}/nemo/diarization/fr/cfpp2000"
 
     raw_audio_root = Path(args.raw_audio_root
                           or f"{os.environ['DATA_FOLDER']}/raw")
@@ -585,10 +579,10 @@ def main():
     for v in diar_outputs:
         (diar_out_root / v).mkdir(parents=True, exist_ok=True)
 
-    recordings = discover_records(corpus_root, args.include_corrupted)
+    recordings = discover_records(corpus_root)
     if args.limit:
         recordings = recordings[:args.limit]
-    logger.info(f"Found {len(recordings)} TCOF .trs/.wav recordings under {corpus_root}")
+    logger.info(f"Found {len(recordings)} CFPP2000 .trs recordings under {corpus_root}")
     if args.prefer_converted:
         logger.info(f"Indexed {len(conv_index)} converted audio files under {conv_dataset_dir}")
 
@@ -613,7 +607,7 @@ def main():
         audio = resolve_audio(audio, conv_index, args.prefer_converted)
         if str(audio).startswith(str(conv_audio_root)):
             n_converted += 1
-        mix_dur = audio_duration(audio)
+        mix_dur = audio_duration(audio)  # None for unreadable audio
 
         if args.diarization:
             units = build_units(

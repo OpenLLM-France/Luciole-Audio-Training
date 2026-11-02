@@ -25,7 +25,7 @@ import logging
 import argparse
 from pathlib import Path
 
-PROCESSING = Path(__file__).resolve().parent.parent / "processing"   # data/processing
+PROCESSING = Path(__file__).resolve().parent.parent.parent / "processing"   # data/processing
 sys.path.insert(0, str(PROCESSING))
 
 from ssak.utils.kaldi_dataset import KaldiDataset
@@ -39,7 +39,6 @@ KALDI = f"{os.environ['DATA_FOLDER']}/kaldi/ar/raw"
 RAW = f"{os.environ['DATA_FOLDER']}/raw/transcript/ar"
 OUT = f"{os.environ['DATA_FOLDER']}/nemo/asr/ar"
 CONVERTED = f"{os.environ['DATA_FOLDER']}/converted_audios/transcript/ar"
-DEFAULT_FILTER_DIR = "/tmp/claude-1005/-home-abert-airflow/07599129-18b1-4367-86b9-623d318594b2/scratchpad/mix"
 
 CTX_CATEGORY = "nocasepunc"    # category in contexts/ar_asr_contexts.json
 MASC_MAX_DUR = 60.0            # drop MASC segments with corrupt (>60s) durations
@@ -296,6 +295,8 @@ def process(name, spec, filter_dir):
 
         filt = spec.get("filter", {}).get(split)
         if filt:
+            if filter_dir is None:
+                raise SystemExit(f"{name}/{split} needs {filt}: pass --filter_dir")
             keep = set()
             with open(os.path.join(filter_dir, filt)) as f:
                 for line in f:
@@ -336,7 +337,8 @@ def process(name, spec, filter_dir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="+", default=None, help="subset of dataset names")
-    ap.add_argument("--filter_dir", default=DEFAULT_FILTER_DIR)
+    ap.add_argument("--filter_dir", default=None,
+                    help="Folder with the utt-id lists of the `filter` entries (MGB2_wmer0.utt2dur for MGB2 train)")
     args = ap.parse_args()
 
     summary = []

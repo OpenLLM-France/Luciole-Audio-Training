@@ -1,33 +1,33 @@
-"""Convert the ESLO corpus into NeMo manifests.
+"""Convert the TCOF corpus (Traitement de Corpus Oraux en Français) into NeMo manifests.
 
-ESLO ships several sub-corpora in incompatible layouts/formats. This converter
-currently implements only the **diarization** family, and only over the
-**ESLO-orleans `.trs` subset**, which is the cleanest self-contained,
-audio-paired set: each `record-*/` folder holds one Transcriber `.trs`
-transcript (UTF-8, turn-level timing + speaker labels + overlap markers) next to
-its audio file.
+TCOF ships one folder per recording, each holding a Transcriber `.trs` transcript
+(UTF-8, turn-level timing + speaker labels + overlap markers) next to its audio
+(`.wav`) and an `.xml` metadata file — the same Transcriber format as CFPP2000 /
+the ESLO-orleans `.trs` subset. Recordings are nested several levels deep under a
+Corpus/ tree (Adultes/Enfants × genre/type × recording).
 
-Expected layout (Cocoon/Orléans "demande" export):
+Expected layout:
 
     <root>/
-        ESLO-orleans/
-            record-1/   <ID>_C.trs   <something>.mp3|wav|mp4
-            record-2/   ...
-            ...
+        tcof/<...>/Corpus/<...>/<REC>/<REC>.trs   <REC>.wav   <REC>.xml
+        ...
+        tcof/<...>/Corpus/corrupted_folders/...   (skipped)
 
 Produces (each opt-in via a flag):
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
-                    variants, several output formats (RTTM, SRT, VTT, ...) and
-                    with/without backchannels.
+                    variants, several output formats (RTTM, SRT, VTT, ...).
 
-ASR (over *all* available ESLO audio-paired data: ESLO-md + ESLO-orleans, both
-`.trs` and `crdo*.xml`) is intentionally not wired up yet. The `--asr` flag and
-its dispatch hook are present so it can be filled in later without reshaping the
-CLI; for now passing it errors out.
+ASR is intentionally not wired up yet. The `--asr` flag and its dispatch hook are
+present so it can be filled in later without reshaping the CLI; for now passing it
+errors out.
 
-Note on language: ESLO is French (language="fr"), so rows draw the French
-prompts from prompts_diarization (including the French-only "Locuteur" formats); any
-prompt list French is missing falls back to English automatically.
+TCOF transcription conventions handled in `clean_text`: anonymised named-entity
+placeholders are written between '¤' markers (e.g. '¤Pren1¤', '¤N1¤', '¤T1¤');
+the '¤' delimiters are stripped but the placeholder is kept. Overlap/uncertain
+inline markers ('<', '>', '*') and standalone '+' are removed.
+
+Note on language: TCOF is French (language="fr"). prompts_diarization provides French
+prompts (incl. the 'Locuteur' formats), so rows draw French prompts.
 """
 
 import argparse
@@ -36,6 +36,7 @@ import logging
 import os
 import random
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -43,6 +44,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # prompts_diarization.py
 from prompts_diarization import (
     DIAR_VARIANTS,
     choose_format,
@@ -54,15 +56,13 @@ from prompts_diarization import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATASET_NAME = "ESLO"
+DATASET_NAME = "TCOF"
 LANGUAGE = "fr"
 
-AUDIO_EXTS = (".mp3", ".wav", ".mp4", ".flac", ".m4a", ".ogg")
-# Trailing transcription-tier marker on the .trs basename (ESLO1_ENT_001_C.trs).
-_TIER_RE = re.compile(r"_[A-Z]$")
+AUDIO_EXTS = (".wav", ".mp3", ".mp4", ".flac", ".m4a", ".ogg")
 
 
-# ESLO has no canonical train/dev/test split, so we derive a deterministic one by
+# TCOF has no canonical train/dev/test split, so we derive a deterministic one by
 # hashing the recording id (stable across runs and independent of file order).
 def split_for(rec_id: str, val_ratio: float, test_ratio: float) -> str:
     h = (int(hashlib.md5(rec_id.encode("utf-8")).hexdigest(), 16) % 1000) / 1000.0
@@ -85,9 +85,8 @@ def audio_duration(path: Path) -> float | None:
 def build_converted_index(conv_dataset_dir: Path) -> dict:
     """Map lowercased filename stem -> converted audio path (wav preferred over
     flac) for every audio under the dataset's converted tree. The converted tree
-    may reorganise files into different subdirs/extension relative to raw (e.g. ESLO
-    raw 'ESLO-orleans/record-N/<REC>.mp3' vs converted
-    'ESLO_800H/<n>/<CAT>/<REC>/<REC>.wav'), so we match by filename stem, not path."""
+    may reorganise files into different subdirs/extension relative to raw, so we
+    match by filename stem, not by mirrored path."""
     index: dict[str, Path] = {}
     if not conv_dataset_dir.is_dir():
         return index
@@ -109,15 +108,21 @@ def resolve_audio(audio: Path, conv_index: dict, prefer: bool) -> Path:
 
 # --------------------------- text cleanup ---------------------------
 
-# Transcriber events are separate <Event> elements, so .trs tail text is mostly
-# clean; this just normalises whitespace and drops any stray inline [..] markers.
+# Anonymised entities are written '¤Pren1¤' etc.; keep the placeholder, drop '¤'.
+_ANON_RE = re.compile(r"¤\s*([^¤]*?)\s*¤")
+# Inline overlap/uncertain markers and stray transcription symbols.
+_MARKER_RE = re.compile(r"[<>*]")
+_PLUS_RE = re.compile(r"(?<!\S)\+(?!\S)")  # standalone '+'
 _INLINE_TAG_RE = re.compile(r"\[[^\]]*\]")
 _WS_RE = re.compile(r"\s+")
 _DETOK_RE = re.compile(r"\s+([,.;:!?])")
 
 
 def clean_text(text: str) -> str:
+    text = _ANON_RE.sub(r"\1", text)
     text = _INLINE_TAG_RE.sub(" ", text)
+    text = _MARKER_RE.sub(" ", text)
+    text = _PLUS_RE.sub(" ", text)
     text = _WS_RE.sub(" ", text).strip()
     return _DETOK_RE.sub(r"\1", text)
 
@@ -127,8 +132,8 @@ def clean_text(text: str) -> str:
 def parse_trs(path: Path):
     """Return (speakers, root) where speakers maps spk id -> display name.
 
-    ET respects the XML declaration's encoding (ESLO-md is ISO-8859-1, orleans is
-    UTF-8) and does not fetch the declared external DTD."""
+    ET respects the XML declaration's encoding and does not fetch the declared
+    external DTD."""
     root = ET.parse(str(path)).getroot()
     speakers = {}
     for s in root.iter("Speaker"):
@@ -141,11 +146,12 @@ def parse_trs(path: Path):
 def iter_trs_utterances(root, speakers: dict):
     """Yield {'speaker', 'start', 'end', 'text'} for every speaker-attributed turn.
 
-    Transcriber stores spoken text in the `.tail` of <Sync>/<Who> elements. A
-    <Sync time=t> opens a time-anchored sub-segment; a <Who nb=k> switches the
-    active speaker within an overlapping turn (turn @speaker is a space-separated
-    list, k is 1-based into it). Each sub-segment ends at the next Sync time, or
-    the turn's endTime. Overlapping chunks share the enclosing sub-segment span.
+    Transcriber stores spoken text in the `.tail` of <Sync>/<Who>/<Event>
+    elements. A <Sync time=t> opens a time-anchored sub-segment; a <Who nb=k>
+    switches the active speaker within an overlapping turn (turn @speaker is a
+    space-separated list, k is 1-based into it). Each sub-segment ends at the next
+    Sync time, or the turn's endTime. Overlapping chunks share the enclosing
+    sub-segment span.
     """
     for turn in root.iter("Turn"):
         spk_list = (turn.get("speaker") or "").split()
@@ -221,45 +227,40 @@ def iter_trs_utterances(root, speakers: dict):
 
 # --------------------------- discovery ---------------------------
 
-def find_audio(folder: Path) -> Path | None:
-    for fp in sorted(folder.iterdir()):
-        if fp.suffix.lower() in AUDIO_EXTS:
-            return fp
-    return None
+def discover_records(corpus_root: Path, include_corrupted: bool) -> list[tuple[str, Path, Path]]:
+    """Return [(rec_id, audio_path, trs_path)] for every .trs with a sibling audio.
 
-
-def pick_trs(folder: Path) -> Path | None:
-    trs = sorted(folder.glob("*.trs"))
-    if not trs:
-        return None
-    # Prefer the final '_C' tier when several tiers are present.
-    for t in trs:
-        if t.stem.endswith("_C"):
-            return t
-    return trs[0]
-
-
-def discover_orleans_trs(orleans_root: Path) -> list[tuple[str, Path, Path]]:
-    """Return [(rec_id, audio_path, trs_path)] for orleans records with both."""
+    Walks the Corpus/ tree recursively; skips the 'corrupted_folders' bucket
+    (unless include_corrupted) and Synology '@eaDir' sidecars."""
     out = []
-    for d in sorted(orleans_root.glob("record-*")):
-        if not d.is_dir():
+    seen: set[str] = set()
+    for trs in sorted(corpus_root.rglob("*.trs")):
+        parts = set(trs.parts)
+        if "@eaDir" in parts:
             continue
-        trs = pick_trs(d)
-        if trs is None:
+        if not include_corrupted and "corrupted_folders" in parts:
             continue
-        audio = find_audio(d)
+        audio = None
+        for ext in AUDIO_EXTS:
+            cand = trs.with_suffix(ext)
+            if cand.exists():
+                audio = cand
+                break
         if audio is None:
-            logger.debug(f"{d.name}: .trs but no audio, skipping")
+            logger.debug(f"{trs}: no sibling audio, skipping")
             continue
-        rec_id = _TIER_RE.sub("", trs.stem) or d.name
+        rec_id = trs.stem
+        if rec_id in seen:
+            rec_id = f"{trs.parent.name}/{rec_id}"  # disambiguate rare stem clashes
+        seen.add(rec_id)
         out.append((rec_id, audio, trs))
     return out
 
 
 # --------------------------- diarization windowing ---------------------------
-# (Shared shape with ami2nemo.py / icsi2nemo.py; kept local per the per-converter
-# convention. The only ESLO-specific part is how `units` are built, above.)
+# (Shared shape with ami2nemo.py / icsi2nemo.py / cfpp20002nemo.py; kept local per
+# the per-converter convention. The only corpus-specific part is how `units` are
+# built, above.)
 
 def build_units(root, speakers: dict, merge_gap: float | None,
                 mix_duration: float | None = None) -> list[dict]:
@@ -368,13 +369,24 @@ def _pieces_to_segs(pieces: list[dict], win_start: float):
 def build_diar_rows(meeting_id: str, mix_audio: Path, units: list[dict],
                     max_dur: float, min_turns: int, min_dur: float,
                     split: str, max_turns: int | None = None,
-                    format_variety: bool = True, backchannel_versions: bool = True,
-                    generic_ratio: float = 0.4, backchannel_ratio: float = 0.5,
+                    format_variety: bool = True, generic_ratio: float = 0.4,
+                    backchannel_versions: bool = True, backchannel_ratio: float = 0.5,
                     mixed_variants: tuple | None = None) -> dict:
     """Build diarization rows for every variant from one shared windowing.
 
-    See ami2nemo.build_diar_rows for the full description of the per-window
-    variant/format/backchannel logic; this is the same machinery."""
+    For each (window, variant, version) a (format, prompt_style) is chosen by
+    prompts_diarization.choose_format: JSON is emitted for a small fixed fraction of rows
+    (JSON_FORMAT_RATIO), otherwise with probability generic_ratio a generic,
+    no-format prompt on the variant's DEFAULT format, else an explicit
+    format-specifying prompt on a random non-JSON format. The choice is stored in
+    custom_metadata so make_diar_lean_row can pick a matching prompt.
+
+    When backchannel_versions, each window yields a "clean" version
+    (backchannels/acknowledgements removed, default prompt); if it also contained
+    backchannels, a "full" version (kept, prompt asks to include them) is emitted
+    with probability backchannel_ratio. Windows entirely of backchannels yield only
+    the full version. Windows with fewer than min_turns turns or shorter than
+    min_dur seconds are dropped."""
     out: dict[str, list] = {v: [] for v in DIAR_VARIANTS}
     if mixed_variants:
         out["mixed"] = []
@@ -387,6 +399,7 @@ def build_diar_rows(meeting_id: str, mix_audio: Path, units: list[dict],
         if dur < min_dur or dur <= 0:
             continue
 
+        # (tag, pieces, include_backchannels). Audio window is unchanged; only text differs.
         if backchannel_versions:
             clean = clean_window_pieces(window, LANGUAGE)
             versions = []
@@ -453,20 +466,17 @@ def build_diar_rows(meeting_id: str, mix_audio: Path, units: list[dict],
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert ESLO to NeMo manifests.")
+    parser = argparse.ArgumentParser(description="Convert TCOF to NeMo manifests.")
 
     io_group = parser.add_argument_group("input/output")
     io_group.add_argument("--root", type=str, default=None,
-                          help="ESLO dataset root (contains ESLO-orleans/, ...). "
-                               "Default: $DATA_FOLDER/raw/transcript/fr/ESLO.")
-    io_group.add_argument("--force", action="store_true",
-                          help="Overwrite existing manifest .jsonl files.")
-    io_group.add_argument("--limit", type=int, default=None,
-                          help="Process at most N recordings (debug).")
-    io_group.add_argument("--val-ratio", type=float, default=0.05,
-                          help="Fraction of recordings hashed into the validation split.")
-    io_group.add_argument("--test-ratio", type=float, default=0.05,
-                          help="Fraction of recordings hashed into the test split.")
+                          help="TCOF dataset root (contains tcof/). "
+                               "Default: $DATA_FOLDER/raw/transcript/fr/TCOF.")
+    io_group.add_argument("--corpus-subdir", type=str, default="tcof",
+                          help="Sub-directory under --root to scan recursively for "
+                               ".trs/.wav pairs (default: 'tcof'; use 'tcof-v1' for v1).")
+    io_group.add_argument("--include-corrupted", action="store_true",
+                          help="Include recordings under 'corrupted_folders' (skipped by default).")
     io_group.add_argument("--prefer-converted", action=argparse.BooleanOptionalAction, default=True,
                           help="Prefer the converted (wav/flac, 16 kHz mono) audio mirroring the "
                                "raw path under --converted-audio-root when present "
@@ -477,22 +487,29 @@ def main():
     io_group.add_argument("--converted-audio-root", type=str, default=None,
                           help="Root of the converted audio tree. Default: "
                                "$DATA_FOLDER/converted_audios.")
+    io_group.add_argument("--force", action="store_true",
+                          help="Overwrite existing manifest .jsonl files.")
+    io_group.add_argument("--limit", type=int, default=None,
+                          help="Process at most N recordings (debug).")
+    io_group.add_argument("--val-ratio", type=float, default=0.05,
+                          help="Fraction of recordings hashed into the validation split.")
+    io_group.add_argument("--test-ratio", type=float, default=0.05,
+                          help="Fraction of recordings hashed into the test split.")
 
-    # --asr is declared so the CLI shape is final; the implementation (over all
-    # ESLO audio-paired data) is not wired up yet.
+    # --asr is declared so the CLI shape is final; the implementation is not wired
+    # up yet.
     asr_group = parser.add_argument_group("asr manifest (not implemented yet)")
     asr_group.add_argument("--asr", action="store_true",
-                           help="[NOT IMPLEMENTED] ASR manifest over all ESLO data.")
+                           help="[NOT IMPLEMENTED] ASR manifest.")
     asr_group.add_argument("--asr-min-duration", type=float, default=0.2)
     asr_group.add_argument("--asr-max-duration", type=float, default=60.0)
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
-                            help="Enable the speaker-diarization manifests (off by default), "
-                                 "built from the ESLO-orleans .trs subset. Emits three "
-                                 "variants under diarization/: 'asr' (speaker-labeled "
-                                 "transcript), 'timestamps' (who-spoke-when), and "
-                                 "'timestamps_asr' (labels + times + words).")
+                            help="Enable the speaker-diarization manifests (off by default). "
+                                 "Emits three variants under diarization/: 'asr' "
+                                 "(speaker-labeled transcript), 'timestamps' (who-spoke-when), "
+                                 "and 'timestamps_asr' (labels + times + words).")
     diar_group.add_argument("--diar-max-duration", type=float, default=90.0,
                             help="Max window length in seconds.")
     diar_group.add_argument("--diar-min-duration", type=float, default=10.0,
@@ -514,10 +531,14 @@ def main():
                                  "only formats defined in both languages are eligible.")
     diar_group.add_argument("--diar-backchannel-versions", action=argparse.BooleanOptionalAction,
                             default=True,
-                            help="Emit clean (no-backchannel) and, when present, full "
-                                 "(backchannel-included) versions per window.")
+                            help="Emit two versions per window: one without "
+                                 "backchannels/acknowledgements (default prompt) and, when the "
+                                 "window has any, one with them (prompt asks to include them). "
+                                 "--no-diar-backchannel-versions keeps every utterance in a "
+                                 "single version.")
     diar_group.add_argument("--diar-backchannel-ratio", type=float, default=0.5,
-                            help="Probability of also emitting the backchannel-included version.")
+                            help="When a window contains backchannels, the probability of also "
+                                 "emitting its backchannel-included version.")
     diar_group.add_argument("--diar-mixed", action=argparse.BooleanOptionalAction, default=True,
                             help="Also emit a 'mixed/' folder (one randomly-chosen variant per window).")
     diar_group.add_argument("--diar-mixed-variants", nargs="+", choices=list(DIAR_VARIANTS),
@@ -528,12 +549,12 @@ def main():
                                  "many seconds. Negative disables merging.")
     diar_group.add_argument("--diar-manifest-path", type=str, default=None,
                             help="Training diarization manifest folder. "
-                                 "Default: $DATA_FOLDER/nemo/diarization/fr/eslo.")
+                                 "Default: $DATA_FOLDER/nemo/diarization/fr/tcof.")
 
     args = parser.parse_args()
 
     if args.asr:
-        parser.error("--asr is not implemented yet for ESLO; only --diarization is available.")
+        parser.error("--asr is not implemented yet for TCOF; only --diarization is available.")
     if not args.diarization:
         parser.error("Nothing to do: pass --diarization.")
 
@@ -541,22 +562,17 @@ def main():
     if args.root is None:
         if not data_dir:
             parser.error("--root not set and DATA_FOLDER env var is missing")
-        args.root = f"{data_dir}/raw/transcript/fr/ESLO"
+        args.root = f"{data_dir}/raw/transcript/fr/TCOF"
         print(f"Input path not specified, using default: {args.root}")
     root = Path(args.root)
-    orleans_root = root / "ESLO-orleans"
-    if not orleans_root.is_dir():
-        parser.error(f"Missing directory: {orleans_root}")
+    corpus_root = root / args.corpus_subdir
+    if not corpus_root.is_dir():
+        parser.error(f"Missing directory: {corpus_root}")
 
     if args.diar_manifest_path is None:
         if not data_dir:
             parser.error("--diar-manifest-path not set and DATA_FOLDER env var is missing")
-        args.diar_manifest_path = f"{data_dir}/nemo/diarization/fr/eslo"
-
-    diar_out_root = Path(args.diar_manifest_path)
-    diar_outputs = list(DIAR_VARIANTS) + (["mixed"] if args.diar_mixed else [])
-    for v in diar_outputs:
-        (diar_out_root / v).mkdir(parents=True, exist_ok=True)
+        args.diar_manifest_path = f"{data_dir}/nemo/diarization/fr/tcof"
 
     raw_audio_root = Path(args.raw_audio_root
                           or f"{os.environ['DATA_FOLDER']}/raw")
@@ -566,10 +582,15 @@ def main():
                         if str(root).startswith(str(raw_audio_root)) else conv_audio_root)
     conv_index = build_converted_index(conv_dataset_dir) if args.prefer_converted else {}
 
-    recordings = discover_orleans_trs(orleans_root)
+    diar_out_root = Path(args.diar_manifest_path)
+    diar_outputs = list(DIAR_VARIANTS) + (["mixed"] if args.diar_mixed else [])
+    for v in diar_outputs:
+        (diar_out_root / v).mkdir(parents=True, exist_ok=True)
+
+    recordings = discover_records(corpus_root, args.include_corrupted)
     if args.limit:
         recordings = recordings[:args.limit]
-    logger.info(f"Found {len(recordings)} ESLO-orleans .trs recordings under {orleans_root}")
+    logger.info(f"Found {len(recordings)} TCOF .trs/.wav recordings under {corpus_root}")
     if args.prefer_converted:
         logger.info(f"Indexed {len(conv_index)} converted audio files under {conv_dataset_dir}")
 
@@ -594,7 +615,7 @@ def main():
         audio = resolve_audio(audio, conv_index, args.prefer_converted)
         if str(audio).startswith(str(conv_audio_root)):
             n_converted += 1
-        mix_dur = audio_duration(audio)  # None for unreadable audio (e.g. some mp3)
+        mix_dur = audio_duration(audio)
 
         if args.diarization:
             units = build_units(
@@ -610,8 +631,8 @@ def main():
                 split=split,
                 max_turns=None if args.diar_max_turns <= 0 else args.diar_max_turns,
                 format_variety=args.diar_format_variety,
-                backchannel_versions=args.diar_backchannel_versions,
                 generic_ratio=args.diar_generic_prompt_ratio,
+                backchannel_versions=args.diar_backchannel_versions,
                 backchannel_ratio=args.diar_backchannel_ratio,
                 mixed_variants=tuple(args.diar_mixed_variants) if args.diar_mixed else None,
             )

@@ -175,6 +175,10 @@ packages = [
     "luciole_audio.data",
     "luciole_audio.data.convert",
     "luciole_audio.data.datasets2nemo",
+    "luciole_audio.data.datasets2nemo.ar",
+    "luciole_audio.data.datasets2nemo.en",
+    "luciole_audio.data.datasets2nemo.fr",
+    "luciole_audio.data.datasets2nemo.multilang",
     "luciole_audio.data.generation",
     "luciole_audio.data.processing",
     "luciole_audio.data.templating",
@@ -190,6 +194,10 @@ packages = [
 "luciole_audio.data" = "data"
 "luciole_audio.data.convert" = "data/convert"
 "luciole_audio.data.datasets2nemo" = "data/datasets2nemo"
+"luciole_audio.data.datasets2nemo.ar" = "data/datasets2nemo/ar"
+"luciole_audio.data.datasets2nemo.en" = "data/datasets2nemo/en"
+"luciole_audio.data.datasets2nemo.fr" = "data/datasets2nemo/fr"
+"luciole_audio.data.datasets2nemo.multilang" = "data/datasets2nemo/multilang"
 "luciole_audio.data.generation" = "data/generation"
 "luciole_audio.data.processing" = "data/processing"
 "luciole_audio.data.templating" = "data/templating"
