@@ -12,6 +12,8 @@
 #   nocasepunc: lines that get a prompt asking for no case nor punctuation (default false: none):
 #                 true: lines with no uppercase letter and no punctuation;
 #                 N:    those, and lines of N+ words with no punctuation (lowercased)
+#   lowercase:  true: lines with punctuation and no uppercase get a prompt asking for lowercase with
+#               punctuation (compositional prompts only; default false)
 #   output_lines: lines of each output but base (default: all), drawn at random, each output its
 #               own: read speech, whose events/disfluencies outputs only show that a prompt asking
 #               for markers may get none

@@ -49,8 +49,10 @@ blocks:
     - drop_if_match: {patterns: ['<OTHER>']}
     - map_tags: {tables: [gigaspeech]}
     - replace:
+        # podcasts and YouTube write "uh" as "ah": in 518k lines sampled, no "uh", "ah" ~20k times, "um" ~14k
+        # (checked by ear). In audiobooks (AUD ids) it is a real "ah": "ah! said he,"
+        unless_id: '^AUD'
         rules:
-          # the corpus seems to write "uh" as "ah": in 518k lines sampled, no "uh", "ah" ~20k times, "um" ~14k
           - {pattern: "(?<![\\w'-])ah(?![\\w'-])", repl: 'uh'}
     - speech_rate
     - events

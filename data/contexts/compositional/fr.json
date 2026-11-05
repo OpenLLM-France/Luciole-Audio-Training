@@ -94,6 +94,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["en minuscules et avec la ponctuation", "sans majuscules mais avec la ponctuation", "tout en minuscules, en gardant la ponctuation", "avec la ponctuation, en minuscules"],
+        "sentence": [{"tu": "Écris tout en minuscules, mais mets la ponctuation."}, {"tu": "Mets la ponctuation, mais pas de majuscules."}, {"vous": "Écrivez tout en minuscules, mais mettez la ponctuation."}, {"vous": "Mettez la ponctuation, mais aucune majuscule."}, "Pas de majuscules, mais la ponctuation.", "Le texte doit être en minuscules, avec la ponctuation."],
+        "kv": [["Casse : minuscules", "Ponctuation : oui"], ["Majuscules : non", "Ponctuation : oui"], ["Format : minuscules, avec ponctuation"]]
+      },
       "yes": {
         "clause": [
           "en minuscules et sans ponctuation",

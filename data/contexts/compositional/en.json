@@ -82,6 +82,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["in lowercase but with punctuation", "with punctuation but no capital letters", "all lowercase, with punctuation", "punctuated, in lowercase"],
+        "sentence": ["Use lowercase only, but keep the punctuation.", "No capital letters, but keep the punctuation.", "Keep the punctuation and leave out capitalization.", "The text must be lowercase, with punctuation."],
+        "kv": [["Case: lowercase", "Punctuation: yes"], ["Format: lowercase, with punctuation"]]
+      },
       "yes": {
         "clause": ["in lowercase and without punctuation", "with no capital letters or punctuation",
                    "all lowercase, with no punctuation at all", "without any punctuation, in lowercase"],

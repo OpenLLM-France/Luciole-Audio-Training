@@ -2,7 +2,8 @@
 
 A prompt is a transcription request (a base) that states each requested constraint:
   language      explicit (transcribe in French) or source (in the original language)
-  nocasepunc    lowercase without punctuation (yes) or cased and punctuated (no)
+  nocasepunc    lowercase without punctuation (yes), cased and punctuated (no) or lowercase with
+                punctuation (lowercase)
   events        keep (yes) or drop (no) the [tags] of non-speech events
   disfluencies  keep (yes) or drop (no) the hesitations (euh, hmm)
 An unset constraint is not mentioned: the base alone is a plain transcription request.
@@ -51,7 +52,7 @@ import os
 import random
 
 
-AXES = {"language": ("explicit", "source"), "nocasepunc": ("yes", "no"), "events": ("yes", "no"),
+AXES = {"language": ("explicit", "source"), "nocasepunc": ("yes", "no", "lowercase"), "events": ("yes", "no"),
         "disfluencies": ("yes", "no")}
 FORMATS = {"fused": 0.3, "sentences": 0.25, "lines": 0.15, "bullets": 0.15, "kv": 0.15}
 LANGUAGE_MENTION = {"none": 0.8, "explicit": 0.1, "source": 0.1}
@@ -173,7 +174,7 @@ class PromptComposer:
     def compose(self, rng, nocasepunc=None, events=None, disfluencies=None, fmt=None, instruction_language=None,
                 mention=None):
         """A prompt asking for the given constraints: nocasepunc True (lowercase, no punctuation),
-        False (case and punctuation) or None (not mentioned); events / disfluencies True (keep),
+        False (case and punctuation), "lowercase" (lowercase, with punctuation) or None (not mentioned); events / disfluencies True (keep),
         False (drop) or None. `fmt`, `instruction_language` and `mention`
         (none, explicit, source) force a format, an instruction language or the language mention."""
         name = instruction_language or weighted(rng, self.instruction_languages)
@@ -183,7 +184,7 @@ class PromptComposer:
                 raise ValueError(f"instructions in {name} for {self.audio_language} audio must mention the language")
             mention = mention or rng.choice(AXES["language"])
         mention = mention or weighted(rng, self.language_mention)
-        wanted = [(axis, "yes" if value else "no")
+        wanted = [(axis, value if isinstance(value, str) else "yes" if value else "no")
                   for axis, value in (("nocasepunc", nocasepunc), ("events", events),
                                       ("disfluencies", disfluencies)) if value is not None]
         if mention != "none":
@@ -240,8 +241,9 @@ def main():
     p.add_argument("--instruction-language", default=None,
                    help="language of the instructions (default: the audio's); another one always mentions the language")
     p.add_argument("--mention", choices=["none", "explicit", "source"], help="force the language mention")
-    p.add_argument("--nocasepunc", choices=["yes", "no"],
-                   help="ask for lowercase without punctuation (yes) or with case and punctuation (no)")
+    p.add_argument("--nocasepunc", choices=["yes", "no", "lowercase"],
+                   help="ask for lowercase without punctuation (yes), with case and punctuation (no) "
+                        "or lowercase with punctuation (lowercase)")
     p.add_argument("--events", choices=["yes", "no"], help="ask to keep (yes) or drop (no) the [tags]")
     p.add_argument("--disfluencies", choices=["yes", "no"], help="ask to keep (yes) or drop (no) the hesitations")
     p.add_argument("--all", action="store_true", help="every combination of the constraints")
@@ -255,9 +257,9 @@ def main():
     rng = random.Random(args.seed)
     yes_no = {"yes": True, "no": False, None: None}
     if args.all:
-        combos = itertools.product((None, True, False), repeat=3)
+        combos = itertools.product((None, True, False, "lowercase"), (None, True, False), (None, True, False))
     else:
-        combos = [(yes_no[args.nocasepunc], yes_no[args.events], yes_no[args.disfluencies])]
+        combos = [(yes_no.get(args.nocasepunc, args.nocasepunc), yes_no[args.events], yes_no[args.disfluencies])]
     for nocasepunc, events, disfluencies in combos:
         print(f"### nocasepunc={nocasepunc} events={events} disfluencies={disfluencies}")
         for _ in range(args.n):

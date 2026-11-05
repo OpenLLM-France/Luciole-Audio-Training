@@ -77,6 +77,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["in kleine letters, maar met leestekens", "met leestekens, maar zonder hoofdletters", "helemaal in kleine letters, met leestekens"],
+        "sentence": ["Gebruik alleen kleine letters, maar behoud de leestekens.", "Geen hoofdletters, wel leestekens.", "De tekst moet in kleine letters en met leestekens zijn."],
+        "kv": [["Hoofdletters: nee", "Leestekens: ja"], ["Opmaak: kleine letters, met leestekens"]]
+      },
       "yes": {
         "clause": ["in kleine letters en zonder leestekens", "zonder hoofdletters of leestekens",
                    "helemaal in kleine letters, zonder enige interpunctie", "zonder interpunctie, in kleine letters"],

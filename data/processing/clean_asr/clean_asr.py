@@ -283,11 +283,13 @@ class Replace(Filter):
     words, any case) then its `patterns`.
 
     keep_case capitalises repl when the match starts with an uppercase letter.
+    unless_id: a regex on the line's id, the lines it matches are left alone.
     """
     name = "replace"
 
-    def __init__(self, ctx, rules, lang="fr", **params):
+    def __init__(self, ctx, rules, lang="fr", unless_id=None, **params):
         super().__init__(ctx)
+        self.unless_id = re.compile(unless_id) if unless_id else None
         if isinstance(rules, str):
             rules = self.named(lang, rules)
         self.rules = [(_compile(r["pattern"], r.get("ignore_case", False)), r["repl"], r.get("keep_case", False))
@@ -309,6 +311,8 @@ class Replace(Filter):
         return out + list(sets[name].get("patterns") or [])
 
     def __call__(self, s):
+        if self.unless_id and self.unless_id.search(str(s.rec.get("id", ""))):
+            return True
         text = s.text
         for pattern, repl, keep_case in self.rules:
             if keep_case:

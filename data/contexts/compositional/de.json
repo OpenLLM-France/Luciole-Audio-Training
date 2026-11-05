@@ -79,6 +79,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["in Kleinbuchstaben, aber mit Satzzeichen", "mit Satzzeichen, aber ohne Großbuchstaben", "komplett kleingeschrieben, mit Satzzeichen"],
+        "sentence": ["Verwende nur Kleinbuchstaben, aber behalte die Satzzeichen bei.", "Keine Großbuchstaben, aber Satzzeichen.", "Der Text muss kleingeschrieben sein und Satzzeichen enthalten."],
+        "kv": [["Schreibweise: Kleinbuchstaben", "Satzzeichen: ja"], ["Format: Kleinbuchstaben, mit Satzzeichen"]]
+      },
       "yes": {
         "clause": ["in Kleinbuchstaben und ohne Satzzeichen", "ohne Großbuchstaben und Satzzeichen",
                    "komplett kleingeschrieben, ganz ohne Satzzeichen", "ohne jegliche Satzzeichen, in Kleinbuchstaben"],

@@ -80,6 +80,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["in minuscolo e con la punteggiatura", "con la punteggiatura ma senza maiuscole", "tutto in minuscolo, con la punteggiatura"],
+        "sentence": ["Usa solo lettere minuscole, ma mantieni la punteggiatura.", "Niente maiuscole, ma con la punteggiatura.", "Il testo deve essere in minuscolo e con la punteggiatura."],
+        "kv": [["Maiuscole: no", "Punteggiatura: sì"], ["Formato: minuscolo, con punteggiatura"]]
+      },
       "yes": {
         "clause": ["in minuscolo e senza punteggiatura", "senza maiuscole né punteggiatura", "tutto in minuscolo, senza alcuna punteggiatura",
                    "senza alcun segno di punteggiatura, in minuscolo"],

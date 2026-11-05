@@ -79,6 +79,11 @@
       }
     },
     "nocasepunc": {
+      "lowercase": {
+        "clause": ["en minúsculas y con puntuación", "con puntuación pero sin mayúsculas", "todo en minúsculas, con puntuación"],
+        "sentence": ["Usa solo minúsculas, pero mantén la puntuación.", "Sin mayúsculas, pero con puntuación.", "El texto debe estar en minúsculas y con puntuación."],
+        "kv": [["Mayúsculas: no", "Puntuación: sí"], ["Formato: minúsculas, con puntuación"]]
+      },
       "yes": {
         "clause": ["en minúsculas y sin puntuación", "sin mayúsculas ni puntuación", "todo en minúsculas, sin ningún signo de puntuación",
                    "sin ninguna puntuación, en minúsculas"],
