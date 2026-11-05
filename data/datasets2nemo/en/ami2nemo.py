@@ -13,7 +13,7 @@ Expected layout (matches the standard `ami_public_manual_*.zip` + `amicorpus` do
 Produces three manifest families (each opt-in via a flag):
   - summary/      : one row per meeting (Mix-Headset.wav + abstractive summary text)
   - asr/          : one row per segment   (per-speaker headset .wav + transcript), written
-                    to nemo/asr/en/cleaned/AMI/intermediate; event markers kept raw (see meeting_asr.py)
+                    to nemo/asr/en/clean/AMI/intermediate; event markers kept raw (see meeting_asr.py)
   - diarization/  : windowed "who spoke when" rows in asr/timestamps/timestamps_asr
                     variants, several output formats (RTTM, SRT, VTT, ...) and
                     with/without backchannels (written under a diarization-specific root)
@@ -1098,7 +1098,7 @@ def main():
                                 "Default: $DATA_FOLDER/raw/summary/en/ami/asr")
     asr_group.add_argument("--asr-manifest-path", type=str, default=None,
                            help="Training ASR manifest folder. "
-                                "Default: $DATA_FOLDER/nemo/asr/en/cleaned/AMI/intermediate")
+                                "Default: $DATA_FOLDER/nemo/asr/en/clean/AMI/intermediate")
 
     diar_group = parser.add_argument_group("diarization manifest")
     diar_group.add_argument("--diarization", action="store_true",
@@ -1205,7 +1205,7 @@ def main():
         if args.asr_raw_manifest_path is None:
             args.asr_raw_manifest_path = f"{data_dir}/raw/summary/en/ami/asr"
         if args.asr_manifest_path is None:
-            args.asr_manifest_path = f"{data_dir}/nemo/asr/en/cleaned/AMI/intermediate"
+            args.asr_manifest_path = f"{data_dir}/nemo/asr/en/clean/AMI/intermediate"
 
     if args.diarization:
         if args.diar_raw_manifest_path is None:

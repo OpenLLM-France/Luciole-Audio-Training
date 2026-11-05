@@ -227,6 +227,28 @@ datasets:
       - markers_subtitles
       - finish
 
+  Yodas2:                         # same fr000 captions as Yodas, whole videos: count the audio once
+    input: clean/Yodas2/intermediate/train.jsonl   # from datasets2nemo/jz/yodas22nemo.py
+    output: clean/Yodas2
+    outputs: [base, events]
+    nocasepunc: 8                  # as Yodas
+    filters:
+      - normalize_unicode
+      - strip_html
+      - join_split_compounds
+      - drop_if_match: {patterns: ['\[\s*_+\s*\]']}   # "[ __ ]": censored swear word
+      - drop_foreign
+      - map_tags: {tables: [youtube, asterisk, tedx]}
+      - drop_unknown_brackets
+      - parentheses
+      - drop_subtitle_debris
+      - speaker_labels
+      - join_elisions
+      - drop_subtitle_junk
+      - speech_rate
+      - markers_subtitles
+      - finish
+
   VoxForge:                        # read prompts; verse capitals and quotes are right ("J'Accuse")
     input: clean/VoxForge/intermediate/train_recasepunc*.jsonl
     output: clean/VoxForge
@@ -247,17 +269,19 @@ datasets:
     filters: [fix_mixed_case, speech_rate, disfluency_model, normalize_spacing, fix_punctuation,
               french_typography]   # "AciCLOvir" -> "Aciclovir"
 
-  Multilingual_LibriSpeech:        # lowercase, no punctuation
-    input: context/Multilingual_LibriSpeech/train.jsonl
-    output: clean/Multilingual_LibriSpeech
-    nocasepunc: true
-    filters: [drop_ocr, speech_rate]   # read speech: no events nor disfluencies; nothing to fix in the punctuation
-
   Multilingual_LibriSpeech_recasepunc:
     input: context/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl
     output: clean/Multilingual_LibriSpeech_recasepunc
     filters: [drop_ocr, direct_speech, fix_spurious_caps, speech_rate, replace: {rules: no_final_period},
               fix_punctuation, french_typography]   # "…gens de.": cut segment
+
+  Multilingual_LibriSpeech:        # lowercase, no punctuation; after _recasepunc, whose output it reads
+    input: context/Multilingual_LibriSpeech/train.jsonl
+    output: clean/Multilingual_LibriSpeech
+    nocasepunc: true
+    # the lines only here are mostly damaged by OCR ("ils taient ivres"), which drop_ocr misses
+    filters: [keep_ids: {manifest: clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl},
+              drop_ocr, speech_rate]   # read speech: no events nor disfluencies; nothing to fix in the punctuation
 
   CommonVoice:                     # one full sentence per line, hand-punctuated
     input: context/CommonVoice/train.jsonl

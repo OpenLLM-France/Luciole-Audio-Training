@@ -11,7 +11,8 @@ Each dataset of the config (conf/fr.yaml, its header says how to write one) has:
   filters     filters and blocks (named lists of filters, `blocks` of the config), in order
 A filter rewrites the text of the Assistant turn or drops the line; lines left with no letter
 nor digit (only "euh", "[laughter]" in an output without tags, a [silence] line) are dropped, but
-for `empty_fraction` of them (config), kept with an empty text: nothing to transcribe. Then the prompt (first User text turn) is chosen from the final text
+for `empty_fraction` of them (config), kept with an empty text: nothing to transcribe (train only:
+an empty reference has no place in dev and test files). Then the prompt (first User text turn) is chosen from the final text
 (ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
 (config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
 (composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says).
@@ -221,6 +222,24 @@ class DropIfMatch(Filter):
 
     def __call__(self, s):
         return not any(p.search(s.text) for p in self.patterns)
+
+
+@register
+class KeepIds(Filter):
+    """Keep only the lines whose id is in another manifest (path relative to `root`), usually the
+    output of another dataset of the config, which must then be cleaned first."""
+    name = "keep_ids"
+
+    def __init__(self, ctx, manifest, **params):
+        super().__init__(ctx)
+        cache = ctx.setdefault("keep_ids_cache", {})
+        if manifest not in cache:
+            with open(os.path.join(ctx["root"], manifest), encoding="utf-8") as f:
+                cache[manifest] = frozenset(json.loads(line)["id"] for line in f)
+        self.ids = cache[manifest]
+
+    def __call__(self, s):
+        return s.rec["id"] in self.ids
 
 
 @register
@@ -1717,7 +1736,7 @@ def main():
         paths = sorted({p for pattern in inputs for p in glob.glob(os.path.join(root, pattern))})
         if not paths:
             print(f"[{name}] no input matches {inputs}")
-        dctx = {**ctx, "dataset": name, "inputs": paths}   # per-dataset state shared by the outputs
+        dctx = {**ctx, "dataset": name, "inputs": paths, "root": root}   # per-dataset state shared by the outputs
         kept_somewhere = {m for o in outputs for m in OUTPUTS[o]}
         for output in outputs:
             keep = OUTPUTS[output]
@@ -1747,8 +1766,9 @@ def main():
                 if not args.dry_run and os.path.exists(out) and not args.overwrite:
                     print(f"skip {path}: {out} exists (use --overwrite)")
                     continue
-                process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples, empty_fraction,
-                        select)
+                is_eval = re.match(r"(dev|test)\b", os.path.basename(path))
+                process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples,
+                        0.0 if is_eval else empty_fraction, select)
 
 
 if __name__ == "__main__":

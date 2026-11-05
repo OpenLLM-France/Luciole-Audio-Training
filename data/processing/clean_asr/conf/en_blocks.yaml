@@ -19,6 +19,15 @@ tag_tables:
     - {pattern: '<SIL>', tags: [silence]}
     - {pattern: '<MUSIC>', tags: [music]}
     - {pattern: '<NOISE>', tags: [noise]}
+  youtube:     # subtitle markers of the raw captions (Yodas2)
+    - {pattern: '\[music\]', tags: [music], ignore_case: true}
+    - {pattern: '\[applause\]', tags: [applause], ignore_case: true}
+    - {pattern: '\[(?:laughter|laughs)\]', tags: [laughter], ignore_case: true}
+    - {pattern: '\[noise\]', tags: [noise], ignore_case: true}
+    - {pattern: '\[inaudible\]', tags: [inaudible], ignore_case: true}
+    - {pattern: '\((?:laughter|laughs|laughing)\)', tags: [laughter], ignore_case: true}
+    - {pattern: '\(applause\)', tags: [applause], ignore_case: true}
+    - {pattern: '\(music\)', tags: [music], ignore_case: true}
 
 # Fraction of the lines whose prompt states what the text does not have (see fr_blocks.yaml).
 explicit_fraction: {default: 0.2, with_output: 0.25}
@@ -60,4 +69,21 @@ blocks:
     - finish_hand_punctuated     # no fix_punctuation: it works from the case
   # subtitle leftovers: sung lyrics, censored words "f***"
   drop_subtitle_debris:
-    - drop_if_match: {patterns: ['[♪♫*]']}
+    - drop_if_match: {patterns: ['[♪♫♬*]']}
+  # raw captions (Yodas2): what is not a transcription of the speech
+  drop_caption_junk:
+    - drop_if_match:
+        patterns:
+          - '\[\s*_+\s*\]'           # "[ __ ]": censored swear word
+          - '-->|\b\d{1,2}:\d{2}:\d{2}'   # raw subtitle lines, timecodes
+          - '\(-?\d+\.\d+,\s*-?\d+\.\d+'   # drone telemetry "(-122.9042,48.4788)"; "[iso : 100]" goes with drop_unknown_brackets
+          - '[\U0001F300-\U0001FAFF\u2600-\u27BF]'   # emoji: live chat "user_name: 😍"
+          - '[\u0400-\u04FF\u0590-\u06FF\u0900-\u0DFF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]'   # other scripts
+  # ">>" change of speaker, "(aside)": keep the words; "(Name)": speaker or credits
+  caption_markers:
+    - replace:
+        rules:
+          - {pattern: '>+', repl: ' '}
+          - {pattern: '\([A-Z][^()]{0,80}\)', repl: ' '}
+          - {pattern: '\(([^()]{0,80})\)', repl: ' \1 '}
+          - {pattern: '[()]', repl: ' '}
