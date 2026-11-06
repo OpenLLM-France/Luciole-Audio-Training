@@ -1,0 +1,93 @@
+# Text cleaning of the Italian ASR manifests: context/<Dataset>/ -> clean/<Dataset>/, same file names.
+#   python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/it.yaml --datasets CommonVoice [--dry-run --limit 10000]
+# The dataset entries are written as in conf/fr.yaml (its header says how). Each one lists only the
+# filters that change something in it. No fix_punctuation: see multilang_blocks.yaml.
+# Yodas2: datasets2nemo/jz/yodas22nemo.slurm (on JZ) writes clean/Yodas2/intermediate/.
+
+include: [multilang_blocks.yaml]
+root: ${DATA_FOLDER}/nemo/asr/it
+prompts: compositional                         # or fixed (--prompts overrides)
+contexts: data/contexts/it_asr_contexts.json   # relative to the repo
+compositional:
+  dir: data/contexts/compositional             # one instruction file per language
+  audio_language: it
+  # instructions in another language than the audio's: en 2.5 %, the 6 others 2.5 %
+  foreign_fraction: 0.05
+  favored_languages: [it, en]
+  language_mention: {none: 0.8, explicit: 0.1, source: 0.1}
+seed: 1234
+# lines left with no word once the markers are stripped: this fraction is kept with an empty text,
+# so that the model learns to write nothing
+empty_fraction: 0.1
+
+tag_tables:
+  youtube:     # subtitle markers of the raw captions
+    - {pattern: '\[(?:musica|music)\]', tags: [music], ignore_case: true}
+    - {pattern: '\[(?:applausi|applauso|applause)\]', tags: [applause], ignore_case: true}
+    - {pattern: '\[(?:risate|risata|ride|laughter)\]', tags: [laughter], ignore_case: true}
+    - {pattern: '\[(?:inudibile|inaudible)\]', tags: [inaudible], ignore_case: true}
+    - {pattern: '\((?:risate|risata)\)', tags: [laughter], ignore_case: true}
+    - {pattern: '\((?:applausi|applauso)\)', tags: [applause], ignore_case: true}
+    - {pattern: '\((?:musica)\)', tags: [music], ignore_case: true}
+  tedx:
+    - {pattern: '\((?:risate|risata)\)', tags: [laughter], ignore_case: true}
+    - {pattern: '\((?:applausi|applauso)\)', tags: [applause], ignore_case: true}
+    - {pattern: '\((?:musica)\)', tags: [music], ignore_case: true}
+
+datasets:
+  CommonVoice:                     # one full sentence per line, hand-punctuated
+    input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
+    output: clean/CommonVoice
+    outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
+    output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
+    filters: [add_final_period, speech_rate, finish]
+
+  FLEURS:                          # hand-punctuated
+    input: [context/FLEURS/train.jsonl, context/FLEURS/dev.jsonl, context/FLEURS/test.jsonl]
+    output: clean/FLEURS
+    filters: [add_final_period, finish]
+
+  Multilingual_LibriSpeech:        # lowercase, no punctuation
+    input: [context/Multilingual_LibriSpeech/train.jsonl, context/Multilingual_LibriSpeech/dev.jsonl, context/Multilingual_LibriSpeech/test.jsonl]
+    output: clean/Multilingual_LibriSpeech
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing]   # read speech: no events nor disfluencies
+
+  VoxPopuli:                       # European Parliament reports, segments cut mid-sentence: no final period to add
+    input: [context/VoxPopuli/train.jsonl, context/VoxPopuli/dev.jsonl, context/VoxPopuli/test.jsonl]
+    output: clean/VoxPopuli
+    nocasepunc: true               # the lines that fell back to the lowercase normalized text
+    filters: [speech_rate, finish, uncased_no_punctuation]
+
+  Multilingual_TEDx:               # "(Applause)" notes; some lines are very long: max_duration at training
+    input: [context/Multilingual_TEDx/train.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
+    output: clean/Multilingual_TEDx
+    outputs: [base, events]
+    filters:
+      - strip_html
+      - map_tags: {tables: [tedx]}
+      - caption_markers
+      - drop_subtitle_debris
+      - speech_rate
+      - events
+      - finish
+
+  Yodas2:                          # raw captions of it000
+    input: clean/Yodas2/intermediate/train.jsonl   # from datasets2nemo/jz/yodas22nemo.py
+    output: clean/Yodas2
+    outputs: [base, events, disfluencies]
+    nocasepunc: 8                  # lines of 8+ words with no punctuation: never punctuated
+    filters:
+      - normalize_unicode
+      - strip_html                 # "&gt;&gt;" before caption_markers
+      - drop_caption_junk
+      - drop_other_scripts
+      - map_tags: {tables: [youtube]}   # before caption_markers, which removes the "(Applause)" left
+      - caption_markers
+      - drop_unknown_brackets      # "[iso : 100]", speaker labels, cuts
+      - drop_subtitle_debris
+      - all_caps: {min_words: 3, action: drop}   # lowercasing loses proper nouns
+      - speech_rate
+      - events
+      - disfluencies: {lang: it, truncations: false}   # "word-" is mostly a word cut by the cue
+      - finish

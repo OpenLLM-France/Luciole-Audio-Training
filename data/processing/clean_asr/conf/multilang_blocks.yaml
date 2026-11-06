@@ -1,0 +1,36 @@
+# Shared parts of de, es, it, nl, pt and ar.yaml: event tags, prompt fractions and blocks of filters.
+# No fix_punctuation here: it needs word lists and a common_words file that only fr and en have.
+# The tag_tables are in each language's file.
+
+tags: [laughter, applause, music, noise, cough, breath, inaudible, beep, silence]
+
+# Fraction of the lines whose prompt states what the text does not have (see fr_blocks.yaml).
+explicit_fraction: {default: 0.2, with_output: 0.25}
+
+blocks:
+  finish:
+    - normalize_spacing
+    - normalize_punctuation      # "..", "?.", "??", leading punctuation, invisible characters
+    - english_typography         # ' only, "..." not "…", no space before ; : ! ? (keeps « » ¿ ¡ ؟)
+  # raw captions (Yodas2): what is not a transcription of the speech
+  drop_caption_junk:
+    - drop_if_match:
+        patterns:
+          - '\[\s*_+\s*\]'           # "[ __ ]": censored swear word
+          - '-->|\b\d{1,2}:\d{2}:\d{2}'   # raw subtitle lines, timecodes
+          - '\(-?\d+\.\d+,\s*-?\d+\.\d+'   # drone telemetry "(4.8217,51.9338)"; "[iso : 100]" goes with drop_unknown_brackets
+          - '[\U0001F300-\U0001FAFF☀-➿]'   # emoji: live chat "user_name: 😍"
+  drop_other_scripts:            # Latin-script languages: another script is another language
+    - drop_if_match:
+        patterns: ['[Ѐ-ӿ֐-ۿऀ-෿฀-๿぀-ヿ㐀-鿿가-힯]']
+  # ">>" change of speaker, "(aside)": keep the words; "(Name)", "(SPD)": speaker or credits
+  caption_markers:
+    - replace:
+        rules:
+          - {pattern: '>+', repl: ' '}
+          - {pattern: '\([A-ZÀ-Þ][^()]{0,80}\)', repl: ' '}
+          - {pattern: '\(([^()]{0,80})\)', repl: ' \1 '}
+          - {pattern: '[()]', repl: ' '}
+  # subtitle leftovers: sung lyrics, censored words "f***"; not the German gender star "Kolleg*innen", "Bürger*innenrat"
+  drop_subtitle_debris:
+    - drop_if_match: {patterns: ['[♪♫♬]|(?<![a-zäöüß])\*|\*(?!in)']}

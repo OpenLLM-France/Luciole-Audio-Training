@@ -265,3 +265,59 @@ en:
     # no capital after an abbreviation's period: "e.g. this", "vs. them" (initials "U.S." are handled by the code)
     abbreviations: >-
       etc vs e.g i.e a.m p.m mr mrs ms dr prof st jr sr inc ltd co corp no fig approx dept ave
+
+# Rules of the other languages: only what `disfluencies` needs (no fix_punctuation, conf/multilang_blocks.yaml).
+# Hesitations: only the spellings that cannot be a word. Left out, because they are also words or
+# answers: es/it "eh", nl "em", pt "é", "em" and "um", ar "اه" ("yes").
+de:
+  no_end_words: der die das den dem des ein eine einen einem einer und oder aber von zu mit für auf in an
+  disfluencies:
+    hesitations:
+      ähm: ['[Ää]+h*m+', '[Ee]hm+']
+      äh: ['[Ää]+h+']
+      öh: ['[Öö]+h+m*']
+      hm: ['[Mm]+[Hh]+[Mm]+', '[Hh]m+', '[Mm]m+']
+    # not "der der", "die die", "das das": relative pronouns ("die, die")
+    repeatable_not: ein eine einen einem einer und oder aber von zu mit für auf ich du er wir
+es:
+  no_end_words: el la los las un una unos unas de del a al con por para y o e u pero mi tu su
+  disfluencies:
+    hesitations:
+      ehm: ['[Ee]h+m+', '[Ee]m+']
+      hmm: ['[Hh]m+', '[Mm]m+h*']
+    repeatable_not: el los las un una unos unas de del con por para y o pero yo tú mi tu su
+it:
+  no_end_words: il lo la i gli le un uno una di del della a al alla da in con per e o ma mio tuo suo
+  disfluencies:
+    hesitations:
+      ehm: ['[Ee]h+m+', '[Ee]m+']
+      uhm: ['[Uu]+h*m+']
+      hmm: ['[Hh]m+', '[Mm]m+h*']
+    repeatable_not: il lo gli un uno una di del della da con per e o ma io tu mio tuo suo
+nl:
+  no_end_words: de het een van voor met en of maar op in aan te mijn je
+  disfluencies:
+    hesitations:
+      ehm: ['[Ee]h+m+']   # not "em": "geef 'em"
+      eh: ['[Ee]h+']
+      uhm: ['[Uu]+h*m+']
+      uh: ['[Uu]+h+']
+      hmm: ['[Hh]m+', '[Mm]m+h*']
+    # not "dat dat", "die die": relative pronouns
+    repeatable_not: de het een van voor met en of maar op ik jij hij zij wij mijn
+pt:
+  no_end_words: o a os as um uma de do da dos das em no na com por para e ou mas meu teu seu
+  disfluencies:
+    hesitations:
+      ehm: ['[Ee]h+m+']
+      hum: ['[Hh]um+', '[Hh]m+', '[Mm]m+h*']   # not "um": the article
+      hã: ['[Hh]ã+', '[Aa]h+n+']
+    # not "a a", "o o": preposition + article
+    repeatable_not: um uma de do da em no na com por para e ou mas eu tu meu teu seu
+ar:
+  no_end_words: في من على الى إلى عن مع
+  disfluencies:
+    hesitations:
+      ممم: ['م{3,}']
+      امم: ['[اأإ]م{2,}']
+    repeatable_not: في من على الى إلى عن مع

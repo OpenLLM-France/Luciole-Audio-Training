@@ -61,7 +61,7 @@ TAG_WORD_RE = re.compile(r"\S*\[[^\[\]]+\]\S*")
 TRAILING_TAGS_RE = re.compile(r"(?:\s*\[[^\[\]]+\])+\s*$")
 LETTER_RE = re.compile(r"[^\W\d_]")
 WORD_CHAR_RE = re.compile(r"[^\W_]")      # a letter or a digit: digits are kept as written
-PUNCT_RE = re.compile(r"[.,;:!?…]")
+PUNCT_RE = re.compile(r"[.,;:!?…،؛؟]")
 CHUNK_SIZE = 1024          # lines per batch of the filters with a `prepare` (models)
 
 
@@ -415,29 +415,37 @@ class FixMixedCase(Filter):
 
 @register
 class AllCaps(Filter):
-    """Runs of >= min_words ALL-CAPS words: lowercase them (action: lowercase) or drop the line (action: drop)."""
+    """Runs of >= min_words ALL-CAPS words: lowercase them (action: lowercase) or drop the line (action: drop).
+    ignore: regexes of capitalized words that are written so (party names "CDU, SPD, BÜNDNIS 90/DIE GRÜNEN"),
+    never counted in a run nor lowercased."""
     name = "all_caps"
 
-    def __init__(self, ctx, min_words=3, action="lowercase", **params):
+    def __init__(self, ctx, min_words=3, action="lowercase", ignore=(), **params):
         super().__init__(ctx)
         word = r"[A-ZÀ-Þ][A-ZÀ-Þ'’-]*[A-ZÀ-Þ]"
         self.re = re.compile(rf"\b{word}(?:[\s,]+{word}){{{min_words - 1},}}\b")
+        self.ignore = re.compile(r"\b(?:%s)\b" % "|".join(ignore)) if ignore else None
         self.action = action
 
     def __call__(self, s):
-        m = self.re.search(s.text)
+        # an ignored word is masked by as many "x": the offsets stay the same
+        masked = self.ignore.sub(lambda m: "x" * len(m.group(0)), s.text) if self.ignore else s.text
+        m = self.re.search(masked)
         if not m:
             return True
         if self.action == "drop":
             return False
 
-        def repl(m):
-            run = m.group(0).lower()
-            before = s.text[:m.start()].rstrip()
+        # runs found in the masked text, rewritten in the real one (same offsets)
+        text, end, parts = s.text, 0, []
+        for m in self.re.finditer(masked):
+            run = text[m.start():m.end()].lower()
+            before = text[:m.start()].rstrip()
             if not before or before[-1] in ".?!…:«\"":
                 run = run[0].upper() + run[1:]
-            return run
-        s.text = self.re.sub(repl, s.text)
+            parts += [text[end:m.start()], run]
+            end = m.end()
+        s.text = "".join(parts) + text[end:]
         return True
 
 

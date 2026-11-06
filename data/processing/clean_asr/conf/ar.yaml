@@ -1,0 +1,131 @@
+# Text cleaning of the Arabic ASR manifests: context/<Dataset>/ -> clean/<Dataset>/, same file names.
+#   python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/ar.yaml --datasets MASC [--dry-run --limit 10000]
+# The dataset entries are written as in conf/fr.yaml (its header says how). Each one lists only the
+# filters that change something in it. No fix_punctuation (see multilang_blocks.yaml), no
+# add_final_period (it does not know "؟"), no uncased_no_punctuation (Arabic has no case: it would strip all).
+# Yodas2: datasets2nemo/jz/yodas22nemo.slurm (on JZ) writes clean/Yodas2/intermediate/.
+
+include: [multilang_blocks.yaml]
+root: ${DATA_FOLDER}/nemo/asr/ar
+prompts: compositional                         # or fixed (--prompts overrides)
+contexts: data/contexts/ar_asr_contexts.json   # relative to the repo
+compositional:
+  dir: data/contexts/compositional             # one instruction file per language
+  audio_language: ar
+  # instructions in another language than the audio's: en 2.5 %, the 6 others 2.5 %
+  foreign_fraction: 0.05
+  favored_languages: [ar, en]
+  language_mention: {none: 0.8, explicit: 0.1, source: 0.1}
+seed: 1234
+# lines left with no word once the markers are stripped: this fraction is kept with an empty text,
+# so that the model learns to write nothing
+empty_fraction: 0.1
+
+tag_tables:
+  youtube:     # subtitle markers of the raw captions
+    - {pattern: '\[\s*(?:موسيقى|الموسيقى|music)\s*\]', tags: [music], ignore_case: true}
+    - {pattern: '\[\s*(?:تصفيق|applause)\s*\]', tags: [applause], ignore_case: true}
+    - {pattern: '\[\s*(?:ضحك|laughter)\s*\]', tags: [laughter], ignore_case: true}
+    - {pattern: '\(\s*موسيقى\s*\)', tags: [music]}
+    - {pattern: '\(\s*(?:يضحك|ضحك)\s*\)', tags: [laughter]}
+    - {pattern: '\(\s*تصفيق\s*\)', tags: [applause]}
+  tedx:
+    - {pattern: '\(\s*موسيقى\s*\)', tags: [music]}
+    - {pattern: '\(\s*ضحك\s*\)', tags: [laughter]}
+    - {pattern: '\(\s*تصفيق\s*\)', tags: [applause]}
+
+datasets:
+  ARABIC-SPEECH:                   # diacritized, no punctuation
+    input: [context/ARABIC-SPEECH/train.jsonl, context/ARABIC-SPEECH/test.jsonl]
+    output: clean/ARABIC-SPEECH
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing]
+
+  CommonVoice:                     # half the lines are diacritized Quran with no punctuation
+    input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
+    output: clean/CommonVoice
+    outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
+    output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
+    nocasepunc: true
+    filters: [speech_rate, finish]
+
+  ESCWA:                           # "اه" is written, but it also means "yes": left in the text
+    input: context/ESCWA/all.jsonl
+    output: clean/ESCWA
+    nocasepunc: true
+    filters: [speech_rate, finish]
+
+  FLEURS:                          # hand-punctuated
+    input: [context/FLEURS/train.jsonl, context/FLEURS/dev.jsonl, context/FLEURS/test.jsonl]
+    output: clean/FLEURS
+    filters: [finish]
+
+  MASC:                            # "[الراوي]": speaker labels
+    input: [context/MASC/train.jsonl, context/MASC/dev.jsonl, context/MASC/test.jsonl]
+    output: clean/MASC
+    nocasepunc: true               # the lines with no punctuation
+    filters: [strip_html, drop_unknown_brackets, speech_rate, finish]
+
+  MGB2:
+    input: [context/MGB2/train.jsonl, context/MGB2/dev.jsonl, context/MGB2/test.jsonl]
+    output: clean/MGB2
+    nocasepunc: true               # the lines with no punctuation
+    filters: [strip_html, drop_unknown_brackets, speech_rate, finish]
+
+  MGB5:                            # Moroccan dialect, no punctuation
+    input: [context/MGB5/train.jsonl, context/MGB5/test.jsonl]
+    output: clean/MGB5
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing]
+
+  Multilingual_TEDx:               # some lines are very long: max_duration at training
+    input: [context/Multilingual_TEDx/train.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
+    output: clean/Multilingual_TEDx
+    outputs: [base, events]
+    nocasepunc: true
+    filters:
+      - strip_html
+      - map_tags: {tables: [tedx]}
+      - caption_markers
+      - drop_subtitle_debris
+      - speech_rate
+      - events
+      - finish
+
+  TARIC:                           # Tunisian, diacritized; "<word>" marks a word, which stays
+    input: [context/TARIC/train.jsonl, context/TARIC/dev.jsonl, context/TARIC/test.jsonl]
+    output: clean/TARIC
+    nocasepunc: true
+    filters:
+      - replace: {rules: [{pattern: '<([^<>]*)>', repl: '\1'}]}
+      - speech_rate
+      - normalize_spacing
+
+  TunSwitch:                       # Tunisian with French and English, marked "<fr>...</fr>": the words stay
+    input: [context/TunSwitch/train.jsonl, context/TunSwitch/dev.jsonl, context/TunSwitch/test.jsonl]
+    output: clean/TunSwitch
+    nocasepunc: true
+    filters:
+      - replace: {rules: [{pattern: '</?\\?(?:fr|en)>', repl: ' '}]}
+      - speech_rate
+      - normalize_spacing
+
+  Yodas2:                          # raw captions of ar000
+    input: clean/Yodas2/intermediate/train.jsonl   # from datasets2nemo/jz/yodas22nemo.py
+    output: clean/Yodas2
+    outputs: [base, events, disfluencies]
+    nocasepunc: 8                  # lines of 8+ words with no punctuation: never punctuated
+    filters:
+      - normalize_unicode
+      - strip_html                 # "&gt;&gt;" before caption_markers
+      - drop_caption_junk
+      - drop_if_match: {patterns: ['[\u0400-\u04FF\u0900-\u0DFF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]']}   # another language
+      - map_tags: {tables: [youtube]}
+      - caption_markers
+      - drop_unknown_brackets      # speaker labels, cuts
+      - drop_subtitle_debris
+      - drop_if_match: {patterns: ['^(?!(?:\s*\[[a-z]+\]\s*)+$)[^\u0600-\u06FF]*$']}   # 10 % of lines have no Arabic: English tracks
+      - speech_rate
+      - events
+      - disfluencies: {lang: ar, truncations: false}
+      - finish

@@ -235,6 +235,7 @@ datasets:
     filters:
       - normalize_unicode
       - strip_html
+      - replace: {rules: [{pattern: '>+', repl: ' '}]}   # ">>" change of speaker: keep the words (drop_subtitle_junk drops ">")
       - join_split_compounds
       - drop_if_match: {patterns: ['\[\s*_+\s*\]']}   # "[ __ ]": censored swear word
       - drop_foreign
