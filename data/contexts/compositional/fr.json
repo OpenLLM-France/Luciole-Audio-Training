@@ -242,5 +242,107 @@
         ]
       }
     }
+  },
+  "ast": {
+    "source_names": {
+      "fr": "du français",
+      "en": "de l'anglais",
+      "ar": "de l'arabe",
+      "de": "de l'allemand",
+      "nl": "du néerlandais",
+      "es": "de l'espagnol",
+      "it": "de l'italien",
+      "pt": "du portugais"
+    },
+    "bases": {
+      "target": {
+        "imperative": [
+          {"tu": "Traduis cet audio en {tgt}"},
+          {"tu": "Traduis cet enregistrement en {tgt}"},
+          {"tu": "Traduis ce qui est dit en {tgt}"},
+          {"tu": "Traduis en {tgt} ce que tu entends"},
+          {"tu": "Traduis ce passage en {tgt}"},
+          {"tu": "Donne-moi la traduction en {tgt} de cet audio"},
+          {"tu": "Écris en {tgt} ce que dit la personne"},
+          {"vous": "Traduisez cet audio en {tgt}"},
+          {"vous": "Traduisez ce fichier audio en {tgt}"},
+          {"vous": "Veuillez traduire cet enregistrement en {tgt}"},
+          {"vous": "Fournissez une traduction en {tgt} de cet enregistrement"},
+          {"vous": "Écrivez en {tgt} ce qui est dit"},
+          {"vous": "Traduisez en {tgt} les paroles de cet extrait"},
+          {"vous": "Donnez-moi la traduction en {tgt} de ce qui est dit"},
+          {"vous": "Convertissez le contenu parlé en {tgt}"},
+          "Merci de traduire ce fichier audio en {tgt}"
+        ],
+        "question": [
+          {"tu": "Peux-tu traduire cet audio en {tgt}"},
+          {"tu": "Tu peux me traduire ça en {tgt}"},
+          {"tu": "Peux-tu me dire en {tgt} ce que dit la personne"},
+          {"tu": "Est-ce que tu peux me donner la version en {tgt}"},
+          {"vous": "Pouvez-vous traduire cet enregistrement en {tgt}"},
+          {"vous": "Pourriez-vous me traduire ce passage en {tgt}"},
+          {"vous": "Est-ce que vous pouvez me donner la traduction en {tgt}"},
+          "Comment on dit ça en {tgt}",
+          "Qu'est-ce que ça donne en {tgt}"
+        ],
+        "noun": [
+          "Traduction en {tgt}",
+          "Traduction en {tgt} de cet audio",
+          "Traduction de cet enregistrement en {tgt}",
+          "Version en {tgt} de cet enregistrement",
+          "Ce qui est dit, en {tgt}",
+          {"tu": "En {tgt}, s'il te plaît"},
+          {"vous": "En {tgt}, s'il vous plaît"}
+        ]
+      },
+      "source_target": {
+        "imperative": [
+          {"tu": "Traduis cet audio {src} en {tgt}"},
+          {"tu": "Traduis cet enregistrement {src} en {tgt}"},
+          {"tu": "Traduis {src} en {tgt} ce que tu entends"},
+          {"tu": "L'audio est en {src_name}, traduis-le en {tgt}"},
+          {"vous": "Traduisez cet audio {src} en {tgt}"},
+          {"vous": "Veuillez traduire cet enregistrement {src} en {tgt}"},
+          {"vous": "Traduisez {src} en {tgt} le contenu de ce fichier"},
+          {"vous": "Convertissez le contenu parlé {src} en {tgt}"},
+          {"vous": "L'audio est en {src_name}, traduisez-le en {tgt}"},
+          "Merci de traduire ce fichier audio {src} en {tgt}"
+        ],
+        "question": [
+          {"tu": "Peux-tu traduire cet audio {src} en {tgt}"},
+          {"tu": "Tu peux me traduire ça {src} en {tgt}"},
+          {"vous": "Pouvez-vous traduire ce discours {src} en {tgt}"},
+          {"vous": "Pourriez-vous traduire ce passage {src} en {tgt}"}
+        ],
+        "noun": [
+          "Traduction {src} en {tgt}",
+          "Traduction de cet audio {src} en {tgt}",
+          "Traduction de cet enregistrement {src} en {tgt}"
+        ]
+      },
+      "implicit": {
+        "imperative": [
+          {"tu": "Traduis cet audio"},
+          {"tu": "Traduis ce que tu entends"},
+          {"tu": "Traduis ce qui est dit"},
+          {"vous": "Traduisez cet enregistrement"},
+          {"vous": "Veuillez traduire ce fichier audio"},
+          {"vous": "Traduisez le contenu parlé"}
+        ],
+        "question": [
+          {"tu": "Peux-tu traduire cet audio"},
+          {"tu": "Tu peux me traduire ça"},
+          {"vous": "Pouvez-vous traduire cet enregistrement"},
+          {"vous": "Pourriez-vous traduire ce passage"},
+          "Ça veut dire quoi",
+          "Qu'est-ce que ça veut dire"
+        ],
+        "noun": [
+          "Traduction de cet audio",
+          "Traduction de cet enregistrement",
+          "Traduction de ce qui est dit"
+        ]
+      }
+    }
   }
 }

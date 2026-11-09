@@ -130,5 +130,77 @@
         "kv": [["Hesitations: remove"], ["Hesitations: none"]]
       }
     }
+  },
+  "ast": {
+    "bases": {
+      "target": {
+        "imperative": [
+          "Translate this audio into {tgt}",
+          "Translate this recording into {tgt}",
+          "Translate what is being said into {tgt}",
+          "Translate the speech into {tgt}",
+          "Translate what you hear into {tgt}",
+          "Please translate this audio file into {tgt}",
+          "Give me the {tgt} translation of this recording",
+          "Provide a translation of this clip into {tgt}",
+          "Write what the speaker says in {tgt}",
+          "Convert the spoken content to {tgt}"
+        ],
+        "question": [
+          "Can you translate this audio into {tgt}",
+          "Could you translate this recording into {tgt}",
+          "Can you give me the {tgt} translation",
+          "How would you say this in {tgt}",
+          "What does this say in {tgt}",
+          "Could you please put this in {tgt}"
+        ],
+        "noun": [
+          "{tgt} translation of this audio",
+          "{tgt} translation of this recording",
+          "{tgt} version of this clip",
+          "Translation into {tgt}",
+          "In {tgt}, please"
+        ]
+      },
+      "source_target": {
+        "imperative": [
+          "Translate this audio from {src} into {tgt}",
+          "Translate this recording from {src} to {tgt}",
+          "Translate the {src} speech into {tgt}",
+          "Please translate this {src} audio into {tgt}",
+          "Translate what is said from {src} to {tgt}",
+          "Convert the spoken content from {src} to {tgt}",
+          "The audio is in {src_name}, translate it into {tgt}"
+        ],
+        "question": [
+          "Can you translate this from {src} into {tgt}",
+          "Could you translate this {src} recording into {tgt}",
+          "This is in {src}, can you translate it into {tgt}"
+        ],
+        "noun": [
+          "{src} to {tgt} translation",
+          "Translation from {src} into {tgt}",
+          "{tgt} translation of this {src} audio"
+        ]
+      },
+      "implicit": {
+        "imperative": [
+          "Translate this",
+          "Translate this audio",
+          "Translate what is being said",
+          "Please translate this recording",
+          "Translate what you hear"
+        ],
+        "question": [
+          "Can you translate this",
+          "Could you translate this recording",
+          "What does this mean"
+        ],
+        "noun": [
+          "Translation of this audio",
+          "Translation of what is said"
+        ]
+      }
+    }
   }
 }

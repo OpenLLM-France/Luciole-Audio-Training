@@ -126,5 +126,75 @@
         "kv": [["Hesitações: remover"], ["Hesitações: nenhuma"]]
       }
     }
+  },
+  "ast": {
+    "bases": {
+      "target": {
+        "imperative": [
+          "Traduza este áudio para o {tgt}",
+          "Traduza esta gravação para o {tgt}",
+          "Traduza para o {tgt} o que é dito",
+          "Traduza para o {tgt} o que você ouve",
+          "Por favor, traduza este arquivo de áudio para o {tgt}",
+          "Me dê a tradução desta gravação para o {tgt}",
+          "Faça uma tradução deste trecho para o {tgt}",
+          "Escreva em {tgt} o que a pessoa diz",
+          "Converta o conteúdo falado para o {tgt}"
+        ],
+        "question": [
+          "Você pode traduzir este áudio para o {tgt}",
+          "Você poderia traduzir esta gravação para o {tgt}",
+          "Você pode me dar a tradução para o {tgt}",
+          "Como se diz isso em {tgt}",
+          "O que isso diz em {tgt}",
+          "Poderia traduzir isso para o {tgt}, por favor"
+        ],
+        "noun": [
+          "Tradução deste áudio para o {tgt}",
+          "Tradução desta gravação para o {tgt}",
+          "Versão em {tgt} deste trecho",
+          "Tradução para o {tgt}",
+          "Em {tgt}, por favor"
+        ]
+      },
+      "source_target": {
+        "imperative": [
+          "Traduza este áudio do {src} para o {tgt}",
+          "Traduza esta gravação do {src} para o {tgt}",
+          "Traduza do {src} para o {tgt} o que é dito",
+          "Por favor, traduza este arquivo de áudio do {src} para o {tgt}",
+          "Converta o conteúdo falado do {src} para o {tgt}",
+          "O áudio está em {src_name}, traduza-o para o {tgt}"
+        ],
+        "question": [
+          "Você pode traduzir isso do {src} para o {tgt}",
+          "Você poderia traduzir esta gravação do {src} para o {tgt}",
+          "Isso está em {src}, você pode traduzir para o {tgt}"
+        ],
+        "noun": [
+          "Tradução do {src} para o {tgt}",
+          "Tradução deste áudio do {src} para o {tgt}",
+          "Tradução desta gravação do {src} para o {tgt}"
+        ]
+      },
+      "implicit": {
+        "imperative": [
+          "Traduza isso",
+          "Traduza este áudio",
+          "Traduza o que é dito",
+          "Por favor, traduza esta gravação",
+          "Traduza o que você ouve"
+        ],
+        "question": [
+          "Você pode traduzir isso",
+          "Você poderia traduzir esta gravação",
+          "O que isso significa"
+        ],
+        "noun": [
+          "Tradução deste áudio",
+          "Tradução do que é dito"
+        ]
+      }
+    }
   }
 }

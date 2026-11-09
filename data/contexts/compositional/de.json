@@ -127,5 +127,87 @@
         "kv": [["Zögerlaute: entfernen"], ["Häsitationen: keine"]]
       }
     }
+  },
+  "ast": {
+    "source_names": {
+      "fr": "aus dem Französischen",
+      "en": "aus dem Englischen",
+      "ar": "aus dem Arabischen",
+      "de": "aus dem Deutschen",
+      "nl": "aus dem Niederländischen",
+      "es": "aus dem Spanischen",
+      "it": "aus dem Italienischen",
+      "pt": "aus dem Portugiesischen"
+    },
+    "bases": {
+      "target": {
+        "imperative": [
+          "Übersetze dieses Audio auf {tgt}",
+          "Übersetze diese Aufnahme auf {tgt}",
+          "Übersetze das Gesagte auf {tgt}",
+          "Übersetze auf {tgt}, was du hörst",
+          "Bitte übersetze diese Audiodatei auf {tgt}",
+          "Gib mir die Übersetzung dieser Aufnahme auf {tgt}",
+          "Erstelle eine Übersetzung dieses Ausschnitts auf {tgt}",
+          "Schreibe auf {tgt} auf, was die Person sagt",
+          "Bitte übersetzen Sie diese Aufnahme auf {tgt}",
+          "Übersetzen Sie den gesprochenen Inhalt auf {tgt}"
+        ],
+        "question": [
+          "Kannst du dieses Audio auf {tgt} übersetzen",
+          "Könntest du diese Aufnahme auf {tgt} übersetzen",
+          "Kannst du mir die Übersetzung auf {tgt} geben",
+          "Wie sagt man das auf {tgt}",
+          "Was heißt das auf {tgt}",
+          "Könnten Sie das bitte auf {tgt} übersetzen"
+        ],
+        "noun": [
+          "Übersetzung dieses Audios auf {tgt}",
+          "Übersetzung dieser Aufnahme auf {tgt}",
+          "Übersetzung auf {tgt}",
+          "Das Gesagte auf {tgt}",
+          "Auf {tgt}, bitte"
+        ]
+      },
+      "source_target": {
+        "imperative": [
+          "Übersetze dieses Audio {src} auf {tgt}",
+          "Übersetze diese Aufnahme {src} auf {tgt}",
+          "Übersetze das Gesagte {src} auf {tgt}",
+          "Bitte übersetze diese Audiodatei {src} auf {tgt}",
+          "Bitte übersetzen Sie diese Aufnahme {src} auf {tgt}",
+          "Übersetzen Sie den gesprochenen Inhalt {src} auf {tgt}",
+          "Das Audio ist auf {src_name}, übersetze es auf {tgt}"
+        ],
+        "question": [
+          "Kannst du das {src} auf {tgt} übersetzen",
+          "Könntest du diese Aufnahme {src} auf {tgt} übersetzen",
+          "Das ist auf {src_name}, kannst du es auf {tgt} übersetzen"
+        ],
+        "noun": [
+          "Übersetzung {src} auf {tgt}",
+          "Übersetzung dieses Audios {src} auf {tgt}",
+          "Übersetzung dieser Aufnahme {src} auf {tgt}"
+        ]
+      },
+      "implicit": {
+        "imperative": [
+          "Übersetze das",
+          "Übersetze dieses Audio",
+          "Übersetze, was gesagt wird",
+          "Bitte übersetze diese Aufnahme",
+          "Übersetze, was du hörst"
+        ],
+        "question": [
+          "Kannst du das übersetzen",
+          "Könntest du diese Aufnahme übersetzen",
+          "Was bedeutet das"
+        ],
+        "noun": [
+          "Übersetzung dieses Audios",
+          "Übersetzung des Gesagten"
+        ]
+      }
+    }
   }
 }

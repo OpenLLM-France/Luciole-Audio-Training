@@ -125,5 +125,75 @@
         "kv": [["Aarzelingen: verwijderen"], ["Aarzelingen: geen"]]
       }
     }
+  },
+  "ast": {
+    "bases": {
+      "target": {
+        "imperative": [
+          "Vertaal deze audio naar het {tgt}",
+          "Vertaal deze opname naar het {tgt}",
+          "Vertaal wat er wordt gezegd naar het {tgt}",
+          "Vertaal wat je hoort naar het {tgt}",
+          "Vertaal dit audiobestand alsjeblieft naar het {tgt}",
+          "Geef me de vertaling van deze opname in het {tgt}",
+          "Maak een vertaling van dit fragment in het {tgt}",
+          "Schrijf in het {tgt} op wat de persoon zegt",
+          "Zet de gesproken inhoud om naar het {tgt}"
+        ],
+        "question": [
+          "Kun je deze audio naar het {tgt} vertalen",
+          "Zou je deze opname naar het {tgt} kunnen vertalen",
+          "Kun je me de vertaling in het {tgt} geven",
+          "Hoe zeg je dit in het {tgt}",
+          "Wat betekent dit in het {tgt}",
+          "Zou u dit alstublieft naar het {tgt} kunnen vertalen"
+        ],
+        "noun": [
+          "Vertaling van deze audio in het {tgt}",
+          "Vertaling van deze opname in het {tgt}",
+          "Versie van dit fragment in het {tgt}",
+          "Vertaling naar het {tgt}",
+          "In het {tgt}, alsjeblieft"
+        ]
+      },
+      "source_target": {
+        "imperative": [
+          "Vertaal deze audio uit het {src} naar het {tgt}",
+          "Vertaal deze opname uit het {src} naar het {tgt}",
+          "Vertaal wat er wordt gezegd uit het {src} naar het {tgt}",
+          "Vertaal dit audiobestand alsjeblieft uit het {src} naar het {tgt}",
+          "Zet de gesproken inhoud uit het {src} om naar het {tgt}",
+          "De audio is in het {src_name}, vertaal het naar het {tgt}"
+        ],
+        "question": [
+          "Kun je dit uit het {src} naar het {tgt} vertalen",
+          "Zou je deze opname uit het {src} naar het {tgt} kunnen vertalen",
+          "Dit is in het {src}, kun je het naar het {tgt} vertalen"
+        ],
+        "noun": [
+          "Vertaling uit het {src} naar het {tgt}",
+          "Vertaling van deze audio uit het {src} naar het {tgt}",
+          "Vertaling van deze opname uit het {src} naar het {tgt}"
+        ]
+      },
+      "implicit": {
+        "imperative": [
+          "Vertaal dit",
+          "Vertaal deze audio",
+          "Vertaal wat er wordt gezegd",
+          "Vertaal deze opname alsjeblieft",
+          "Vertaal wat je hoort"
+        ],
+        "question": [
+          "Kun je dit vertalen",
+          "Zou je deze opname kunnen vertalen",
+          "Wat betekent dit"
+        ],
+        "noun": [
+          "Vertaling van deze audio",
+          "Vertaling van wat er wordt gezegd"
+        ]
+      }
+    }
   }
 }

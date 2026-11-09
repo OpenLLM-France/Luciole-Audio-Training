@@ -1,0 +1,210 @@
+# Text cleaning of the translation (AST) manifests: <pair>/context/<Dataset>/ -> <pair>/clean/<Dataset>/, same file names.
+#   python data/processing/clean_asr/clean_asr.py data/processing/clean_asr/conf/ast.yaml --datasets fr-en/CoVoST [--dry-run --limit 10000]
+# The filters work on the Assistant turn, so they follow the TARGET language of the pair. One output
+# per dataset (base: no event tags). The prompts are composed for the pair of the dataset's name (data/contexts/compose_ast_prompts.py).
+# No disfluencies nor fix_punctuation: a translation has no hesitations, and its punctuation is not
+# a recase model's. No add_final_period on TEDx (subtitle pieces), on Arabic targets (it does not know "؟")
+# nor on Portuguese sources (single words, as in pt.yaml). Each dataset lists the filters that change something.
+
+include: [multilang_blocks.yaml]
+root: ${DATA_FOLDER}/nemo/ast
+prompts: ast
+seed: 1234
+empty_fraction: 0.0            # a line with no text left has nothing to translate: dropped
+
+tag_tables:
+  tedx:                        # the target languages of Multilingual_TEDx: en, es, fr, it, pt
+    - {pattern: '\((?:applause|aplausos?|applaudissements|applausi)\)', tags: [applause], ignore_case: true}
+    - {pattern: '\((?:laughter|risas?|rires?|risos|risate)\)', tags: [laughter], ignore_case: true}
+    - {pattern: '\((?:music|música|musique|musica)\)', tags: [music], ignore_case: true}
+    - {pattern: '\((?:inaudible|inaudível|inaudibile)\)', tags: [inaudible], ignore_case: true}
+
+blocks:
+  finish_fr:                   # finish, with the French spacing
+    - normalize_spacing
+    - normalize_punctuation
+    - french_typography
+  # what a translation model or a translator left in the text: a recopied source, notes, a placeholder
+  drop_translation_junk:
+    - drop_if_match:
+        ignore_case: true
+        patterns:
+          - '\n'
+          - '\*\*'
+          - '(?-i:TO REMOVE)'
+          - '\[(?:to be removed|to remmove|remove|removed|rejected|blank|missing word|translator''s note[^\]]*|untranslatable[^\]]*)\]'
+          - '\((?:note|nota|opmerking|anmerkung)\s*:'
+          - 'translated text|texte traduit|vertaalde tekst|übersetzten text|texto traducido|testo tradotto|texto traduzido'
+          - '^\s*(?:here is the translation|voici (?:la traduction|le texte traduit))'
+  # "[date]", "[distancia]": a number missing from the sentence read, filled in by the translation model
+  drop_bracket_placeholders:
+    - drop_if_match: {patterns: ['\[[^\[\]]{1,40}\]']}
+  # Arabic targets: another script is the model drifting; Latin glued inside an Arabic word too ("كnoxفيل").
+  # Latin names stay, "وSteinmuhl" too (no Arabic letter after the name)
+  drop_other_scripts_ar:
+    - drop_if_match:
+        patterns:
+          - '[Ѐ-ӿऀ-෿฀-๿぀-ヿ㐀-鿿가-힯]'
+          - '[ء-ي][A-Za-z]+[ء-ي]'
+  # fr-ar only: the model drifting to Latin in the middle of a word ("لباusanias"); in en-ar, "وcue" is right
+  drop_glued_latin_ar:
+    - drop_if_match: {patterns: ['[ء-ي][a-z]']}
+  tedx_markers:
+    - strip_html
+    - map_tags: {tables: [tedx]}
+    - caption_markers
+    - drop_subtitle_debris
+    # speakers as initials: "RC: This was", "VV, UM: ..." (speaker_labels needs French word lists)
+    - replace:
+        rules:
+          - {pattern: '(?:^\s*|(?<=[.?!…"»\]])\s+)[A-ZÀ-Þ]{1,3}(?:, [A-ZÀ-Þ]{1,3})* ?: (?=\S)', repl: ' '}
+
+datasets:
+
+  # --- target ar ----------------------------------------------------------------------
+  en-ar/CoVoST:
+    input: [en-ar/context/CoVoST/train.jsonl, en-ar/context/CoVoST/dev.jsonl, en-ar/context/CoVoST/test.jsonl]
+    output: en-ar/clean/CoVoST
+    filters: [drop_translation_junk, drop_other_scripts_ar, speech_rate, finish]
+  fr-ar/CommonVoiceFR2AR:
+    input: [fr-ar/context/CommonVoiceFR2AR/train.jsonl, fr-ar/context/CommonVoiceFR2AR/dev.jsonl, fr-ar/context/CommonVoiceFR2AR/test.jsonl]
+    output: fr-ar/clean/CommonVoiceFR2AR
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts_ar, drop_glued_latin_ar, speech_rate, finish]
+
+  # --- target de ----------------------------------------------------------------------
+  en-de/CoVoST:
+    input: [en-de/context/CoVoST/train.jsonl, en-de/context/CoVoST/dev.jsonl, en-de/context/CoVoST/test.jsonl]
+    output: en-de/clean/CoVoST
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish]
+  fr-de/CommonVoiceFR2DE:
+    input: [fr-de/context/CommonVoiceFR2DE/train.jsonl, fr-de/context/CommonVoiceFR2DE/dev.jsonl, fr-de/context/CommonVoiceFR2DE/test.jsonl]
+    output: fr-de/clean/CommonVoiceFR2DE
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+
+  # --- target en ----------------------------------------------------------------------
+  ar-en/CoVoST:
+    input: [ar-en/context/CoVoST/train.jsonl, ar-en/context/CoVoST/dev.jsonl, ar-en/context/CoVoST/test.jsonl]
+    output: ar-en/clean/CoVoST
+    filters: [add_final_period, finish]
+  de-en/CoVoST:
+    input: [de-en/context/CoVoST/train.jsonl, de-en/context/CoVoST/dev.jsonl, de-en/context/CoVoST/test.jsonl]
+    output: de-en/clean/CoVoST
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish]
+  es-en/CoVoST:
+    input: [es-en/context/CoVoST/train.jsonl, es-en/context/CoVoST/dev.jsonl, es-en/context/CoVoST/test.jsonl]
+    output: es-en/clean/CoVoST
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish]
+  es-en/Multilingual_TEDx:
+    input: [es-en/context/Multilingual_TEDx/train.jsonl, es-en/context/Multilingual_TEDx/dev.jsonl, es-en/context/Multilingual_TEDx/test.jsonl]
+    output: es-en/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  fr-en/CoVoST:
+    input: [fr-en/context/CoVoST/train.jsonl, fr-en/context/CoVoST/dev.jsonl, fr-en/context/CoVoST/test.jsonl]
+    output: fr-en/clean/CoVoST
+    filters: [normalize_unicode, drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish]
+  fr-en/CommonVoiceFR2EN:
+    input: [fr-en/context/CommonVoiceFR2EN/train.jsonl, fr-en/context/CommonVoiceFR2EN/dev.jsonl, fr-en/context/CommonVoiceFR2EN/test.jsonl]
+    output: fr-en/clean/CommonVoiceFR2EN
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+  fr-en/Multilingual_TEDx:
+    input: [fr-en/context/Multilingual_TEDx/train.jsonl, fr-en/context/Multilingual_TEDx/dev.jsonl, fr-en/context/Multilingual_TEDx/test.jsonl]
+    output: fr-en/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  it-en/CoVoST:
+    input: [it-en/context/CoVoST/train.jsonl, it-en/context/CoVoST/dev.jsonl, it-en/context/CoVoST/test.jsonl]
+    output: it-en/clean/CoVoST
+    filters: [drop_translation_junk, add_final_period, speech_rate, finish]
+  it-en/Multilingual_TEDx:
+    input: [it-en/context/Multilingual_TEDx/train.jsonl, it-en/context/Multilingual_TEDx/dev.jsonl, it-en/context/Multilingual_TEDx/test.jsonl]
+    output: it-en/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  pt-en/CoVoST:
+    input: [pt-en/context/CoVoST/train.jsonl, pt-en/context/CoVoST/dev.jsonl, pt-en/context/CoVoST/test.jsonl]
+    output: pt-en/clean/CoVoST
+    filters: [drop_translation_junk, speech_rate, finish]
+  pt-en/Multilingual_TEDx:
+    input: [pt-en/context/Multilingual_TEDx/train.jsonl, pt-en/context/Multilingual_TEDx/dev.jsonl, pt-en/context/Multilingual_TEDx/test.jsonl]
+    output: pt-en/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+
+  # --- target es ----------------------------------------------------------------------
+  fr-es/CommonVoiceFR2ES:
+    input: [fr-es/context/CommonVoiceFR2ES/train.jsonl, fr-es/context/CommonVoiceFR2ES/dev.jsonl, fr-es/context/CommonVoiceFR2ES/test.jsonl]
+    output: fr-es/clean/CommonVoiceFR2ES
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+  fr-es/Multilingual_TEDx:
+    input: [fr-es/context/Multilingual_TEDx/train.jsonl, fr-es/context/Multilingual_TEDx/dev.jsonl, fr-es/context/Multilingual_TEDx/test.jsonl]
+    output: fr-es/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  it-es/Multilingual_TEDx:
+    input: [it-es/context/Multilingual_TEDx/train.jsonl, it-es/context/Multilingual_TEDx/dev.jsonl, it-es/context/Multilingual_TEDx/test.jsonl]
+    output: it-es/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  pt-es/Multilingual_TEDx:
+    input: [pt-es/context/Multilingual_TEDx/train.jsonl, pt-es/context/Multilingual_TEDx/dev.jsonl, pt-es/context/Multilingual_TEDx/test.jsonl]
+    output: pt-es/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+
+  # --- target fr ----------------------------------------------------------------------
+  ar-fr/CommonVoiceAR2FR:
+    input: [ar-fr/context/CommonVoiceAR2FR/train.jsonl, ar-fr/context/CommonVoiceAR2FR/dev.jsonl, ar-fr/context/CommonVoiceAR2FR/test.jsonl]
+    output: ar-fr/clean/CommonVoiceAR2FR
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  de-fr/CommonVoiceDE2FR:
+    input: [de-fr/context/CommonVoiceDE2FR/train.jsonl, de-fr/context/CommonVoiceDE2FR/dev.jsonl, de-fr/context/CommonVoiceDE2FR/test.jsonl]
+    output: de-fr/clean/CommonVoiceDE2FR
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  en-fr/CommonVoiceEN2FR:
+    input: [en-fr/context/CommonVoiceEN2FR/train.jsonl, en-fr/context/CommonVoiceEN2FR/dev.jsonl, en-fr/context/CommonVoiceEN2FR/test.jsonl]
+    output: en-fr/clean/CommonVoiceEN2FR
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  es-fr/CommonVoiceES2FR:
+    input: [es-fr/context/CommonVoiceES2FR/train.jsonl, es-fr/context/CommonVoiceES2FR/dev.jsonl, es-fr/context/CommonVoiceES2FR/test.jsonl]
+    output: es-fr/clean/CommonVoiceES2FR
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  es-fr/Multilingual_TEDx:
+    input: [es-fr/context/Multilingual_TEDx/train.jsonl, es-fr/context/Multilingual_TEDx/dev.jsonl, es-fr/context/Multilingual_TEDx/test.jsonl]
+    output: es-fr/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish_fr]
+  it-fr/CommonVoiceIT2FR:
+    input: [it-fr/context/CommonVoiceIT2FR/train.jsonl, it-fr/context/CommonVoiceIT2FR/dev.jsonl, it-fr/context/CommonVoiceIT2FR/test.jsonl]
+    output: it-fr/clean/CommonVoiceIT2FR
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  nl-fr/CommonVoiceNL2FR:
+    input: [nl-fr/context/CommonVoiceNL2FR/train.jsonl, nl-fr/context/CommonVoiceNL2FR/dev.jsonl, nl-fr/context/CommonVoiceNL2FR/test.jsonl]
+    output: nl-fr/clean/CommonVoiceNL2FR
+    filters: [drop_translation_junk, drop_other_scripts, add_final_period, speech_rate, finish_fr]
+  pt-fr/CommonVoicePT2FR:
+    input: [pt-fr/context/CommonVoicePT2FR/train.jsonl, pt-fr/context/CommonVoicePT2FR/dev.jsonl, pt-fr/context/CommonVoicePT2FR/test.jsonl]
+    output: pt-fr/clean/CommonVoicePT2FR
+    filters: [drop_translation_junk, drop_other_scripts, speech_rate, finish_fr]
+
+  # --- target it ----------------------------------------------------------------------
+  es-it/Multilingual_TEDx:
+    input: [es-it/context/Multilingual_TEDx/train.jsonl, es-it/context/Multilingual_TEDx/dev.jsonl, es-it/context/Multilingual_TEDx/test.jsonl]
+    output: es-it/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  fr-it/CommonVoiceFR2IT:
+    input: [fr-it/context/CommonVoiceFR2IT/train.jsonl, fr-it/context/CommonVoiceFR2IT/dev.jsonl, fr-it/context/CommonVoiceFR2IT/test.jsonl]
+    output: fr-it/clean/CommonVoiceFR2IT
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+
+  # --- target nl ----------------------------------------------------------------------
+  fr-nl/CommonVoiceFR2NL:
+    input: [fr-nl/context/CommonVoiceFR2NL/train.jsonl, fr-nl/context/CommonVoiceFR2NL/dev.jsonl, fr-nl/context/CommonVoiceFR2NL/test.jsonl]
+    output: fr-nl/clean/CommonVoiceFR2NL
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+
+  # --- target pt ----------------------------------------------------------------------
+  es-pt/Multilingual_TEDx:
+    input: [es-pt/context/Multilingual_TEDx/train.jsonl, es-pt/context/Multilingual_TEDx/dev.jsonl, es-pt/context/Multilingual_TEDx/test.jsonl]
+    output: es-pt/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]
+  fr-pt/CommonVoiceFR2PT:
+    input: [fr-pt/context/CommonVoiceFR2PT/train.jsonl, fr-pt/context/CommonVoiceFR2PT/dev.jsonl, fr-pt/context/CommonVoiceFR2PT/test.jsonl]
+    output: fr-pt/clean/CommonVoiceFR2PT
+    filters: [drop_translation_junk, drop_bracket_placeholders, drop_other_scripts, add_final_period, speech_rate, finish]
+  fr-pt/Multilingual_TEDx:
+    input: [fr-pt/context/Multilingual_TEDx/train.jsonl, fr-pt/context/Multilingual_TEDx/dev.jsonl, fr-pt/context/Multilingual_TEDx/test.jsonl]
+    output: fr-pt/clean/Multilingual_TEDx
+    filters: [tedx_markers, speech_rate, events, finish]

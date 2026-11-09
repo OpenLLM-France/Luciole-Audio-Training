@@ -16,7 +16,7 @@ an empty reference has no place in dev and test files). Then the prompt (first U
 (ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
 (config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
 (composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says) or
-keep (each line keeps its prompt: conf/ast.yaml, the translations).
+ast (a translation prompt: conf/ast.yaml).
 
 The words and spellings the filters use, per language, are in conf/rules.yaml, not in the code.
 
@@ -1621,13 +1621,19 @@ class ChoosePrompt:
         return True
 
 
-class KeepPrompt:
-    """In place of ChoosePrompt (`prompts: keep`): every line keeps the prompt of its input. For
-    manifests whose prompt does not depend on the text: a translation (AST) keeps its instruction."""
+class AstPrompt:
+    """In place of ChoosePrompt (`prompts: ast`): a translation prompt for the pair of the dataset's
+    name ("fr-en/CoVoST"), composed by data/contexts/compose_ast_prompts.py."""
     label = "prompt"
     nocasepunc = lowercase = False
 
+    def __init__(self, dataset):
+        from compose_ast_prompts import DEFAULT_DIR, AstPromptComposer
+        source, target = dataset.split("/")[0].split("-")
+        self.composer = AstPromptComposer(DEFAULT_DIR, source, target)
+
     def __call__(self, s):
+        s.prompt = self.composer.compose(s.rng)
         return True
 
 
@@ -1773,14 +1779,14 @@ def main():
     p.add_argument("--output-dir", help="write <dir>/<dataset>/ instead of each dataset's output (e.g. to test in a scratch dir)")
     p.add_argument("--overwrite", action="store_true", help="overwrite existing outputs")
     p.add_argument("--root", help="override the config's root (e.g. to test on a local copy)")
-    p.add_argument("--prompts", choices=["fixed", "compositional", "keep"], help="override the config's prompts")
+    p.add_argument("--prompts", choices=["fixed", "compositional", "ast"], help="override the config's prompts")
     args = p.parse_args()
 
     cfg = load_config(args.config)
     ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", [])}
     prompts = args.prompts or cfg.get("prompts", "fixed")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "data", "contexts"))
     if prompts == "compositional":
-        sys.path.insert(0, os.path.join(REPO_ROOT, "data", "contexts"))
         from compose_asr_prompts import PromptComposer
         comp = dict(cfg["compositional"])
         hesitations = [form for form, _ in Disfluencies.forms(comp["audio_language"])]   # conf/rules.yaml
@@ -1789,8 +1795,8 @@ def main():
         ctx["contexts_path"] = os.path.join(REPO_ROOT, cfg["contexts"])
         with open(ctx["contexts_path"], encoding="utf-8") as f:
             ctx["contexts"] = json.load(f)
-    elif prompts != "keep":
-        raise SystemExit(f"prompts: {prompts!r}, expected fixed, compositional or keep")
+    elif prompts != "ast":
+        raise SystemExit(f"prompts: {prompts!r}, expected fixed, compositional or ast")
     root, seed, blocks = os.path.expandvars(args.root or cfg["root"]), cfg.get("seed", 0), cfg.get("blocks") or {}
     if "$" in root:
         raise SystemExit(f"root {root!r}: set the variable")
@@ -1827,7 +1833,7 @@ def main():
             # a few prompts state what the text does not have (no markers, case and punctuation),
             # more when another output keeps the markers or some lines are lowercase unpunctuated
             favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
-            prompt = KeepPrompt() if prompts == "keep" else \
+            prompt = AstPrompt(name) if prompts == "ast" else \
                 ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
                              nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
             # output_lines: an output but base takes that many lines at random, other ones than the
