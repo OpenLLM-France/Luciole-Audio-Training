@@ -248,6 +248,20 @@ en:
       er: ['[Ee]r', '[Ee]rr*m+']
     # not "that that", "had had", "is is" ("what it is is"), "in"/"on" ("come in in")
     repeatable_not: the a an of to for with from and or but I he she we they my your his our their
+    # never collapsed by `phrase_repetitions`, alone or as a whole run: numbers (digits read aloud,
+    # "two five two five"), discourse words ("yeah yeah", "no no no"), "had had"
+    repeat_keep: >-
+      zero oh one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen
+      sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred
+      thousand million billion
+      yeah yes yep yup no nope okay ok right alright well oh ah hello bye thanks sure exactly true
+      had
+
+  disfluency_model:
+    # words, added to the protect list of disfluency_detector_en.py: never removed, unless repeated
+    # (Clausa learnt Switchboard, where discourse markers are disfluent; "you know", "I mean" are
+    # protected in the module)
+    discourse_words: well oh ah like yeah yes yep no okay ok right actually basically anyway
 
   fix_punctuation:
     # English has stranded prepositions ("what it's for. We", "the people I work with. They"): a "."

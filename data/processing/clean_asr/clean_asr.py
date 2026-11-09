@@ -15,7 +15,8 @@ for `empty_fraction` of them (config), kept with an empty text: nothing to trans
 an empty reference has no place in dev and test files). Then the prompt (first User text turn) is chosen from the final text
 (ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
 (config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
-(composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says).
+(composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says) or
+keep (each line keeps its prompt: conf/ast.yaml, the translations).
 
 The words and spellings the filters use, per language, are in conf/rules.yaml, not in the code.
 
@@ -517,7 +518,7 @@ class AddFinalPeriod(Filter):
     replace_trailing: a trailing , ; : is replaced by "." instead.
     """
     name = "add_final_period"
-    END_RE = re.compile(r"[.?!…][\"»”)']*$")
+    END_RE = re.compile(r"[.?!…][\s\"»”)']*$")   # \s: the French space before "»"
 
     def __init__(self, ctx, replace_trailing=True, **params):
         super().__init__(ctx)
@@ -656,7 +657,11 @@ class Disfluencies(_MarkerFilter):
            words and stay. In en, "mm-hmm", "uh-huh", "uh-uh", "mm-mm" are hesitations too: their
            yes / no cannot be told from a mere hesitation.
            Cut-off words ("L- la fin") go too (`truncations`), and repeated function words
-           are collapsed ("je je" -> "je", `repetitions`); other repetitions are not touched. A comma or "..." right after
+           are collapsed ("je je" -> "je", `repetitions`); with `phrase_repetitions` (en meetings), any
+           word or run of 2 to 4 words repeated right after itself too ("you've you've got", "how are
+           you how are you all"), but numbers, the words of `repeat_keep` (conf/rules.yaml: discourse
+           words, "had had") and a repeat after a punctuation ("Yeah, yeah", "Hello? Hello?":
+           reiterations); else other repetitions are not touched. A comma or "..." right after
            the hesitation goes with it; a sentence end after it (". ? !") moves to the
            previous word, a "." as a comma when the line goes on (`period_after_hesitation`:
            in transcripts it marks the pause, not a sentence end: "J'ai appelé euh. L'éditrice"
@@ -675,12 +680,13 @@ class Disfluencies(_MarkerFilter):
     MOVED_END_RE = re.compile(r"(?:([^\s\x00\x01]+)([\s\x00]*))?\x01([.?!]+)")
     LOST_START_RE = re.compile(r"\x02[\s\x00]*([^\s\x00\x02]+)")
 
-    def __init__(self, ctx, lang="fr", truncations=True, repetitions=True, cut_after_no_end="drop",
-                 period_after_hesitation="comma", **params):
+    def __init__(self, ctx, lang="fr", truncations=True, repetitions=True, phrase_repetitions=False,
+                 cut_after_no_end="drop", period_after_hesitation="comma", **params):
         """lang: a language of conf/rules.yaml (hesitation spellings, function words never repeated:
         `disfluencies`, words that cannot end a sentence: `no_end_words`).
         truncations: also strip cut-off words "j- je" (off for subtitles, where "anti- " is a split compound).
-        repetitions: also collapse repeated function words "je je" -> "je"."""
+        repetitions: also collapse repeated function words "je je" -> "je".
+        phrase_repetitions: also collapse any repeated word or run of up to 4 words (see above)."""
         super().__init__(ctx, **params)
         forms = self.forms(lang)
         any_form = "|".join(r for _, r in forms)
@@ -699,6 +705,8 @@ class Disfluencies(_MarkerFilter):
         self.period_comma = period_after_hesitation == "comma"
         self.common = load_common_words(lang)
         self.repetitions = repetitions
+        self.phrase_repetitions = phrase_repetitions
+        self.repeat_keep = words(lang, "disfluencies", "repeat_keep")
         self.repetition_re = re.compile(
             r"(?<![\w'’-])(%s)((?:\s*(?:\.\.\.|…|[.,])?\s+\1)+)(?![\w'’-])(,(?=\s))?"
             % "|".join(sorted(words(lang, "disfluencies", "repeatable_not"))), re.IGNORECASE)
@@ -770,8 +778,43 @@ class Disfluencies(_MarkerFilter):
                                           text).replace("\x02", " ")
         if self.repetitions:
             text = self.repetition_re.sub(self._collapse, text)
+        if self.phrase_repetitions:
+            text = self.collapse_phrases(text)
         s.text = text
         return True
+
+    PHRASE_MAX = 4
+    NUMBER_RE = re.compile(r"\d[\d.,]*")
+
+    def collapse_phrases(self, text):
+        """The first copy of a word or run of up to PHRASE_MAX words repeated right after itself
+        removed, longest runs first, until none is left ("in in in in" -> "in")."""
+        toks = text.split()
+
+        def key(t):
+            if TAG_WORD_RE.fullmatch(t) or re.search(r'["“”«»()\[\]]', t):
+                return ""                                    # a tag or quote: never part of a repeat
+            return t.strip(".,;:!?…").lower()
+
+        keys = [key(t) for t in toks]
+        changed = True
+        while changed:
+            changed = False
+            for n in range(self.PHRASE_MAX, 0, -1):
+                for i in range(len(toks) - 2 * n + 1):
+                    first = keys[i:i + n]
+                    if (first != keys[i + n:i + 2 * n] or not all(first)
+                            or re.search(r"[.,;:!?…]$", toks[i + n - 1])           # "Yeah, yeah": a reiteration
+                            or all(k in self.repeat_keep or self.NUMBER_RE.fullmatch(k) for k in first)):
+                        continue
+                    if toks[i][:1].isupper() and toks[i + n][:1].islower():
+                        toks[i + n] = toks[i + n][0].upper() + toks[i + n][1:]
+                    del toks[i:i + n], keys[i:i + n]
+                    changed = True
+                    break
+                if changed:
+                    break
+        return " ".join(toks)
 
 
 @register
@@ -779,6 +822,10 @@ class DisfluencyModel(Filter):
     """Disfluencies removed by linagora/flaubert_disfluency_detector and the code of its
     repository (src/detect_disfluencies.py), with no rule of ours on top: hesitations,
     repetitions, false starts ("je vais je vais", "les de le") and cut-off words ("bonj-").
+    lang: en -- oldriku/Clausa (CC-BY-NC-SA) and disfluency_detector_en.py, next to this file (the
+                model repository has no code), the same API: "the the", "I went to the, to the
+                store", "presi- the chairman". Its protect list keeps numbers even repeated (digits
+                read aloud), "you know", "I mean" and the discourse words of conf/rules.yaml.
 
     mode: strip -- the model's removal: hmm / pff and cut-off words first (`strip_fillers` of the
                    repository), then the words the model flags (euh, repeats, false starts), a
@@ -794,37 +841,49 @@ class DisfluencyModel(Filter):
     and stay where they are. The lines of a chunk are classified in one batch (`prepare`).
     """
     name = "disfluency_model"
-    DISCOURSE_WORDS = words("fr", "disfluency_model", "discourse_words")
+    # lang: (model, revision, threshold, code: "repo" for src/detect_disfluencies.py of the model
+    # repository, else a module next to this file)
+    MODELS = {"fr": ("linagora/flaubert_disfluency_detector", "4307de6b425f153b7b82fe181eef190d05443197", 0.55, "repo"),
+              "en": ("oldriku/Clausa", "c5378bca94328da4d3e265ceae624bd5a13e7d67", 0.5, "disfluency_detector_en")}
     # names of the repository code used here, checked at load: a new revision may change them
     REPO_API = ("annotate", "strip_fillers", "strip_disfluency_tags", "_FILLER_WORD_RE", "_PROTECT_WORDS")
 
-    def __init__(self, ctx, mode="strip", model="linagora/flaubert_disfluency_detector",
-                 revision="4307de6b425f153b7b82fe181eef190d05443197", threshold=0.55, truncations=True,
-                 device="cpu", threads=32, batch_size=64, **params):
-        """model: Hugging Face id or local copy of linagora/flaubert_disfluency_detector.
+    def __init__(self, ctx, mode="strip", lang="fr", model=None, revision=None, threshold=None, truncations=True,
+                 postfilter=False, device="cpu", threads=32, batch_size=64, **params):
+        """model: Hugging Face id or local copy of the model (default: MODELS[lang]).
         revision: commit of the repository (weights and code), so that an update does not change
         the outputs unnoticed.
-        threshold: probability over which a token is disfluent (0.55: 0.5 removes "pour cent" of
+        threshold: probability over which a token is disfluent (fr 0.55: 0.5 removes "pour cent" of
         "cent pour cent", "Suisse" of "Suisse Allemande").
+        postfilter: a removal is kept only when a hesitation, a cut-off word or an exact repeat of
+        the words next to it (repository option): no false start, no correction.
         truncations: also remove the cut-off words "bonj-" (off for subtitles, where "anti- " is a
         split compound)."""
         super().__init__(ctx)
         if mode not in ("keep", "strip", "drop"):
             raise ValueError(f"disfluency_model: mode must be keep, strip or drop, got {mode!r}")
+        if lang not in self.MODELS:
+            raise ValueError(f"disfluency_model: no model for {lang!r}, expected one of {sorted(self.MODELS)}")
+        default_model, default_revision, default_threshold, code = self.MODELS[lang]
+        if model is None:
+            model, revision = default_model, revision or default_revision
+        threshold = default_threshold if threshold is None else threshold
         self.mode, self.threshold, self.truncations, self.batch_size = mode, threshold, truncations, batch_size
-        self.hesitations = Disfluencies(ctx, lang="fr", mode="keep")
+        self.postfilter = postfilter
+        self.hesitations = Disfluencies(ctx, lang=lang, mode="keep")
         # a hesitation word, as normalize() writes it, with its punctuation: "euh,"
-        forms = "|".join(re.escape(form) for form, _ in Disfluencies.forms("fr"))
+        forms = "|".join(re.escape(form) for form, _ in Disfluencies.forms(lang))
         self.hesitation_re = re.compile(rf"(\W*)({forms})\W*", re.IGNORECASE)
         if mode != "keep":
-            self.detector, self.model = self._load(model, revision, device, threads)
-            self.detector._PROTECT_WORDS = self.detector._PROTECT_WORDS | self.DISCOURSE_WORDS
+            self.detector, self.model = self._load(model, revision, device, threads, code)
+            self.detector._PROTECT_WORDS = self.detector._PROTECT_WORDS | words(lang, "disfluency_model", "discourse_words")
             self.gpu = int(device.split(":")[1]) if device.startswith("cuda:") else 0 if device == "cuda" else None
 
     @classmethod
     @functools.lru_cache(maxsize=None)
-    def _load(cls, model_id, revision, device, threads):
-        """(detect_disfluencies module of the model repository, loaded model), once per run."""
+    def _load(cls, model_id, revision, device, threads, code="repo"):
+        """(detector module: detect_disfluencies of the model repository or `code`, loaded model),
+        once per run."""
         import importlib
         import sys
         import torch
@@ -833,8 +892,12 @@ class DisfluencyModel(Filter):
         if not os.path.isdir(path):
             from huggingface_hub import snapshot_download
             path = snapshot_download(model_id, revision=revision)
-        sys.path.insert(0, os.path.join(path, "src"))
-        detector = importlib.import_module("detect_disfluencies")
+        if code == "repo":
+            sys.path.insert(0, os.path.join(path, "src"))
+            code = "detect_disfluencies"
+        else:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        detector = importlib.import_module(code)
         missing = [a for a in cls.REPO_API if not hasattr(detector, a)]
         if missing:
             raise RuntimeError(f"disfluency_model: {path} has no {', '.join(missing)} (another revision?)")
@@ -871,7 +934,8 @@ class DisfluencyModel(Filter):
         keys = [self.model_input(t) for t in texts]
         todo = sorted({k for k in keys if k and k not in cache})
         annotations = self.detector.annotate(self.model, todo, threshold=self.threshold, batch_size=self.batch_size,
-                                             gpu=self.gpu, progress=False, word_level=True, protect=True)
+                                             gpu=self.gpu, progress=False, word_level=True, protect=True,
+                                             postfilter=self.postfilter)
         for k, a in zip(todo, annotations):
             cache[k] = a
         for s, t, k in zip(samples, texts, keys):
@@ -1557,6 +1621,16 @@ class ChoosePrompt:
         return True
 
 
+class KeepPrompt:
+    """In place of ChoosePrompt (`prompts: keep`): every line keeps the prompt of its input. For
+    manifests whose prompt does not depend on the text: a translation (AST) keeps its instruction."""
+    label = "prompt"
+    nocasepunc = lowercase = False
+
+    def __call__(self, s):
+        return True
+
+
 def resolve_filters(specs, blocks, seen=()):
     """The filter specs of a list of filter and block names, the blocks spliced in."""
     for spec in specs or []:
@@ -1686,7 +1760,7 @@ def load_config(path):
     merged = {}
     for inc in cfg.pop("include", None) or []:
         merged.update(load_config(os.path.join(os.path.dirname(path), inc)))
-    return {**merged, **cfg}
+    return {**merged, **cfg, "blocks": {**(merged.get("blocks") or {}), **(cfg.get("blocks") or {})}}
 
 
 def main():
@@ -1699,7 +1773,7 @@ def main():
     p.add_argument("--output-dir", help="write <dir>/<dataset>/ instead of each dataset's output (e.g. to test in a scratch dir)")
     p.add_argument("--overwrite", action="store_true", help="overwrite existing outputs")
     p.add_argument("--root", help="override the config's root (e.g. to test on a local copy)")
-    p.add_argument("--prompts", choices=["fixed", "compositional"], help="override the config's prompts")
+    p.add_argument("--prompts", choices=["fixed", "compositional", "keep"], help="override the config's prompts")
     args = p.parse_args()
 
     cfg = load_config(args.config)
@@ -1715,8 +1789,8 @@ def main():
         ctx["contexts_path"] = os.path.join(REPO_ROOT, cfg["contexts"])
         with open(ctx["contexts_path"], encoding="utf-8") as f:
             ctx["contexts"] = json.load(f)
-    else:
-        raise SystemExit(f"prompts: {prompts!r}, expected fixed or compositional")
+    elif prompts != "keep":
+        raise SystemExit(f"prompts: {prompts!r}, expected fixed, compositional or keep")
     root, seed, blocks = os.path.expandvars(args.root or cfg["root"]), cfg.get("seed", 0), cfg.get("blocks") or {}
     if "$" in root:
         raise SystemExit(f"root {root!r}: set the variable")
@@ -1753,8 +1827,9 @@ def main():
             # a few prompts state what the text does not have (no markers, case and punctuation),
             # more when another output keeps the markers or some lines are lowercase unpunctuated
             favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
-            prompt = ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
-                                  nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
+            prompt = KeepPrompt() if prompts == "keep" else \
+                ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
+                             nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
             # output_lines: an output but base takes that many lines at random, other ones than the
             # other outputs while there are enough: the outputs of read speech, only there to show
             # that a prompt asking for markers may get none (the filters may drop a few)

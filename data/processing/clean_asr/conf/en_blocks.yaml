@@ -51,7 +51,23 @@ blocks:
           - {pattern: '(?<=[A-Z])_', repl: ''}                  # spelled letters: "X_M_L_", "T_V_s" -> "XML", "TVs"
     - speech_rate
     - events
-    - disfluencies: {lang: en}
+    - disfluencies: {lang: en, phrase_repetitions: true}   # "you've you've got", "how are you how are you"
+    - finish_hand_punctuated
+  # meetings with the disfluency model (Clausa, CC-BY-NC-SA: licence to check before use): the
+  # outputs without disfluencies lose the repeats of any word too ("I'm I'm interested in in",
+  # "that's not our that's not our design"), not only uh / um, cut-off words and "the the"
+  meetings_model:
+    - map_tags: {tables: [meetings]}
+    - replace:
+        rules:
+          - {pattern: '(\[[a-z ]+\])(?:\s*\1)+', repl: '\1'}
+          - {pattern: '(?<=[A-Z])_', repl: ''}
+    - speech_rate
+    - events
+    - disfluencies: {lang: en}     # first: the model keeps "but but", "and and" (its protect list)
+    # postfilter: only hesitations, cut-off words and exact repeats ("it it", "with a with a"); without
+    # it, a third of the changes are wrong ("I don't think so." -> "So.", "volume up, volume down")
+    - disfluency_model: {lang: en, postfilter: true}
     - finish_hand_punctuated
   gigaspeech:
     # <OTHER>: unknown audio, must not become an empty text (empty_fraction)

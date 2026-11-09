@@ -27,13 +27,13 @@ datasets:
     input: clean/AMI/intermediate/*.jsonl
     output: clean/AMI
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [meetings]
+    filters: [meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
 
   ICSI:                            # the mix, verbatim; 6 % of lines are digits read aloud, written in words
     input: clean/ICSI/intermediate/*.jsonl
     output: clean/ICSI
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [meetings]
+    filters: [meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
 
   CommonVoice:                     # one full sentence per line, hand-punctuated
     input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
@@ -105,3 +105,21 @@ datasets:
       - speech_rate
       - disfluencies: {lang: en, truncations: false}   # "word-" is mostly a word cut by the cue
       - finish
+
+  TEDLIUM:                         # TED-LIUM 3, lowercase, no punctuation, hesitations not transcribed
+    input: clean/TEDLIUM/intermediate/*.jsonl   # from datasets2nemo/jz/tedlium2nemo.py; dev/test = legacy (Open ASR leaderboard)
+    output: clean/TEDLIUM
+    nocasepunc: true
+    filters:
+      - drop_if_match: {patterns: ['\[']}   # "[ unclear ]", "[ the ]": uncertain words (~100 lines)
+      - replace:
+          rules:
+            - {pattern: '<unk>', repl: ' '}  # 225k: breaths, fillers, inaudible words
+      - speech_rate
+      - normalize_spacing
+
+  PeoplesSpeech:                   # clean subset, lowercase, no punctuation, hesitations almost never written
+    input: clean/PeoplesSpeech/intermediate/*.jsonl   # from datasets2nemo/jz/peoples_speech2nemo.py
+    output: clean/PeoplesSpeech
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing]
