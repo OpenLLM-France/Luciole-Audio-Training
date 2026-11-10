@@ -34,13 +34,13 @@ defaults:
   # the recipe the warm-start checkpoint was produced with. Do NOT switch: a
   # different attention would silently drop weights (see the lora note below) and
   # run the encoder under a masking scheme it was never trained with.
-  - /recipe: luciole
+  - /recipe: luciole-1b
   - _self_
 
 model:
   init_from_checkpoint: ${oc.env:CHECKPOINT}
 
-  # ROTE — redundant with recipe/luciole (same values), kept explicit as a
+  # ROTE — redundant with recipe/luciole-1b (same values), kept explicit as a
   # guard so a recipe edit can't silently change the geometry vs the checkpoint.
   perception:
     rote:

@@ -27,7 +27,7 @@
 # will mismatch. (Training validation is disabled here via base.yaml limit_val_batches=0.)
 defaults:
   - /base
-  - /recipe: luciole
+  - /recipe: luciole-1b
   - _self_
 
 data:

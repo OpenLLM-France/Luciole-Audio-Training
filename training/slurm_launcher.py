@@ -227,7 +227,7 @@ def main():
     )
 
     g_train = parser.add_argument_group("training knobs (env vars)")
-    g_train.add_argument("--config", default="run/luciole",
+    g_train.add_argument("--config", default="run/luciole-1b",
                          help="Hydra config name under conf/ (default: %(default)s). "
                               "Use 'run/<name>' to pick a composed run file.")
     g_train.add_argument("--data-version", default="v4",

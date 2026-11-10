@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - /base
-  - /recipe: luciole
+  - /recipe: luciole-1b
   - _self_
 trainer:
   max_steps: 100_000

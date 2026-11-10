@@ -29,7 +29,7 @@
 # ============================================================
 defaults:
   - /base
-  - /recipe: luciole
+  - /recipe: luciole-1b
   - _self_
 
 model:

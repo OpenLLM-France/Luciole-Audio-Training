@@ -27,14 +27,14 @@ defaults:
   # Same recipe as the warm-start line (LOCAL attention + ROTE + LoRA r=64), so the
   # architecture matches bit-for-bit — expect 1052/1052 tensors on load. It also
   # supplies the data shape we want back, so do NOT add a data block below.
-  - /recipe: luciole
+  - /recipe: luciole-1b
   - _self_
 
 model:
   # stage2_from_lora_v2 at 200k (final = best, val_loss 0.7559). Pinned, not a glob.
   init_from_checkpoint: ${oc.env:CHECKPOINT}
 
-  # ROTE — redundant with recipe/luciole, kept explicit as a guard so a recipe
+  # ROTE — redundant with recipe/luciole-1b, kept explicit as a guard so a recipe
   # edit can't silently change the geometry vs the checkpoint.
   perception:
     rote:

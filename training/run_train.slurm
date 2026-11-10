@@ -68,7 +68,7 @@ TMP_CACHE="$SCRATCH/.cache"
 DATA_VERSION=${DATA_VERSION:-v4}
 
 # --- Config file
-CONFIG_NAME="${CONFIG_NAME:-run/luciole}"  # Hydra config name (no .yaml); e.g. run/luciole, run/v2
+CONFIG_NAME="${CONFIG_NAME:-run/luciole-1b}"  # Hydra config name (no .yaml); e.g. run/luciole-1b, run/v2
 
 # --- Soft time cap for Lightning (Days:HH:MM:SS). slurm_launcher.py computes
 #     this as SLURM --time minus 15min (min 30min); fallback here is 15min.
