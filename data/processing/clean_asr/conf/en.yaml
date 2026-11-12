@@ -129,3 +129,14 @@ datasets:
     output: clean/PeoplesSpeech
     nocasepunc: true
     filters: [{fill_duration: {durations: clean/PeoplesSpeech/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/PeoplesSpeech/intermediate/audio_durations.tsv}}, speech_rate, normalize_spacing]
+
+  SLUE-SQA5:                       # Wikipedia passages read aloud, whole 40 s files cut mid-sentence: no final period to add
+    input: clean/SLUE-SQA5/intermediate/train.jsonl   # datasets2nemo/en/slue-phase-2-sqa5.py --asr (train only: SLUE is an evaluation set)
+    output: clean/SLUE-SQA5
+    filters: [speech_rate, finish_hand_punctuated]
+
+  SLUE-SQA5_questions:             # the spoken questions (SQuAD, Natural Questions, TriviaQA...): some lowercase with no
+    input: clean/SLUE-SQA5/intermediate/train_questions.jsonl   # punctuation (search queries), some with no final "?": left as they are
+    output: clean/SLUE-SQA5
+    nocasepunc: true               # the lines with no case nor punctuation
+    filters: [speech_rate, finish_hand_punctuated]

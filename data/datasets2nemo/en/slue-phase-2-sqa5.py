@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 import re
@@ -9,7 +10,6 @@ import numpy as np
 import soundfile as sf
 from tqdm import tqdm
 
-from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +60,129 @@ def recover_cased_answer(answer_spans: dict, word2time: dict) -> str:
     return answer
 
 
+CSV_QUOTED_RE = re.compile(r'^"(.*)"$', re.S)
+OPEN_CURLY_RE = re.compile(r"([“‘])\s+")
+CLOSE_CURLY_RE = re.compile(r"\s+([”’])")
+
+
+# Wikipedia annotations in brackets, not read: "[ citation needed ]", "[ 1 ]", "[ a ]", "[ . . . ]"
+WIKI_NOTE_RE = re.compile(r"^(?:\d+|[a-z]|[. ]+|.*\b(?:citation|needed|sic|who|whom|when|which|where|clarification"
+                          r"|dubious|unsupported|verification|verify|page|according|original research|source|discuss"
+                          r"|disputed|update|year|full|specify|vague|why|how|failed|not in)\b.*)$", re.I)
+
+
+def drop_wiki_notes(words: list, starts: list):
+    """Remove the bracketed Wikipedia annotations ("[ citation needed ]", footnotes "[ 1 ]") and keep
+    the words of the other brackets without them ("[ writ for the son ]": an editorial insertion,
+    read). None when brackets are unpaired or curly braces are there."""
+    out_w, out_s, i = [], [], 0
+    while i < len(words):
+        if words[i] in "{}" or words[i] == "]":
+            return None
+        if words[i] == "[":
+            try:
+                j = words.index("]", i + 1)
+            except ValueError:
+                return None
+            inner = words[i + 1:j]
+            if "[" in inner:
+                return None
+            if not WIKI_NOTE_RE.match(" ".join(inner)):
+                out_w += inner
+                out_s += starts[i + 1:j]
+            i = j + 1
+            continue
+        out_w.append(words[i])
+        out_s.append(starts[i])
+        i += 1
+    return out_w, out_s
+
+
+HUNDRED_N_RE = re.compile(r"\b(\d{1,2}) hundred (\d{1,2})(s?)\b")      # "19 hundred 69" -> "1969", "19 hundred 70s"
+HUNDRED_RE = re.compile(r"\b(\d{1,2}) hundred(s?)\b(?! (?:and )?\d)")   # "18 hundred" -> "1800"
+POINT_RE = re.compile(r"\b\d+(?: point \d+)+\b")                        # "Section 5 point 3 point 1" -> "5.3.1"
+
+
+def written_numbers(text: str) -> str:
+    """The SLUE text spells numbers as read ("19 hundred 69", "Section 5 point 3"): written back."""
+    text = HUNDRED_N_RE.sub(lambda m: f"{int(m[1]) * 100 + int(m[2])}{m[3]}", text)
+    text = HUNDRED_RE.sub(lambda m: f"{int(m[1]) * 100}{m[2]}", text)
+    return POINT_RE.sub(lambda m: m[0].replace(" point ", "."), text)
+
+
+def document_text(word2time: dict, detok) -> str | None:
+    """The read text of a document chunk, detokenized ("America ( a club ) ." -> "America (a club).",
+    leading punctuation of a chunk cut mid-sentence removed), without the Wikipedia annotations in
+    brackets (drop_wiki_notes); None when part of it was likely not read (a word with no time:
+    Chinese, Greek, Syriac... left out by the aligner) or brackets cannot be resolved."""
+    kept = drop_wiki_notes(list(word2time.get("word") or []), list(word2time.get("start_second") or []))
+    if not kept or not kept[0]:
+        return None
+    words, starts = kept
+    if any(s == -1 and re.search(r"\w", w) for w, s in zip(words, starts)):
+        return None
+    text = detok.detokenize(words)
+    text = CLOSE_CURLY_RE.sub(r"\1", OPEN_CURLY_RE.sub(r"\1", text))
+    text = written_numbers(re.sub(r"^[\s.,;:!?)\]”’]+", "", text))
+    return text.strip() or None
+
+
+def question_text(raw: str) -> str:
+    """The question as read. A CSV-quoted one (the whole text in quotes, inner quotes doubled) is
+    unquoted; a quote left unpaired is removed."""
+    text = raw.strip()
+    m = CSV_QUOTED_RE.match(text)
+    if m and '""' in text:
+        text = m[1].replace('""', '"')
+    if text.count('"') % 2:
+        text = text.replace('"', "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def write_asr(raw_dir: Path, out_dir: Path, splits: list[str]):
+    """ASR intermediates from the raw manifests (the "full" ones of this script), no prompt yet:
+    <split>.jsonl = the document chunks (one line per distinct audio, whole 40 s file, cut
+    mid-sentence), <split>_questions.jsonl = the spoken questions. clean_asr.py conf/en.yaml
+    (SLUE-SQA5, SLUE-SQA5_questions) cleans them into clean/SLUE-SQA5/."""
+    from sacremoses import MosesDetokenizer
+    detok = MosesDetokenizer(lang="en")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for split in splits:
+        src = raw_dir / f"{split}.jsonl"
+        if not src.exists():
+            logger.info(f"[asr {split}] no {src}, skipping")
+            continue
+        docs, questions, dropped = {}, [], 0
+        with open(src, encoding="utf-8") as f:
+            for line in f:
+                row = json.loads(line)
+                meta = row["custom_metadata"]
+                doc = next(t for t in row["conversations"] if t.get("type") == "audio")
+                if doc["value"] not in docs:
+                    text = document_text(meta.get("word2time") or {}, detok)
+                    dropped += text is None
+                    docs[doc["value"]] = (meta["document_id"], doc["duration"], text)
+                questions.append((row["id"], meta["question_audio_filepath"], meta["question_audio_duration"],
+                                  question_text(meta["raw_question_text"])))
+
+        def line_of(uid, path, duration, text):
+            return json.dumps({"id": uid, "dataset_name": "SLUE-SQA5", "conversations": [
+                {"from": "User", "value": path, "type": "audio", "duration": duration},
+                {"from": "Assistant", "value": text, "type": "text"}]}, ensure_ascii=False) + "\n"
+
+        n_docs = 0
+        with open(out_dir / f"{split}.jsonl", "w", encoding="utf-8") as w:
+            for path, (doc_id, duration, text) in docs.items():
+                if text:
+                    w.write(line_of(doc_id, path, duration, text))
+                    n_docs += 1
+        with open(out_dir / f"{split}_questions.jsonl", "w", encoding="utf-8") as w:
+            for uid, path, duration, text in questions:
+                w.write(line_of(uid, path, duration, text))
+        logger.info(f"[asr {split}] {n_docs} documents ({dropped} dropped: words not read), "
+                    f"{len(questions)} questions -> {out_dir}")
+
+
 def load_source_dataset(cache_dir: str | None):
     logger.info(f"Loading asapp/slue-phase-2 (sqa5)"
                 + (f" from cache_dir={cache_dir}" if cache_dir else ""))
@@ -82,7 +205,20 @@ def main():
                         help="Override NeMo manifest folder for text-question + audio-context.")
     parser.add_argument("--audio-path", type=str, default=None,
                         help="Override raw audio output folder.")
+    parser.add_argument("--asr", action="store_true",
+                        help="Only write the ASR intermediates (nemo/asr/en/clean/SLUE-SQA5/intermediate/) "
+                             "from the raw manifests already written, no download.")
+    parser.add_argument("--asr-splits", nargs="+", default=["train"],
+                        help="Splits for --asr (validation/test stay out: SLUE is an evaluation set).")
     args = parser.parse_args()
+
+    if args.asr:
+        raw_dir = Path(args.manifest_path or f"{os.environ['DATA_FOLDER']}/raw/misc/en/slu-phase-2-sqa5")
+        write_asr(raw_dir, Path(f"{os.environ['DATA_FOLDER']}/nemo/asr/en/clean/SLUE-SQA5/intermediate"),
+                  args.asr_splits)
+        return
+
+    from ssak.utils.nemo_dataset import NemoDataset, NemoDatasetRow, NemoTurn  # not needed by --asr
 
     if args.manifest_path is None:
         args.manifest_path = f"{os.environ['DATA_FOLDER']}/raw/misc/en/context/slue-phase-2-sqa5"
