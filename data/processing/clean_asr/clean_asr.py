@@ -1220,6 +1220,76 @@ class SpeakerLabels(Filter):
         return True
 
 
+class _AudioLengths:
+    """Length of audio files: headers, or a TSV "<audio path>\\t<seconds>" relative to root
+    (audio_durations.py) for audio not reachable from here (Yodas2, GigaSpeech: JZ only)."""
+
+    def __init__(self, ctx, durations=None):
+        self.lengths = {}
+        if durations:
+            with open(os.path.join(ctx["root"], durations), encoding="utf-8") as f:
+                for line in f:
+                    path, seconds = line.rstrip("\n").rsplit("\t", 1)
+                    self.lengths[path] = float(seconds)
+
+    def __call__(self, path):
+        if path not in self.lengths:
+            import soundfile as sf
+            info = sf.info(path)                        # raises when missing: no silent keep
+            self.lengths[path] = info.frames / info.samplerate
+        return self.lengths[path]
+
+
+def _audio_turn(s):
+    return next((t for t in s.rec.get("conversations") or [] if t.get("type") == "audio"), None)
+
+
+@register
+class FillDuration(Filter):
+    """Not a filter: a line with no audio duration and no offset (or 0) is the whole file, its
+    duration is the length of the file. With an offset, where the segment ends is unknown: an
+    error. Before the filters that read the duration (audio_bounds, speech_rate). Lengths as in
+    audio_bounds (`durations`)."""
+    name = "fill_duration"
+
+    def __init__(self, ctx, durations=None, **params):
+        super().__init__(ctx)
+        self.length = _AudioLengths(ctx, durations)
+
+    def __call__(self, s):
+        turn = _audio_turn(s)
+        if turn is None:
+            raise ValueError(f"fill_duration: line {s.rec.get('id')!r} has no audio")
+        if not turn.get("duration"):
+            if turn.get("offset"):                      # where the segment ends is unknown
+                raise ValueError(f"fill_duration: line {s.rec.get('id')!r} has an offset but no duration")
+            turn["duration"] = round(self.length(turn["value"]), 3)   # the whole file
+        return True
+
+
+@register
+class AudioBounds(Filter):
+    """Drop lines whose audio segment ends after the end of its file (offset + duration > file
+    length + `tolerance`): YouTube captions run past the audio (Yodas2 it CO5nIm6prto: cues up to
+    439 s on 382 s of audio), giving text on silence or nothing. File lengths come from the
+    headers, or from `durations` (TSV "<audio path>\\t<seconds>", relative to root, from
+    audio_durations.py) when the audio is not reachable from here (Yodas2, GigaSpeech: JZ only).
+    An audio found in neither, or a line with no audio duration (fill_duration first), is an
+    error, not a kept line."""
+    name = "audio_bounds"
+
+    def __init__(self, ctx, durations=None, tolerance=0.1, **params):
+        super().__init__(ctx)
+        self.tolerance, self.length = tolerance, _AudioLengths(ctx, durations)
+
+    def __call__(self, s):
+        turn = _audio_turn(s)
+        if turn is None or not turn.get("duration"):
+            raise ValueError(f"audio_bounds: line {s.rec.get('id')!r} has no audio duration")
+        end = (turn.get("offset") or 0.0) + turn["duration"]
+        return end <= self.length(turn["value"]) + self.tolerance
+
+
 @register
 class SpeechRate(Filter):
     """Drop lines whose text cannot match the audio: audio shorter than `min_duration`, more

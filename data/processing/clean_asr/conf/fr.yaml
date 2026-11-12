@@ -52,6 +52,8 @@ datasets:
     output: clean/Multilingual_TEDx
     outputs: [base, events]
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - strip_html
       - join_split_compounds
       - drop_foreign
@@ -70,6 +72,8 @@ datasets:
     outputs: [base, events]
     nocasepunc: 20                 # 20+ words unpunctuated: ~27k lines; shorter ones are mostly whole cues
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - normalize_unicode
       - strip_html
       - merge_rare_tags
@@ -87,45 +91,45 @@ datasets:
     input: clean/ESLO/intermediate/train_recasepunc*.jsonl
     output: clean/ESLO
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, join_split_compounds, recased, speech_rate, markers_model, finish]
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, recased, speech_rate, markers_model, finish]
 
   TCOF_Adultes:
     input: clean/TCOF_Adultes/intermediate/train_recasepunc*.jsonl
     output: clean/TCOF_Adultes
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model,
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model,
               normalize_spacing, fix_punctuation, french_typography]   # long pauses are real
 
   TCOF_Enfants:
     input: clean/TCOF_Enfants/intermediate/train_recasepunc*.jsonl
     output: clean/TCOF_Enfants
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # slow child speech
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # slow child speech
 
   CFPP2000:
     input: clean/CFPP2000/intermediate/train_recasepunc*.jsonl
     output: clean/CFPP2000
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model, finish]
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model, finish]
 
   CLAPI:
     input: clean/CLAPI/intermediate/train_recasepunc*.jsonl
     output: clean/CLAPI
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # long pauses are real
+    filters: [fill_duration, audio_bounds, join_split_compounds, recased, speech_rate: {median_ratio: 5}, markers_model, finish]   # long pauses are real
 
   CFPB:
     input: clean/CFPB/intermediate/train_recasepunc*.jsonl
     output: clean/CFPB
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model,
+    filters: [fill_duration, audio_bounds, merge_rare_tags, replace: {rules: mm_hesitation}, recased, speech_rate, markers_model,
               normalize_spacing, fix_punctuation, french_typography]
 
   OFROM:
     input: clean/OFROM/intermediate/train_recasepunc*.jsonl
     output: clean/OFROM
     outputs: [base, disfluencies]
-    filters: [join_split_compounds, recased, speech_rate, normalize_interjections, disfluency_model,
+    filters: [fill_duration, audio_bounds, join_split_compounds, recased, speech_rate, normalize_interjections, disfluency_model,
               normalize_spacing, fix_punctuation, french_typography]   # no event tags
 
   PFC:
@@ -134,6 +138,8 @@ datasets:
     outputs: [base, events, disfluencies, events_disfluencies]
     nocasepunc: true               # 41 % of lines are uncased
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - merge_rare_tags
       - join_split_compounds
       - speaker_labels             # "E : D'accord."
@@ -146,13 +152,15 @@ datasets:
     input: clean/ACSYNT/intermediate/train*.jsonl
     output: clean/ACSYNT
     outputs: [base, events, disfluencies, events_disfluencies]   # base fluent thanks to the model (9 % of lines with a repeat by the rules alone)
-    filters: [merge_rare_tags, join_split_compounds, speaker_labels, speech_rate, markers_model, finish]   # "L: Ah je fais..."
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, speaker_labels, speech_rate, markers_model, finish]   # "L: Ah je fais..."
 
   LesVocaux:
     input: clean/LesVocaux/intermediate/train_recasepunc*.jsonl
     output: clean/LesVocaux
     outputs: [base, events, disfluencies, events_disfluencies]
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - merge_rare_tags
       - join_split_compounds
       - drop_if_match: {patterns: ['\[étranger\]']}   # foreign speech, not a canonical tag
@@ -170,6 +178,8 @@ datasets:
     output: clean/SimSamu
     outputs: [base, disfluencies]
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - replace: {rules: [{pattern: '\b[Hh]eu\b', repl: euh, keep_case: true}]}
       - replace: {rules: missing_hyphens}   # "est ce que" -> "est-ce que" (rules.yaml)
       - speech_rate
@@ -181,28 +191,28 @@ datasets:
     input: clean/LINAGORA_Meetings/intermediate/train*.jsonl
     output: clean/LINAGORA_Meetings
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [merge_rare_tags, join_split_compounds, speech_rate, markers_model, finish]
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, speech_rate, markers_model, finish]
 
   LVL-Atril-CTFNN1:
     input: clean/LVL-Atril-CTFNN1/intermediate/train*.jsonl
     output: clean/LVL-Atril-CTFNN1
     outputs: [base, events, disfluencies, events_disfluencies]
     nocasepunc: true               # 67 % of lines are uncased, mixed with cased ones
-    filters: [merge_rare_tags, join_split_compounds, fix_spurious_caps, speech_rate, markers_model, finish]
+    filters: [fill_duration, audio_bounds, merge_rare_tags, join_split_compounds, fix_spurious_caps, speech_rate, markers_model, finish]
 
   LVL-Atril-CTFAR:
     input: clean/LVL-Atril-CTFAR/intermediate/train*.jsonl
     output: clean/LVL-Atril-CTFAR
     outputs: [base, events, disfluencies, events_disfluencies]
     nocasepunc: true
-    filters: [join_split_compounds, fix_spurious_caps, drop_subtitle_junk, speech_rate, markers_model, finish]
+    filters: [fill_duration, audio_bounds, join_split_compounds, fix_spurious_caps, drop_subtitle_junk, speech_rate, markers_model, finish]
 
   SUMM-RE:
     input: clean/SUMM-RE/intermediate/train*.jsonl
     output: clean/SUMM-RE
     outputs: [base, disfluencies]
     nocasepunc: true               # 2 % of lines got no case/punctuation from whisper
-    filters: [join_split_compounds, restore_elisions, speech_rate, normalize_interjections,
+    filters: [fill_duration, audio_bounds, join_split_compounds, restore_elisions, speech_rate, normalize_interjections,
               disfluency_model: {truncations: false}, finish]
 
   Yodas:
@@ -211,6 +221,8 @@ datasets:
     outputs: [base, events]
     nocasepunc: 8                  # ~28 % of videos have unpunctuated subtitles; 8+ words: never punctuated
     filters:
+      - fill_duration   # a missing duration: length of the audio from the offset
+      - audio_bounds   # segments past the end of the audio
       - normalize_unicode
       - strip_html
       - join_split_compounds
@@ -228,11 +240,13 @@ datasets:
       - finish
 
   Yodas2:                         # same fr000 captions as Yodas, whole videos: count the audio once
-    input: clean/Yodas2/intermediate/train.jsonl   # from datasets2nemo/jz/yodas22nemo.py
+    input: clean/Yodas2/intermediate/train*.jsonl   # train.jsonl from datasets2nemo/jz/yodas22nemo.py, train_silence.jsonl from build_silence.py
     output: clean/Yodas2
     outputs: [base, events]
     nocasepunc: 8                  # as Yodas
     filters:
+      - fill_duration: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # a missing duration: length of the audio from the offset
+      - audio_bounds: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # cues past the end of the audio (audio on JZ: lengths from audio_durations.py)
       - normalize_unicode
       - strip_html
       - replace: {rules: [{pattern: '>+', repl: ' '}]}   # ">>" change of speaker: keep the words (drop_subtitle_junk drops ">")
@@ -253,27 +267,27 @@ datasets:
   VoxForge:                        # read prompts; verse capitals and quotes are right ("J'Accuse")
     input: clean/VoxForge/intermediate/train_recasepunc*.jsonl
     output: clean/VoxForge
-    filters: [add_final_period, speech_rate, french_typography]
+    filters: [fill_duration, audio_bounds, add_final_period, speech_rate, french_typography]
 
   # --- text kept from context/ ------------------------------------------------------------
   AfricanAccentedFrench:
     input: clean/AfricanAccentedFrench/intermediate/train_recasepunc.jsonl   # link to context/.../train_recasepunc_max30.jsonl (no full version)
     output: clean/AfricanAccentedFrench
     outputs: [base, disfluencies]  # 0.8 % of lines with euh / hmm
-    filters: [fix_spurious_caps, speech_rate, normalize_interjections, disfluency_model, normalize_spacing,
+    filters: [fill_duration, audio_bounds, fix_spurious_caps, speech_rate, normalize_interjections, disfluency_model, normalize_spacing,
               fix_punctuation, french_typography]
 
   PxSLU:
     input: context/PxSLU/train_recasepunc.jsonl
     output: clean/PxSLU
     outputs: [base, disfluencies]  # 2 % of lines with euh / hmm
-    filters: [fix_mixed_case, speech_rate, disfluency_model, normalize_spacing, fix_punctuation,
+    filters: [fill_duration, audio_bounds, fix_mixed_case, speech_rate, disfluency_model, normalize_spacing, fix_punctuation,
               french_typography]   # "AciCLOvir" -> "Aciclovir"
 
   Multilingual_LibriSpeech_recasepunc:
     input: context/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl
     output: clean/Multilingual_LibriSpeech_recasepunc
-    filters: [drop_ocr, direct_speech, fix_spurious_caps, speech_rate, replace: {rules: no_final_period},
+    filters: [fill_duration, audio_bounds, drop_ocr, direct_speech, fix_spurious_caps, speech_rate, replace: {rules: no_final_period},
               fix_punctuation, french_typography]   # "…gens de.": cut segment
 
   Multilingual_LibriSpeech:        # lowercase, no punctuation; after _recasepunc, whose output it reads
@@ -281,7 +295,7 @@ datasets:
     output: clean/Multilingual_LibriSpeech
     nocasepunc: true
     # the lines only here are mostly damaged by OCR ("ils taient ivres"), which drop_ocr misses
-    filters: [keep_ids: {manifest: clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl},
+    filters: [fill_duration, audio_bounds, keep_ids: {manifest: clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl},
               drop_ocr, speech_rate]   # read speech: no events nor disfluencies; nothing to fix in the punctuation
 
   CommonVoice:                     # one full sentence per line, hand-punctuated
@@ -289,16 +303,16 @@ datasets:
     output: clean/CommonVoice
     outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
     output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
-    filters: [normalize_unicode, join_split_compounds, add_final_period, speech_rate, finish_hand_punctuated]   # read: no events nor disfluencies
+    filters: [fill_duration, audio_bounds, normalize_unicode, join_split_compounds, add_final_period, speech_rate, finish_hand_punctuated]   # read: no events nor disfluencies
 
   FLEURS:                          # hand-punctuated
     input: context/FLEURS/train.jsonl
     output: clean/FLEURS
-    filters: [add_final_period, finish_hand_punctuated]   # read: no events nor disfluencies
+    filters: [fill_duration, audio_bounds, add_final_period, finish_hand_punctuated]   # read: no events nor disfluencies
 
   VoxPopuli:
     input: context/VoxPopuli/train.jsonl
     output: clean/VoxPopuli
     nocasepunc: true               # 6 % of lines fell back to the lowercase normalized text (no raw text)
-    filters: [replace: {rules: missing_hyphens}, speech_rate, normalize_interjections, disfluencies, finish,
+    filters: [fill_duration, audio_bounds, replace: {rules: missing_hyphens}, speech_rate, normalize_interjections, disfluencies, finish,
               uncased_no_punctuation]   # no hyphen in the source

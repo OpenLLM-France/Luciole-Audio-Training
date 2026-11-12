@@ -22,6 +22,7 @@ events/ it is kept.
 
 Usage:
     python data/processing/clean_asr/build_silence.py --datasets ESLO Multilingual_TEDx
+    python data/processing/clean_asr/build_silence.py --lang de --datasets Yodas2
 """
 import argparse
 import collections
@@ -30,6 +31,8 @@ import glob
 import json
 import os
 import random
+import time
+from math import gcd
 
 import numpy as np
 import soundfile as sf
@@ -89,11 +92,14 @@ def _init():
 
 def _read(wav, start, end):
     with sf.SoundFile(wav) as f:
-        if f.samplerate != SR:
-            return None
-        f.seek(max(int(start * SR), 0))
-        x = f.read(max(int((end - start) * SR), 0), dtype="float32", always_2d=True)
-    return x.mean(axis=1)
+        sr = f.samplerate
+        f.seek(max(int(start * sr), 0))
+        x = f.read(max(int((end - start) * sr), 0), dtype="float32", always_2d=True).mean(axis=1)
+    if sr != SR:                                        # e.g. Yodas2: 24 kHz
+        from scipy.signal import resample_poly
+        g = gcd(SR, sr)
+        x = resample_poly(x, SR // g, sr // g).astype("float32")
+    return x
 
 
 def _db(x):
@@ -160,6 +166,7 @@ def make_line(kind, gap, max_duration):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datasets", nargs="+", default=DATASETS)
+    p.add_argument("--lang", default="fr", help="nemo/asr/<lang>/clean and context")
     p.add_argument("--fraction", type=float, default=0.02, help="silence lines per line of the input")
     p.add_argument("--max-per-dataset", type=int, default=5000)
     p.add_argument("--min-gap", type=float, default=2.0, help="shorter gaps are pauses, untagged elsewhere")
@@ -170,24 +177,29 @@ def main():
     p.add_argument("--min-db-below", type=float, default=15.0)
     p.add_argument("--workers", type=int, default=32)
     p.add_argument("--seed", type=int, default=1234)
+    p.add_argument("--max-hours", type=float, default=0, help="stop checking gaps after that long and write what was found")
     args = p.parse_args()
+    deadline = time.time() + args.max_hours * 3600 if args.max_hours else float("inf")
+    clean, context = (d.replace("/asr/fr/", f"/asr/{args.lang}/") for d in (CLEAN, CONTEXT))
 
     with Pool(args.workers, initializer=_init) as pool:
         for ds in args.datasets:
-            inputs = [f for f in sorted(glob.glob(f"{CLEAN}/{ds}/intermediate/train*.jsonl"))
-                      if "max30" not in f and "_silence" not in f]
+            inputs = [f for f in sorted(glob.glob(f"{clean}/{ds}/intermediate/train*.jsonl"))
+                      if "max30" not in os.path.basename(f) and "_silence" not in os.path.basename(f)]
+            if not inputs:
+                raise SystemExit(f"[{ds}] no input in {clean}/{ds}/intermediate/")
             per_file = -(-args.max_per_dataset // max(len(inputs), 1))
             for path in inputs:
                 rng = random.Random(f"{args.seed}:{ds}:{os.path.basename(path)}")
                 recs = load(path)
-                ctx_path = f"{CONTEXT}/{ds}/{os.path.basename(path)}"
+                ctx_path = f"{context}/{ds}/{os.path.basename(path)}"
                 extra = load(ctx_path) if os.path.exists(ctx_path) else []
                 gaps = find_gaps(recs, extra, args.min_gap, args.max_gap)
                 rng.shuffle(gaps)
                 target = min(round(args.fraction * len(recs)), per_file)
                 lines, stats, levels, i = [], collections.Counter(), [], 0
-                while len(lines) < target and i < len(gaps):
-                    batch = gaps[i:i + 4 * (target - len(lines)) + 16]
+                while len(lines) < target and i < len(gaps) and time.time() < deadline:
+                    batch = gaps[i:i + min(4 * (target - len(lines)) + 16, 20000)]
                     i += len(batch)
                     jobs = [(g[0], g[1] + 0.1, g[2] - 0.1, span(g[3])[1] if g[3] else g[1] - 3,
                              span(g[4])[2] if g[4] else g[2] + 3, args.vad_threshold, args.max_db, args.min_db_below)
