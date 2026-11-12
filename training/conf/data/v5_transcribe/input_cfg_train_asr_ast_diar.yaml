@@ -1,0 +1,1658 @@
+# ============================================================
+# WEIGHT RULES inside a dataset (ASR)
+# - events / disfluencies / events_disfluencies variants: 25% each, the
+#   base takes the rest (3 variants + biasing: base 22%).
+# - negative examples (read speech, e.g. CommonVoice: the prompt asks for
+#   markers, the audio has none): not used for now, the variants of
+#   spontaneous speech already have many lines without markers.
+# - contextual biasing variant: 3% (ASR), 1% (AST).
+# - silence lines (gaps of long recordings, build_silence.py; fr datasets
+#   with >= 100 lines, and Yodas2 in every language): 1% each, events
+#   version ([silence] kept) and base version (tag stripped, longer audio).
+#   Few draws on purpose: there are few lines anyway (but Yodas2 en).
+# - recasepunc and non-recasepunc versions of the same data: equal weights.
+# A dataset group competes with its siblings like its base manifest
+# (size**(1/T), assets/suggest_yaml_cfg.py), so dataset / language shares
+# do not depend on its variants.
+# ============================================================
+
+# ============================================================
+# v4 — ASR / AST / diarization only   (Luciole-Audio-1.0-ASR)
+# Speech-recognition profile cut from v4/input_cfg_train.yaml: the ASR and
+# AST buckets are kept as is (same datasets, same language split), every
+# QA / AQA / OTHER bucket is dropped, and diarization becomes a
+# bucket of its own. CVMultiTurn (transcription / translation chains) comes
+# in its asr_ast form, without the accent / gender / age follow-ups, and
+# VoxCeleb chat (same speaker or not?) stays as a small speaker bucket.
+# A 2% text-only bucket (v4 had 1%) keeps the LLM's text chat ability.
+# Sum: 65 + 25 + 2 + 5 + 1 + 2 = 100
+# Audio: ~135 663 h in all (per-manifest hours / max_dur from v4/metadata.csv;
+# CVMultiTurn/mixed_asr_ast is not in it, measured on JZ over every audio turn).
+# ============================================================
+
+# ============================================================
+# ASR — 65%   [121 237 h, max_dur=860.0, 37 244 996 rows]
+# ============================================================
+# Datasets with events / disfluencies / events_disfluencies variants (same
+# audio, other prompt + target) are wrapped in a group, weights per the
+# rules at the top of the file.
+- type: group
+  weight: 0.65
+  tags: {task: asr}
+  input_cfg:
+
+    # FR — 29% of ASR [11 565 h]
+    - type: group
+      weight: 0.29
+      tags: {lang: fr}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train.jsonl # 10.3h, max_dur=29.40, 3 193 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train_contextual_biasing.jsonl # 3 678 rows
+        - type: group
+          weight: 0.08
+          input_cfg:
+            - type: group
+              weight: 0.5
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.97
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_LibriSpeech/train.jsonl # 1040.7h, max_dur=20.00, 249 148 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 273 354 rows
+            - type: group
+              weight: 0.5
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.97
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc.jsonl # 1040.7h, max_dur=20.00, 249 151 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc_contextual_biasing.jsonl # 340 465 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CommonVoice/train.jsonl # 850.7h, max_dur=17.86, 593 002 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CommonVoice/train_contextual_biasing.jsonl # 658 281 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/train_recasepunc.jsonl # 3.9h, max_dur=29.95, 1 916 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/disfluencies/train_recasepunc.jsonl # 1 916 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/train_recasepunc_contextual_biasing.jsonl # 2 436 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxForge/train_recasepunc.jsonl # 37.2h, max_dur=27.12, 22 428 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxForge/train_recasepunc_contextual_biasing.jsonl # 24 469 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/train.jsonl # 7.7h, max_dur=32.15, 3 437 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/events/train.jsonl # 3 486 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/disfluencies/train.jsonl # 3 446 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/events_disfluencies/train.jsonl # 3 495 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/train_contextual_biasing.jsonl # 3 499 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/train.jsonl # 7.9h, max_dur=519.92, 4 746 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/events/train.jsonl # 5 381 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/disfluencies/train.jsonl # 4 848 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/events_disfluencies/train.jsonl # 5 482 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/train_contextual_biasing.jsonl # 4 671 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.2
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train.jsonl # 82.3h, max_dur=30.00, 56 117 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train.jsonl # 56 127 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/disfluencies/train.jsonl # 57 958 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events_disfluencies/train.jsonl # 57 967 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_contextual_biasing.jsonl # 55 733 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_silence.jsonl # 896 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_silence.jsonl # 1 163 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.2
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train.jsonl # 41.9h, max_dur=9.28, 68 951 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train.jsonl # 69 006 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/disfluencies/train.jsonl # 69 407 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events_disfluencies/train.jsonl # 69 462 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_contextual_biasing.jsonl # 57 765 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_silence.jsonl # 1 045 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_silence.jsonl # 1 396 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PFC/train.jsonl # 52.7h, max_dur=37.30, 58 866 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PFC/events/train.jsonl # 60 419 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PFC/disfluencies/train.jsonl # 58 965 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PFC/events_disfluencies/train.jsonl # 60 515 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PFC/train_contextual_biasing.jsonl # 54 624 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.7
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train.jsonl # 170.1h, max_dur=180.26, 113 275 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/events/train.jsonl # 114 056 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 124 536 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train_silence.jsonl # 1 771 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/events/train_silence.jsonl # 2 302 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/train.jsonl # 2.6h, max_dur=19.72, 3 035 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/disfluencies/train.jsonl # 3 056 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/train_contextual_biasing.jsonl # 2 340 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxPopuli/train.jsonl # 205.6h, max_dur=91.06, 73 498 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxPopuli/train_contextual_biasing.jsonl # 82 283 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/train_recasepunc.jsonl # 13.7h, max_dur=29.99, 11 440 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/disfluencies/train_recasepunc.jsonl # 11 441 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/train_recasepunc_contextual_biasing.jsonl # 11 580 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc.jsonl # 8.8h, max_dur=14.66, 17 600 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events/train_recasepunc.jsonl # 17 628 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/disfluencies/train_recasepunc.jsonl # 18 150 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events_disfluencies/train_recasepunc.jsonl # 18 176 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc_contextual_biasing.jsonl # 14 029 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPP2000/train_recasepunc.jsonl # 34.7h, max_dur=111.89, 27 987 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPP2000/events/train_recasepunc.jsonl # 28 903 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPP2000/disfluencies/train_recasepunc.jsonl # 28 842 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPP2000/events_disfluencies/train_recasepunc.jsonl # 29 753 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPP2000/train_recasepunc_contextual_biasing.jsonl # 28 024 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/train_recasepunc.jsonl # 13.8h, max_dur=93.10, 13 096 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/events/train_recasepunc.jsonl # 14 062 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/disfluencies/train_recasepunc.jsonl # 13 191 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/events_disfluencies/train_recasepunc.jsonl # 14 153 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/train_recasepunc_contextual_biasing.jsonl # 11 925 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.2
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/train_recasepunc.jsonl # 258.6h, max_dur=18.38, 416 183 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/events/train_recasepunc.jsonl # 423 726 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/disfluencies/train_recasepunc.jsonl # 439 068 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/events_disfluencies/train_recasepunc.jsonl # 446 165 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/train_recasepunc_contextual_biasing.jsonl # 400 436 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/train_recasepunc_silence.jsonl # 3 660 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/events/train_recasepunc_silence.jsonl # 5 000 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/train_recasepunc.jsonl # 3.5h, max_dur=293.07, 436 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/events/train_recasepunc.jsonl # 743 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/disfluencies/train_recasepunc.jsonl # 436 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/events_disfluencies/train_recasepunc.jsonl # 743 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/train_recasepunc_contextual_biasing.jsonl # 448 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Adultes/train_recasepunc.jsonl # 52.6h, max_dur=40.81, 68 940 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Adultes/events/train_recasepunc.jsonl # 70 854 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Adultes/disfluencies/train_recasepunc.jsonl # 72 378 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Adultes/events_disfluencies/train_recasepunc.jsonl # 74 226 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Adultes/train_recasepunc_contextual_biasing.jsonl # 67 471 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Enfants/train_recasepunc.jsonl # 45.7h, max_dur=38.18, 66 631 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Enfants/events/train_recasepunc.jsonl # 70 936 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Enfants/disfluencies/train_recasepunc.jsonl # 68 399 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Enfants/events_disfluencies/train_recasepunc.jsonl # 72 513 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/TCOF_Enfants/train_recasepunc_contextual_biasing.jsonl # 61 222 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/OFROM/train_recasepunc.jsonl # 55.9h, max_dur=11.28, 111 802 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/OFROM/disfluencies/train_recasepunc.jsonl # 114 354 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/OFROM/train_recasepunc_contextual_biasing.jsonl # 102 098 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.95
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/train.jsonl # 2310.8h, max_dur=120.00, 483 117 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/train_contextual_biasing.jsonl # 732 117 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/train_silence.jsonl # 6297 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/events/train_silence.jsonl # 8924 rows
+        # YouTubeFr — wrap the 7 splits in a single collection so they
+        # compete with the other FR ASR datasets as one entity (not seven).
+        # weight: 0.18 means "this collection gets 18% of the FR ASR budget";
+        # the remaining 82% is split data-driven among the other FR datasets.
+        - type: group
+          weight: 0.18
+          input_cfg:
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split0.jsonl # 787.4h, max_dur=30.00, 227 502 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split0_contextual_biasing.jsonl # 266 584 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split0_silence.jsonl # 2666 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split0_silence.jsonl # 3559 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1.jsonl # 815.4h, max_dur=30.00, 225 418 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1_contextual_biasing.jsonl # 265 545 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1_silence.jsonl # 2055 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split1_silence.jsonl # 2779 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2.jsonl # 795.9h, max_dur=30.00, 227 667 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2_contextual_biasing.jsonl # 266 151 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2_silence.jsonl # 2036 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split2_silence.jsonl # 2744 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3.jsonl # 775.3h, max_dur=30.00, 226 589 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3_contextual_biasing.jsonl # 265 164 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3_silence.jsonl # 2052 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split3_silence.jsonl # 2792 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4.jsonl # 765.4h, max_dur=30.00, 218 477 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4_contextual_biasing.jsonl # 256 157 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4_silence.jsonl # 1966 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split4_silence.jsonl # 2667 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5.jsonl # 711.2h, max_dur=30.00, 204 823 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5_contextual_biasing.jsonl # 240 045 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5_silence.jsonl # 1913 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split5_silence.jsonl # 2620 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.95
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6.jsonl # 561.9h, max_dur=30.00, 161 593 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6_contextual_biasing.jsonl # 188 531 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6_silence.jsonl # 1555 rows
+                - type: multimodal_conversation
+                  weight: 0.01
+                  tags: {sub_task: events_silence}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split6_silence.jsonl # 2085 rows
+    # EN — 29% of ASR [90 805 h]
+    - type: group
+      weight: 0.29
+      tags: {lang: en}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/CommonVoice/train.jsonl # 1798.2h, max_dur=27.00, 1 138 680 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/CommonVoice/train_contextual_biasing.jsonl # 1 538 811 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train.jsonl # 7.5h, max_dur=42.36, 2 602 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train_contextual_biasing.jsonl # 3 531 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Multilingual_LibriSpeech/train.jsonl # 44656.9h, max_dur=20.00, 10 807 293 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 1 070 942 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/VoxPopuli/train.jsonl # 522.1h, max_dur=228.82, 182 269 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/VoxPopuli/train_contextual_biasing.jsonl # 263 794 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/AMI/train.jsonl # 70.9h, max_dur=30.00, 63 393 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/AMI/events/train.jsonl # 66 491 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/AMI/disfluencies/train.jsonl # 69 936 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/AMI/events_disfluencies/train.jsonl # 72 911 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/AMI/train_contextual_biasing.jsonl # 50 480 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.22
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/ICSI/train.jsonl # 41.6h, max_dur=22.66, 65 531 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/ICSI/events/train.jsonl # 65 998 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/ICSI/disfluencies/train.jsonl # 71 996 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events_disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/ICSI/events_disfluencies/train.jsonl # 72 213 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/ICSI/train_contextual_biasing.jsonl # 57 438 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/GigaSpeech/train.jsonl # 9997.2h, max_dur=20.00, 8 281 224 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/GigaSpeech/train_contextual_biasing.jsonl # 1 099 922 rows
+        - type: group
+          weight: 0.08
+          input_cfg:
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.97
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/PeoplesSpeech/train.jsonl # 5894.6h, max_dur=120.00, 300 138 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/PeoplesSpeech/train_contextual_biasing.jsonl # 332 784 rows
+            - type: group
+              input_cfg:
+                - type: multimodal_conversation
+                  weight: 0.97
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/PeoplesSpeech/train_sa.jsonl # 991.7h, max_dur=120.00, 49 739 rows
+                - type: multimodal_conversation
+                  weight: 0.03
+                  tags: {sub_task: contextual_biasing}
+                  manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/PeoplesSpeech/train_sa_contextual_biasing.jsonl # 55 218 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/TEDLIUM/train.jsonl # 443.3h, max_dur=120.00, 87 336 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/TEDLIUM/train_contextual_biasing.jsonl # 96 566 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.7
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Yodas2/train.jsonl # 26380.4h, max_dur=120.00, 6 449 547 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Yodas2/disfluencies/train.jsonl # 6 453 017 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Yodas2/train_contextual_biasing.jsonl # 1 818 432 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Yodas2/train_silence.jsonl # 153385 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/Yodas2/events/train_silence.jsonl # 213248 rows
+
+    # DE — 8% of ASR   [5 978 h]
+    - type: group
+      weight: 0.08
+      tags: {lang: de}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/CommonVoice/train.jsonl # 962.5h, max_dur=18.94, 607 767 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/CommonVoice/train_contextual_biasing.jsonl # 675 070 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train.jsonl # 9.0h, max_dur=26.76, 2 973 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train_contextual_biasing.jsonl # 3 915 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train.jsonl # 10.1h, max_dur=79.26, 6 640 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train.jsonl # 6 686 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 7 034 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_LibriSpeech/train.jsonl # 1959.2h, max_dur=20.00, 468 153 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 519 589 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/VoxPopuli/train.jsonl # 264.4h, max_dur=198.23, 108 346 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/VoxPopuli/train_contextual_biasing.jsonl # 160 205 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.45
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/train.jsonl # 2772.5h, max_dur=120.00, 550 793 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/events/train.jsonl # 551 824 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/disfluencies/train.jsonl # 550 901 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/train_contextual_biasing.jsonl # 947 434 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/train_silence.jsonl # 11680 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/events/train_silence.jsonl # 16724 rows
+
+    # ES — 8% of ASR   [5 299 h]
+    - type: group
+      weight: 0.08
+      tags: {lang: es}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/CommonVoice/train.jsonl # 508.6h, max_dur=22.58, 353 596 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/CommonVoice/train_contextual_biasing.jsonl # 430 189 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train.jsonl # 8.8h, max_dur=29.22, 2 796 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train_contextual_biasing.jsonl # 3 251 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train.jsonl # 171.4h, max_dur=237.65, 100 496 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/events/train.jsonl # 101 221 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 111 538 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_LibriSpeech/train.jsonl # 916.0h, max_dur=20.00, 220 235 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 244 268 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/VoxPopuli/train.jsonl # 151.8h, max_dur=115.06, 50 885 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/VoxPopuli/train_contextual_biasing.jsonl # 69 510 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.95
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/train.jsonl # 3542.0h, max_dur=120.00, 783 865 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/train_contextual_biasing.jsonl # 1 079 769 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/train_silence.jsonl # 21296 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/events/train_silence.jsonl # 31101 rows
+
+    # IT — 6% of ASR   [2 069 h]
+    - type: group
+      weight: 0.06
+      tags: {lang: it}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/CommonVoice/train.jsonl # 254.6h, max_dur=14.06, 172 777 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/CommonVoice/train_contextual_biasing.jsonl # 191 863 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train.jsonl # 9.0h, max_dur=34.20, 3 028 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train_contextual_biasing.jsonl # 3 752 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train.jsonl # 97.5h, max_dur=116.24, 49 269 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/events/train.jsonl # 49 614 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 54 685 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_LibriSpeech/train.jsonl # 247.3h, max_dur=20.00, 59 605 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 66 104 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/VoxPopuli/train.jsonl # 77.9h, max_dur=134.70, 22 530 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/VoxPopuli/train_contextual_biasing.jsonl # 25 503 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.45
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/train.jsonl # 1382.8h, max_dur=120.00, 264 113 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/events/train.jsonl # 264 248 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/disfluencies/train.jsonl # 264 131 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/train_contextual_biasing.jsonl # 373 943 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/train_silence.jsonl # 3401 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/events/train_silence.jsonl # 5177 rows
+
+    # NL — 5% of ASR   [2 061 h]
+    - type: group
+      weight: 0.05
+      tags: {lang: nl}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/CommonVoice/train.jsonl # 54.1h, max_dur=10.34, 43 457 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/CommonVoice/train_contextual_biasing.jsonl # 45 733 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train.jsonl # 7.7h, max_dur=23.64, 2 918 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train_contextual_biasing.jsonl # 3 656 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Multilingual_LibriSpeech/train.jsonl # 1551.2h, max_dur=20.00, 373 524 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 413 032 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/VoxPopuli/train.jsonl # 46.3h, max_dur=50.28, 20 943 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/VoxPopuli/train_contextual_biasing.jsonl # 20 798 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.45
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train.jsonl # 401.9h, max_dur=120.00, 96 420 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/events/train.jsonl # 96 441 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/disfluencies/train.jsonl # 96 429 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train_contextual_biasing.jsonl # 107 036 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train_silence.jsonl # 2194 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/events/train_silence.jsonl # 3326 rows
+
+    # PT — 5% of ASR   [1 842 h]
+    - type: group
+      weight: 0.05
+      tags: {lang: pt}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/CommonVoice/train.jsonl # 26.3h, max_dur=15.48, 22 916 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/CommonVoice/train_contextual_biasing.jsonl # 24 790 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train.jsonl # 10.2h, max_dur=37.62, 2 790 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train_contextual_biasing.jsonl # 3 287 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_LibriSpeech/train.jsonl # 160.8h, max_dur=20.00, 37 494 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_LibriSpeech/train_contextual_biasing.jsonl # 41 205 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train.jsonl # 149.0h, max_dur=303.92, 88 919 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/events/train.jsonl # 89 587 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 98 111 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.45
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/train.jsonl # 1495.7h, max_dur=120.00, 267 737 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/events/train.jsonl # 268 101 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/disfluencies/train.jsonl # 267 760 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/train_contextual_biasing.jsonl # 354 715 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/train_silence.jsonl # 4873 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/events/train_silence.jsonl # 6989 rows
+
+  # AR — 10% of ASR   [1 619 h]
+    - type: group
+      weight: 0.10
+      tags: {lang: ar}
+      input_cfg:
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/CommonVoice/train.jsonl # 32.4h, max_dur=22.07, 28 531 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/CommonVoice/train_contextual_biasing.jsonl # 26 691 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train.jsonl # 6.0h, max_dur=37.02, 2 104 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train_contextual_biasing.jsonl # 2 232 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.72
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train.jsonl # 15.6h, max_dur=860.01, 11 618 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train.jsonl # 11 655 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 12 195 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ARABIC-SPEECH/train.jsonl # 3.8h, max_dur=36.14, 1 813 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ARABIC-SPEECH/train_contextual_biasing.jsonl # 1 199 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ESCWA/all.jsonl # 2.8h, max_dur=23.65, 845 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ESCWA/all_contextual_biasing.jsonl # 802 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MASC/train.jsonl # 484.3h, max_dur=56.24, 394 738 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MASC/train_contextual_biasing.jsonl # 437 275 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB2/train.jsonl # 820.1h, max_dur=206.05, 273 329 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB2/train_contextual_biasing.jsonl # 302 882 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB5/train.jsonl # 1.9h, max_dur=14.98, 1 019 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB5/train_contextual_biasing.jsonl # 881 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TARIC/train.jsonl # 6.9h, max_dur=19.10, 15 024 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TARIC/train_contextual_biasing.jsonl # 8 809 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.97
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TunSwitch/train.jsonl # 8.3h, max_dur=15.00, 5 261 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TunSwitch/train_contextual_biasing.jsonl # 5 475 rows
+        - type: group
+          input_cfg:
+            - type: multimodal_conversation
+              weight: 0.45
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train.jsonl # 236.8h, max_dur=120.00, 81 006 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: events}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/events/train.jsonl # 81 354 rows
+            - type: multimodal_conversation
+              weight: 0.25
+              tags: {sub_task: disfluencies}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/disfluencies/train.jsonl # 81 009 rows
+            - type: multimodal_conversation
+              weight: 0.03
+              tags: {sub_task: contextual_biasing}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train_contextual_biasing.jsonl # 89 790 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train_silence.jsonl # 833 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/events/train_silence.jsonl # 1176 rows
+
+# ============================================================
+# AST — 25%   [11 171 h, max_dur=237.6, 7 679 337 rows]
+# ============================================================
+- type: group
+  tags: {task: ast}
+  weight: 0.25
+  input_cfg:
+    # AST EN→X
+    - type: group
+      tags: {source_lang: en, target_lang: de}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-de/clean/CoVoST/train.jsonl # 586.5h, max_dur=24.67, 428 704 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-de/clean/CoVoST/train_contextual_biasing.jsonl # 814 648 rows
+    - type: group
+      tags: {source_lang: en, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-fr/clean/CommonVoiceEN2FR/train.jsonl # 1796.8h, max_dur=27.79, 1 137 805 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-fr/clean/CommonVoiceEN2FR/train_contextual_biasing.jsonl # 1 321 217 rows
+    # AST FR→X
+    - type: group
+      tags: {source_lang: fr, target_lang: de}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-de/clean/CommonVoiceFR2DE/train.jsonl # 849.7h, max_dur=17.86, 592 325 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-de/clean/CommonVoiceFR2DE/train_contextual_biasing.jsonl # 1 155 091 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: es}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/CommonVoiceFR2ES/train.jsonl # 850.3h, max_dur=17.86, 592 737 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/CommonVoiceFR2ES/train_contextual_biasing.jsonl # 658 200 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: es}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train.jsonl # 31.6h, max_dur=106.92, 20 090 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 22 267 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: it}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-it/clean/CommonVoiceFR2IT/train.jsonl # 850.3h, max_dur=17.86, 592 746 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-it/clean/CommonVoiceFR2IT/train_contextual_biasing.jsonl # 658 395 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: nl}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-nl/clean/CommonVoiceFR2NL/train.jsonl # 849.7h, max_dur=17.86, 592 373 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-nl/clean/CommonVoiceFR2NL/train_contextual_biasing.jsonl # 658 144 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: pt}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/CommonVoiceFR2PT/train.jsonl # 850.3h, max_dur=17.86, 592 723 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/CommonVoiceFR2PT/train_contextual_biasing.jsonl # 658 209 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: pt}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train.jsonl # 19.4h, max_dur=69.32, 12 750 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 14 187 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/CoVoST/train.jsonl # 315.1h, max_dur=13.30, 247 073 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/CoVoST/train_contextual_biasing.jsonl # 274 244 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/CommonVoiceFR2EN/train.jsonl # 849.6h, max_dur=17.86, 592 321 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/CommonVoiceFR2EN/train_contextual_biasing.jsonl # 684 594 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/train.jsonl # 44.0h, max_dur=106.92, 29 130 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 32 195 rows
+    # AST DE→X
+    - type: group
+      tags: {source_lang: de, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-fr/clean/CommonVoiceDE2FR/train.jsonl # 961.8h, max_dur=25.18, 607 347 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-fr/clean/CommonVoiceDE2FR/train_contextual_biasing.jsonl # 673 257 rows
+    - type: group
+      tags: {source_lang: de, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-en/clean/CoVoST/train.jsonl # 344.9h, max_dur=17.42, 263 708 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/de-en/clean/CoVoST/train_contextual_biasing.jsonl # 292 026 rows
+    # AST ES -> X
+    - type: group
+      tags: {source_lang: es, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/CommonVoiceES2FR/train.jsonl # 508.3h, max_dur=20.02, 353 388 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/CommonVoiceES2FR/train_contextual_biasing.jsonl # 392 530 rows
+    - type: group
+      tags: {source_lang: es, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/train.jsonl # 6.2h, max_dur=49.29, 3 504 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 3 868 rows
+    - type: group
+      tags: {source_lang: es, target_lang: it}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train.jsonl # 9.5h, max_dur=72.63, 5 399 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 5 982 rows
+    - type: group
+      tags: {source_lang: es, target_lang: pt}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train.jsonl # 35.9h, max_dur=104.49, 20 221 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 22 296 rows
+    - type: group
+      tags: {source_lang: es, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/CoVoST/train.jsonl # 131.3h, max_dur=15.65, 91 815 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/CoVoST/train_contextual_biasing.jsonl # 102 113 rows
+    - type: group
+      tags: {source_lang: es, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/train.jsonl # 61.3h, max_dur=237.65, 34 785 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 38 627 rows
+    # AST IT→X
+    - type: group
+      tags: {source_lang: it, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-fr/clean/CommonVoiceIT2FR/train.jsonl # 161.7h, max_dur=14.06, 109 673 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-fr/clean/CommonVoiceIT2FR/train_contextual_biasing.jsonl # 121 946 rows
+    - type: group
+      tags: {source_lang: it, target_lang: es}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/train.jsonl # 4.6h, max_dur=47.20, 2 174 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 2 397 rows
+    - type: group
+      tags: {source_lang: it, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/CoVoST/train.jsonl # 60.4h, max_dur=14.06, 42 741 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/CoVoST/train_contextual_biasing.jsonl # 47 486 rows
+    - type: group
+      tags: {source_lang: it, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train.jsonl # 46.6h, max_dur=93.60, 23 915 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 26 524 rows
+    # AST NL -> X
+    - type: group
+      tags: {source_lang: nl, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/nl-fr/clean/CommonVoiceNL2FR/train.jsonl # 54.1h, max_dur=10.34, 43 446 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/nl-fr/clean/CommonVoiceNL2FR/train_contextual_biasing.jsonl # 48 153 rows
+    # AST PT -> X
+    - type: group
+      tags: {source_lang: pt, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/clean/CommonVoicePT2FR/train.jsonl # 26.3h, max_dur=15.48, 22 903 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/clean/CommonVoicePT2FR/train_contextual_biasing.jsonl # 25 389 rows
+    - type: group
+      tags: {source_lang: pt, target_lang: es}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train.jsonl # 19.6h, max_dur=182.67, 11 101 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 12 210 rows
+    - type: group
+      tags: {source_lang: pt, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/CoVoST/train.jsonl # 17.9h, max_dur=10.46, 14 888 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/CoVoST/train_contextual_biasing.jsonl # 16 512 rows
+    - type: group
+      tags: {source_lang: pt, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/train.jsonl # 50.8h, max_dur=180.85, 29 826 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 33 122 rows
+    # AST AR <-> X
+    - type: group
+      tags: {source_lang: ar, target_lang: fr}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/clean/CommonVoiceAR2FR/train.jsonl # 32.3h, max_dur=22.07, 28 454 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-fr/clean/CommonVoiceAR2FR/train_contextual_biasing.jsonl # 31 699 rows
+    - type: group
+      tags: {source_lang: fr, target_lang: ar}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/clean/CommonVoiceFR2AR/train.jsonl # 156.8h, max_dur=13.50, 110 037 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-ar/clean/CommonVoiceFR2AR/train_contextual_biasing.jsonl # 121 926 rows
+    - type: group
+      tags: {source_lang: ar, target_lang: en}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/clean/CoVoST/train.jsonl # 0.4h, max_dur=9.79, 373 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/clean/CoVoST/train_contextual_biasing.jsonl # 417 rows
+    - type: group
+      tags: {source_lang: en, target_lang: ar}
+      input_cfg:
+        - type: multimodal_conversation
+          weight: 0.99
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/clean/CoVoST/train.jsonl # 586.7h, max_dur=24.67, 428 862 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: contextual_biasing}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/en-ar/clean/CoVoST/train_contextual_biasing.jsonl # 475 621 rows
+
+
+# ============================================================
+# DIARIZATION — 2%   [826 h, max_dur=90.0, 86 197 rows]
+# en 25% / fr 75%; within a language each corpus gets its share of the
+# samples. ~6-7 passes per 100k steps (v4 8B: ~4.8 at 1.5%), and the
+# bucket at ~7% of the audio seen (long recordings).
+# ============================================================
+- type: group
+  tags: {task: diarization}
+  weight: 0.02
+  input_cfg:
+    - type: group
+      tags: {lang: en}
+      weight: 0.25
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl # 113.5h, max_dur=89.97, 9 557 rows
+          weight: 0.5055
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl # 88.7h, max_dur=90.00, 9 144 rows
+          weight: 0.4945
+    - type: group
+      tags: {lang: fr}
+      weight: 0.75
+      input_cfg:
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl # 54.6h, max_dur=90.00, 5 508 rows
+          weight: 0.0816
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl # 164.6h, max_dur=89.99, 18 475 rows
+          weight: 0.2737
+        - type: multimodal_conversation
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/eslo/mixed/train.jsonl # 404.5h, max_dur=89.99, 43 513 rows
+          weight: 0.6447
+
+# ============================================================
+# MULTI-TURN ASR / AST — 5%   [2 027 h, max_dur=27.8, 1 000 000 rows]
+# CommonVoice, 8 langues, transcription + traduction fr<->*, sans les
+# questions accent / genre / age (template_commonvoice_multiturn.py).
+# ============================================================
+- type: group
+  tags: {task: multiturn_asr_ast, lang: mixed}
+  weight: 0.05
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/clean/CVMultiTurn/mixed_asr_ast/train.jsonl # 2027.5h, max_dur=27.79, 1 000 000 rows
+
+# ============================================================
+# SPEAKER VERIFICATION — 1%   [402 h, max_dur=133.6, 200 000 rows]
+# VoxCeleb chat: two clips, "same person?" yes/no, fr/en. Helps telling
+# two voices apart, which diarization relies on.
+# ============================================================
+- type: group
+  tags: {task: speaker_verification, lang: mixed}
+  weight: 0.01
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/multilang/context/VoxCeleb/chat/train.jsonl # 402.0h, max_dur=133.63, 200 000 rows
+
+# ============================================================
+# TEXT-ONLY INSTRUCTION / CHAT — 2%   [289 784 rows, en]
+# No audio turn. Anti-forgetting regulariser for the LLM's text
+# instruction-following and multi-turn chat, not a knowledge source.
+# ============================================================
+- type: group
+  tags: {task: text_only, lang: en}
+  weight: 0.02
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/text_only/en/nemotron_posttraining_v3_chat_chat/train.jsonl # 210 399 rows
+      tags: {sub_task: chat}
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/text_only/en/nemotron_posttraining_v3_chat_instruction_following/train.jsonl # 79 385 rows
+      tags: {sub_task: instruction_following}
