@@ -39,7 +39,8 @@ is in English gets an English prompt label); otherwise --lang is a fixed languag
 single data/contexts/biasing_contexts.json holds a short list of labels per language.
 fastText is unreliable on short instructions ("Transcris la parole" scores higher for
 Italian than French): detection first looks the instruction up among the known ASR-context
-templates (data/contexts/<LAN>_asr_contexts.json), which gives an exact language, and only
+templates (data/contexts/<LAN>_asr_contexts.json) and, for a prompt of at most 3 words, among the
+short bases of data/contexts/compositional/<LAN>.json, which gives an exact language, and only
 falls back to fastText biased toward the corpus-majority language via an empirical prior:
 the per-prompt label is the argmax of p(lang|text) * prior[lang] (see --lang-prior /
 --no-lang-prior and --lang-prior-strength).
@@ -119,6 +120,7 @@ References (what each one informs):
 from __future__ import annotations
 
 import argparse
+import atexit
 import copy
 import heapq
 import json
@@ -1138,6 +1140,33 @@ def build_prompt_language_map(contexts_dir: Path) -> dict[str, str]:
     return mapping
 
 
+SHORT_PROMPT_MAX_WORDS = 3
+
+
+def normalize_short_prompt(text: str) -> str:
+    """Lower-cased words of ``text`` without punctuation ("Transcris la parole :" -> "transcris la parole")."""
+    return " ".join(re.sub(r"[^\w\s'’-]", " ", text.lower()).split())
+
+
+def build_short_prompt_map(contexts_dir: Path) -> dict[str, str]:
+    """Map each short base (<= SHORT_PROMPT_MAX_WORDS words) of data/contexts/compositional/<lang>.json to its
+    language. A base sent alone ("Transcribeer.") is too short for fastText ("transcribeer" -> en), but is
+    known exactly. A base shared by several languages ("Transcribe": en, es) is left out (fastText decides)."""
+    langs_by_key: dict[str, set[str]] = defaultdict(set)
+    for path in sorted((contexts_dir / "compositional").glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for entries in (data.get("bases") or {}).values():
+            for entry in entries:
+                for text in entry.values() if isinstance(entry, dict) else [entry]:
+                    key = normalize_short_prompt(str(text))
+                    if 0 < len(key.split()) <= SHORT_PROMPT_MAX_WORDS:
+                        langs_by_key[key].add(path.stem)
+    return {key: next(iter(langs)) for key, langs in langs_by_key.items() if len(langs) == 1}
+
+
 def load_stopwords(contexts_dir: Path, lang: str) -> set[str]:
     """Lower-cased stopwords (function words) for ``lang`` from stopwords.json; empty if absent."""
     path = contexts_dir / "stopwords.json"
@@ -1199,6 +1228,7 @@ class PromptLanguageResolver:
         strength: float,
         topk: int = 7,
         template_lang: dict[str, str] | None = None,
+        short_lang: dict[str, str] | None = None,
     ):
         self.langid = langid
         self.prior = prior or {}
@@ -1206,6 +1236,7 @@ class PromptLanguageResolver:
         self.strength = strength
         self.topk = topk
         self.template_lang = template_lang or {}  # exact instruction -> language (authoritative)
+        self.short_lang = short_lang or {}  # normalized short compositional base -> language (authoritative)
         self._cache: dict[str, str] = {}
         self.raw_counts: Counter[str] = Counter()
         self.corrections: Counter[tuple[str, str]] = Counter()  # (raw top-1, chosen) -> instances
@@ -1218,6 +1249,10 @@ class PromptLanguageResolver:
             return cached
         # Authoritative: the instruction is a known ASR-context template of a known language.
         templated = self.template_lang.get(key)
+        if templated is None:
+            short = normalize_short_prompt(key)
+            if len(short.split()) <= SHORT_PROMPT_MAX_WORDS:
+                templated = self.short_lang.get(short)
         if templated is not None:
             self.n_template_hits += 1
             self._cache[key] = templated
@@ -1540,6 +1575,38 @@ def _count_lines(path: Path) -> int:
         return sum(1 for _ in f)
 
 
+def subsample_inputs(inputs: list[Path], args: argparse.Namespace) -> tuple[list[Path], dict[Path, Path]]:
+    """Draw args.max_input_lines lines at random over all ``inputs`` and copy them, in file order, to one
+    temporary file per input (``.<stem>.subset.tmp`` next to its output, removed at exit). Returns the
+    temporary paths and a map from each one to its original manifest; the inputs are returned unchanged
+    (nothing copied) when they have at most args.max_input_lines lines in all."""
+    counts = [_count_lines(p) for p in inputs]
+    n_lines = sum(counts)
+    if n_lines <= args.max_input_lines:
+        return inputs, {p: p for p in inputs}
+    chosen = random.Random(f"{args.seed}-subsample").sample(range(n_lines), args.max_input_lines)
+    bounds = list(accumulate(counts))
+    keep: list[set[int]] = [set() for _ in inputs]
+    for g in chosen:
+        k = bisect_left(bounds, g + 1)
+        keep[k].add(g - (bounds[k - 1] if k else 0))
+    subsets: list[Path] = []
+    source_of: dict[Path, Path] = {}
+    for path, lines in zip(inputs, keep):
+        base_dir = args.output_dir if args.output_dir is not None else path.parent
+        base_dir.mkdir(parents=True, exist_ok=True)
+        subset = base_dir / f".{path.stem}.subset.tmp"
+        atexit.register(subset.unlink, missing_ok=True)
+        with path.open("rb") as src, subset.open("wb") as dst:
+            for i, raw in enumerate(src):
+                if i in lines:
+                    dst.write(raw)
+        subsets.append(subset)
+        source_of[subset] = path
+    print(f"--max-input-lines {args.max_input_lines}: {args.max_input_lines}/{n_lines} input lines drawn at random")
+    return subsets, source_of
+
+
 def _parallel_worker(task: tuple) -> tuple:
     """Process one contiguous line range into a part file; return (index, stats, template-lang counts)."""
     index, line_start, line_stop, part_path = task
@@ -1796,7 +1863,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-hotwords",
         type=int,
-        default=1500,
+        default=1000,
         help="Maximum hotword-list size. With the default loguniform distribution this also sets the tail: "
         "about 20%% of lists are longer than 300, the rest shorter.",
     )
@@ -1989,6 +2056,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--instruction-separator", default="\n\n", help="Separator between the instruction and the hotword prompt."
     )
+    parser.add_argument(
+        "--max-input-lines",
+        type=int,
+        default=1_000_000,
+        help="Read only this many input lines (over all inputs), drawn at random, for speed: the hotword lexicon "
+        "and the output are built from them alone, in file order. The output can have more lines (paired "
+        "twins) or fewer. 0 reads every line.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     return parser.parse_args()
 
@@ -2002,6 +2077,13 @@ def main() -> None:
     for p in inputs:
         if not p.exists():
             raise FileNotFoundError(f"Input manifest not found: {p}")
+
+    # --max-input-lines: copy a random subset of the input lines (over all inputs, in file order) to
+    # temporary files in one read, so every later pass reads only them. Outputs and READMEs keep the
+    # original names; ``source_of`` maps each pass input back to its original manifest.
+    source_of: dict[Path, Path] = {p: p for p in inputs}
+    if args.max_input_lines:
+        inputs, source_of = subsample_inputs(inputs, args)
 
     templates = load_templates(args.contexts_dir)
     # Compiled anonymisation markers (used from the first scan on, so markers never enter the pool).
@@ -2032,7 +2114,8 @@ def main() -> None:
         else:
             prior, floor = {}, 1.0
         prompt_lang = PromptLanguageResolver(
-            langid, prior, floor, args.lang_prior_strength, template_lang=template_lang
+            langid, prior, floor, args.lang_prior_strength, template_lang=template_lang,
+            short_lang=build_short_prompt_map(args.contexts_dir),
         )
 
     # Pass 1: single-word statistics and named-entity phrases.
@@ -2202,8 +2285,9 @@ def main() -> None:
     total_augmented = 0
     total_hard_negative = 0
     for path in inputs:
-        base_dir = args.output_dir if args.output_dir is not None else path.parent
-        out_path = base_dir / f"{path.stem}{args.output_suffix}.jsonl"
+        source = source_of[path]
+        base_dir = args.output_dir if args.output_dir is not None else source.parent
+        out_path = base_dir / f"{source.stem}{args.output_suffix}.jsonl"
         readme_path = out_path.with_name(f"{out_path.stem}_README.txt")
 
         stats = process_file(
@@ -2221,7 +2305,7 @@ def main() -> None:
             spellings,
         )
         write_readme(
-            readme_path, path, out_path, args, command, derived, stats, pool_sorted, doc_freq_display, spellings
+            readme_path, source, out_path, args, command, derived, stats, pool_sorted, doc_freq_display, spellings
         )
         total_augmented += stats.n_augmented
         total_hard_negative += stats.n_hard_negative
