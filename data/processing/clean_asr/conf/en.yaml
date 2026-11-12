@@ -27,39 +27,39 @@ datasets:
     input: clean/AMI/intermediate/*.jsonl
     output: clean/AMI
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [fill_duration, audio_bounds, meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
+    filters: [{fill_duration: {durations: clean/AMI/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/AMI/intermediate/audio_durations.tsv}}, meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
 
   ICSI:                            # the mix, verbatim; 6 % of lines are digits read aloud, written in words
     input: clean/ICSI/intermediate/*.jsonl
     output: clean/ICSI
     outputs: [base, events, disfluencies, events_disfluencies]
-    filters: [fill_duration, audio_bounds, meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
+    filters: [{fill_duration: {durations: clean/ICSI/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/ICSI/intermediate/audio_durations.tsv}}, meetings]            # or meetings_model: repetitions and false starts removed too (Clausa)
 
   CommonVoice:                     # one full sentence per line, hand-punctuated
     input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
     output: clean/CommonVoice
     outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
     output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
-    filters: [fill_duration, audio_bounds, add_final_period, speech_rate, finish_hand_punctuated]
+    filters: [add_final_period, speech_rate, finish_hand_punctuated]
 
   FLEURS:                          # hand-punctuated
     input: [context/FLEURS/train.jsonl, context/FLEURS/dev.jsonl, context/FLEURS/test.jsonl]
     output: clean/FLEURS
-    filters: [fill_duration, audio_bounds, add_final_period, finish_hand_punctuated]
+    filters: [add_final_period, finish_hand_punctuated]
 
   Multilingual_LibriSpeech:        # lowercase, no punctuation
     input: [context/Multilingual_LibriSpeech/train.jsonl, context/Multilingual_LibriSpeech/dev.jsonl,
             context/Multilingual_LibriSpeech/test.jsonl]
     output: clean/Multilingual_LibriSpeech
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, normalize_spacing]   # read speech: no events nor disfluencies
+    filters: [speech_rate, normalize_spacing]   # read speech: no events nor disfluencies
 
   VoxPopuli:                       # European Parliament reports, segments cut mid-sentence: no final period to add
     input: [context/VoxPopuli/train.jsonl, context/VoxPopuli/dev.jsonl, context/VoxPopuli/test.jsonl]
     output: clean/VoxPopuli
     nocasepunc: true               # 6 % of lines fell back to the lowercase normalized text (no raw text)
     # no hesitation in the text; hand-punctuated but for those lines, which lose the recase model's punctuation
-    filters: [fill_duration, audio_bounds, speech_rate, finish_hand_punctuated, uncased_no_punctuation]
+    filters: [speech_rate, finish_hand_punctuated, uncased_no_punctuation]
 
   GigaSpeech:                      # lowercase with punctuation (text_tn is all caps: no case to recover); no event in train
     input: clean/GigaSpeech/intermediate/train.jsonl
@@ -82,9 +82,10 @@ datasets:
     outputs: [base, events, disfluencies]
     nocasepunc: 8                  # 25 % of lines of 8+ words have no punctuation
     filters:
-      - fill_duration: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # a missing duration: length of the audio from the offset
-      - audio_bounds: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # cues past the end of the audio (audio on JZ: lengths from audio_durations.py)
+      - fill_duration: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # a missing duration: the whole file (no offset)
+      - audio_bounds: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # segments past the end of the audio
       - normalize_unicode
+      - drop_non_latin   # more than half of the letters not Latin: another language
       - strip_html                 # "&gt;&gt;" before caption_markers
       - drop_caption_junk
       - caption_markers
@@ -103,8 +104,7 @@ datasets:
     outputs: [base, disfluencies]  # subtitles leave out part of the hesitations: 1.5 % of lines have some
     nocasepunc: 8                  # 2 % of lines of 8+ words with capitals but no punctuation: never punctuated
     filters:
-      - fill_duration   # a missing duration: length of the audio from the offset
-      - audio_bounds   # segments past the end of the audio
+      - drop_non_latin   # more than half of the letters not Latin: another language
       - drop_subtitle_debris       # censored words "f***ing"
       - speech_rate
       - disfluencies: {lang: en, truncations: false}   # "word-" is mostly a word cut by the cue
@@ -115,8 +115,8 @@ datasets:
     output: clean/TEDLIUM
     nocasepunc: true
     filters:
-      - fill_duration   # a missing duration: length of the audio from the offset
-      - audio_bounds   # segments past the end of the audio
+      - fill_duration: {durations: clean/TEDLIUM/intermediate/audio_durations.tsv}   # a missing duration: the whole file (no offset)
+      - audio_bounds: {durations: clean/TEDLIUM/intermediate/audio_durations.tsv}   # segments past the end of the audio
       - drop_if_match: {patterns: ['\[']}   # "[ unclear ]", "[ the ]": uncertain words (~100 lines)
       - replace:
           rules:
@@ -128,4 +128,4 @@ datasets:
     input: clean/PeoplesSpeech/intermediate/*.jsonl   # from datasets2nemo/jz/peoples_speech2nemo.py
     output: clean/PeoplesSpeech
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, normalize_spacing]
+    filters: [{fill_duration: {durations: clean/PeoplesSpeech/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/PeoplesSpeech/intermediate/audio_durations.tsv}}, speech_rate, normalize_spacing]

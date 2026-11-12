@@ -225,6 +225,39 @@ class DropIfMatch(Filter):
         return not any(p.search(s.text) for p in self.patterns)
 
 
+def _latin(o):
+    return o < 0x250 or 0x1E00 <= o < 0x1F00 or 0x2C60 <= o < 0x2C80 or 0xA720 <= o < 0xA800 or 0xFB00 <= o < 0xFB07
+
+
+SCRIPTS = {"arabic": lambda o: 0x0600 <= o < 0x0700 or 0x0750 <= o < 0x0780 or 0x08A0 <= o < 0x0900
+                               or 0xFB50 <= o < 0xFE00 or 0xFE70 <= o < 0xFF00}
+
+
+def non_latin_fraction(text, allowed=()):
+    """Share of the letters of `text` that are neither Latin nor of an `allowed` script (SCRIPTS);
+    digits, punctuation and spaces do not count. 0 with no letter."""
+    ok = [SCRIPTS[a] for a in allowed]
+    letters = [ord(c) for c in text if c.isalpha()]
+    if not letters:
+        return 0.0
+    return sum(1 for o in letters if not (_latin(o) or any(f(o) for f in ok))) / len(letters)
+
+
+@register
+class DropNonLatin(Filter):
+    """Drop the line when more than `max_fraction` of its letters are of another script than Latin
+    (and `allowed`, e.g. [arabic] for ar): a caption in another language ("За вами слово !"), Greek
+    debates in de. Unlike drop_other_scripts, a cited word ("le mot '님'") or "sen α cos β" stays."""
+    name = "drop_non_latin"
+
+    def __init__(self, ctx, max_fraction=0.5, allowed=(), **params):
+        super().__init__(ctx)
+        self.max_fraction, self.allowed = max_fraction, tuple(allowed)
+
+    def __call__(self, s):
+        return non_latin_fraction(s.text, self.allowed) <= self.max_fraction
+
+
 @register
 class KeepIds(Filter):
     """Keep only the lines whose id is in another manifest (path relative to `root`), usually the

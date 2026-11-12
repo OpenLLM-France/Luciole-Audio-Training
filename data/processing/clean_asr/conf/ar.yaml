@@ -39,7 +39,7 @@ datasets:
     input: [context/ARABIC-SPEECH/train.jsonl, context/ARABIC-SPEECH/test.jsonl]
     output: clean/ARABIC-SPEECH
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, normalize_spacing]
+    filters: [speech_rate, normalize_spacing]
 
   CommonVoice:                     # half the lines are diacritized Quran with no punctuation
     input: [context/CommonVoice/train.jsonl, context/CommonVoice/dev.jsonl, context/CommonVoice/test.jsonl]
@@ -47,36 +47,36 @@ datasets:
     outputs: [base, events, disfluencies, events_disfluencies]   # read: no events nor disfluencies,
     output_lines: 100000           # the prompts of these 3 outputs ask for them all the same
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, finish]
+    filters: [speech_rate, finish]
 
   ESCWA:                           # "اه" is written, but it also means "yes": left in the text
     input: context/ESCWA/all.jsonl
     output: clean/ESCWA
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, finish]
+    filters: [{fill_duration: {durations: clean/ESCWA/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/ESCWA/intermediate/audio_durations.tsv}}, speech_rate, finish]
 
   FLEURS:                          # hand-punctuated
     input: [context/FLEURS/train.jsonl, context/FLEURS/dev.jsonl, context/FLEURS/test.jsonl]
     output: clean/FLEURS
-    filters: [fill_duration, audio_bounds, finish]
+    filters: [finish]
 
   MASC:                            # "[الراوي]": speaker labels
     input: [context/MASC/train.jsonl, context/MASC/dev.jsonl, context/MASC/test.jsonl]
     output: clean/MASC
     nocasepunc: true               # the lines with no punctuation
-    filters: [fill_duration, audio_bounds, strip_html, drop_unknown_brackets, speech_rate, finish]
+    filters: [{fill_duration: {durations: clean/MASC/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/MASC/intermediate/audio_durations.tsv}}, strip_html, drop_unknown_brackets, speech_rate, finish]
 
   MGB2:
     input: [context/MGB2/train.jsonl, context/MGB2/dev.jsonl, context/MGB2/test.jsonl]
     output: clean/MGB2
     nocasepunc: true               # the lines with no punctuation
-    filters: [fill_duration, audio_bounds, strip_html, drop_unknown_brackets, speech_rate, finish]
+    filters: [{fill_duration: {durations: clean/MGB2/intermediate/audio_durations.tsv}}, {audio_bounds: {durations: clean/MGB2/intermediate/audio_durations.tsv}}, strip_html, drop_unknown_brackets, speech_rate, finish]
 
   MGB5:                            # Moroccan dialect, no punctuation
     input: [context/MGB5/train.jsonl, context/MGB5/test.jsonl]
     output: clean/MGB5
     nocasepunc: true
-    filters: [fill_duration, audio_bounds, speech_rate, normalize_spacing]
+    filters: [speech_rate, normalize_spacing]
 
   Multilingual_TEDx:               # some lines are very long: max_duration at training
     input: [context/Multilingual_TEDx/train.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
@@ -84,8 +84,8 @@ datasets:
     outputs: [base, events]
     nocasepunc: true
     filters:
-      - fill_duration   # a missing duration: length of the audio from the offset
-      - audio_bounds   # segments past the end of the audio
+      - fill_duration: {durations: clean/Multilingual_TEDx/intermediate/audio_durations.tsv}   # a missing duration: the whole file (no offset)
+      - audio_bounds: {durations: clean/Multilingual_TEDx/intermediate/audio_durations.tsv}   # segments past the end of the audio
       - strip_html
       - map_tags: {tables: [tedx]}
       - caption_markers
@@ -99,8 +99,8 @@ datasets:
     output: clean/TARIC
     nocasepunc: true
     filters:
-      - fill_duration   # a missing duration: length of the audio from the offset
-      - audio_bounds   # segments past the end of the audio
+      - fill_duration: {durations: clean/TARIC/intermediate/audio_durations.tsv}   # a missing duration: the whole file (no offset)
+      - audio_bounds: {durations: clean/TARIC/intermediate/audio_durations.tsv}   # segments past the end of the audio
       - replace: {rules: [{pattern: '<([^<>]*)>', repl: '\1'}]}
       - speech_rate
       - normalize_spacing
@@ -110,8 +110,6 @@ datasets:
     output: clean/TunSwitch
     nocasepunc: true
     filters:
-      - fill_duration   # a missing duration: length of the audio from the offset
-      - audio_bounds   # segments past the end of the audio
       - replace: {rules: [{pattern: '</?\\?(?:fr|en)>', repl: ' '}]}
       - speech_rate
       - normalize_spacing
@@ -122,9 +120,10 @@ datasets:
     outputs: [base, events, disfluencies]
     nocasepunc: 8                  # lines of 8+ words with no punctuation: never punctuated
     filters:
-      - fill_duration: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # a missing duration: length of the audio from the offset
-      - audio_bounds: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # cues past the end of the audio (audio on JZ: lengths from audio_durations.py)
+      - fill_duration: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # a missing duration: the whole file (no offset)
+      - audio_bounds: {durations: clean/Yodas2/intermediate/audio_durations.tsv}   # segments past the end of the audio
       - normalize_unicode
+      - drop_non_latin: {allowed: [arabic]}   # more than half of the letters neither Arabic nor Latin
       - strip_html                 # "&gt;&gt;" before caption_markers
       - drop_caption_junk
       - drop_if_match: {patterns: ['[\u0400-\u04FF\u0900-\u0DFF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]']}   # another language
