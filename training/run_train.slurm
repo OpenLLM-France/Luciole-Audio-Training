@@ -58,8 +58,9 @@ llm_family() {
 }
 MODEL_FAMILY="$(llm_family "$LLM_MODEL")"
 
-SAVE_DIR="${SAVE_DIR:-$ALL_CCFRSCRATCH/audio/training/logs/${MODEL_FAMILY}/${SLURM_JOB_NAME}}"
 EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments/${MODEL_FAMILY}}"
+# Logs live inside the run's own folder (same default as slurm_launcher.py).
+SAVE_DIR="${SAVE_DIR:-${EXPERIMENT_FOLDER}/${SLURM_JOB_NAME}/logs}"
 
 # --- Cache
 TMP_CACHE="$SCRATCH/.cache"
@@ -188,10 +189,18 @@ fi
 # =====================================================
 # Experiment folder cleanup
 # =====================================================
-if [[ -d "${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}" ]]; then
+# The run folder may hold SAVE_DIR (logs/), created before this point and holding this
+# very job's .out/.err: it alone doesn't mean a previous run exists, and the wipe
+# must spare it (rm-ing an open .out loses this job's log).
+RUN_DIR="${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
+run_dir_content() {
+    [[ -d "$RUN_DIR" ]] || return 0
+    find "$RUN_DIR" -mindepth 1 -maxdepth 1 ! -name logs
+}
+if [[ -n "$(run_dir_content)" ]]; then
     if [[ "${OVERWRITE:-false}" == "true" ]]; then
-        echo "⚠ OVERWRITE=true — wiping ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}"
-        rm -rf "${EXPERIMENT_FOLDER:?}/${EXPERIMENT_NAME}"
+        echo "⚠ OVERWRITE=true — wiping ${RUN_DIR} (keeping its logs/)"
+        run_dir_content | xargs -r -d '\n' rm -rf --
     elif [[ "${RESUME:-false}" == "true" ]]; then
         echo "↻ RESUME=true — keeping ${EXPERIMENT_FOLDER}/${EXPERIMENT_NAME}; exp_manager will resume from its last checkpoint"
     else

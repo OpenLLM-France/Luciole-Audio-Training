@@ -1,0 +1,1990 @@
+- input_cfg:
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0034
+    - input_cfg:
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..49_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.97
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..54_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        type: group
+        weight: 0.5
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc_shards/train_recasepunc__OP_0..49_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.97
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..68_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        type: group
+        weight: 0.5
+      type: group
+      weight: 0.08
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CommonVoice/train_shards/train__OP_0..118_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..131_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1126
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.002
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxForge/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxForge/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0219
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/train.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/events/train.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/disfluencies/train.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/events_disfluencies/train.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0036
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/train.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/events/train.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/disfluencies/train.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/events_disfluencies/train.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.005
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_shards/train__OP_0..11_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.2
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_shards/train__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/disfluencies/train_shards/train__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/events_disfluencies/train_shards/train__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.0347
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_shards/train__OP_0..13_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.2
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/disfluencies/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events_disfluencies/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_contextual_biasing_shards/train_contextual_biasing__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.0384
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/train_shards/train__OP_0..11_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/events/train_shards/train__OP_0..12_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/disfluencies/train_shards/train__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/events_disfluencies/train_shards/train__OP_0..12_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/train_contextual_biasing_shards/train_contextual_biasing__OP_0..10_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0355
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_TEDx/train_shards/train__OP_0..22_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.7
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_TEDx/events/train_shards/train__OP_0..22_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..24_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.0492
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/train.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/disfluencies/train.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0032
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/VoxPopuli/train_shards/train__OP_0..14_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/VoxPopuli/train_contextual_biasing_shards/train_contextual_biasing__OP_0..16_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0397
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0121
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events/train_recasepunc.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events_disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0187
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/events/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/events_disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0245
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/events/train_recasepunc.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/events_disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0139
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/train_recasepunc_shards/train_recasepunc__OP_0..83_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.2
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/events/train_recasepunc_shards/train_recasepunc__OP_0..84_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..87_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/events_disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..89_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..80_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/train_recasepunc_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/events/train_recasepunc_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.0944
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/train_recasepunc.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/events/train_recasepunc.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/events_disfluencies/train_recasepunc.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/train_recasepunc_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0005
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Adultes/train_recasepunc_shards/train_recasepunc__OP_0..13_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Adultes/events/train_recasepunc_shards/train_recasepunc__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Adultes/disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Adultes/events_disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Adultes/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0384
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/train_recasepunc_shards/train_recasepunc__OP_0..13_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/events/train_recasepunc_shards/train_recasepunc__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/events_disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..12_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0378
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/OFROM/train_recasepunc_shards/train_recasepunc__OP_0..22_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/OFROM/disfluencies/train_recasepunc_shards/train_recasepunc__OP_0..22_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/OFROM/train_recasepunc_contextual_biasing_shards/train_recasepunc_contextual_biasing__OP_0..20_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0489
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/train_shards/train__OP_0..96_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.95
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..146_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.1016
+    - input_cfg:
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split0_shards/train_split0__OP_0..45_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split0_contextual_biasing_shards/train_split0_contextual_biasing__OP_0..53_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split0_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split0_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1478
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split1_shards/train_split1__OP_0..45_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split1_contextual_biasing_shards/train_split1_contextual_biasing__OP_0..53_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split1_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1471
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split2_shards/train_split2__OP_0..45_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split2_contextual_biasing_shards/train_split2_contextual_biasing__OP_0..53_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split2_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1479
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split3_shards/train_split3__OP_0..45_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split3_contextual_biasing_shards/train_split3_contextual_biasing__OP_0..53_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split3_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1475
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split4_shards/train_split4__OP_0..43_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split4_contextual_biasing_shards/train_split4_contextual_biasing__OP_0..51_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split4_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1449
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split5_shards/train_split5__OP_0..40_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split5_contextual_biasing_shards/train_split5_contextual_biasing__OP_0..48_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split5_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1403
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split6_shards/train_split6__OP_0..32_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.95
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split6_contextual_biasing_shards/train_split6_contextual_biasing__OP_0..37_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6_silence.jsonl
+          tags:
+            sub_task: silence
+          type: multimodal_conversation
+          weight: 0.01
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split6_silence.jsonl
+          tags:
+            sub_task: events_silence
+          type: multimodal_conversation
+          weight: 0.01
+        type: group
+        weight: 0.1246
+      type: group
+      weight: 0.18
+    tags:
+      lang: fr
+    type: group
+    weight: 0.29
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/CommonVoice/train_shards/train__OP_0..227_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..307_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.088
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0028
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..2161_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..214_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2711
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/VoxPopuli/train_shards/train__OP_0..36_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/VoxPopuli/train_contextual_biasing_shards/train_contextual_biasing__OP_0..52_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0352
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/AMI/train_shards/train__OP_0..12_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/AMI/events/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/AMI/disfluencies/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/AMI/events_disfluencies/train_shards/train__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/AMI/train_contextual_biasing_shards/train_contextual_biasing__OP_0..10_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0208
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/ICSI/train_shards/train__OP_0..13_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.22
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/ICSI/events/train_shards/train__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/ICSI/disfluencies/train_shards/train__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/ICSI/events_disfluencies/train_shards/train__OP_0..14_CL_.jsonl
+        tags:
+          sub_task: events_disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/ICSI/train_contextual_biasing_shards/train_contextual_biasing__OP_0..11_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0211
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/GigaSpeech/train_shards/train__OP_0..1656_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/GigaSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..219_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2373
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/SLUE-SQA5/train.jsonl
+        type: multimodal_conversation
+        weight: 0.75
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/SLUE-SQA5/train_questions_shards/train_questions__OP_0..9_CL_.jsonl
+        tags:
+          sub_task: questions
+        type: multimodal_conversation
+        weight: 0.25
+      type: group
+      weight: 0.01
+    - input_cfg:
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/PeoplesSpeech/train_shards/train__OP_0..60_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.97
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/PeoplesSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..66_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        type: group
+        weight: 0.7107
+      - input_cfg:
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/PeoplesSpeech/train_sa_shards/train_sa__OP_0..9_CL_.jsonl
+          type: multimodal_conversation
+          weight: 0.97
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/PeoplesSpeech/train_sa_contextual_biasing_shards/train_sa_contextual_biasing__OP_0..11_CL_.jsonl
+          tags:
+            sub_task: contextual_biasing
+          type: multimodal_conversation
+          weight: 0.03
+        type: group
+        weight: 0.2893
+      type: group
+      weight: 0.08
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/TEDLIUM/train_shards/train__OP_0..17_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/TEDLIUM/train_contextual_biasing_shards/train_contextual_biasing__OP_0..19_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0244
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_shards/train__OP_0..1289_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.7
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/disfluencies/train_shards/train__OP_0..1290_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..363_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_silence_shards/train_silence__OP_0..30_CL_.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/events/train_silence_shards/train_silence__OP_0..42_CL_.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.2094
+    tags:
+      lang: en
+    type: group
+    weight: 0.29
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/CommonVoice/train_shards/train__OP_0..121_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..135_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2962
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0114
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0255
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..93_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..103_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2599
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/VoxPopuli/train_shards/train__OP_0..21_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/VoxPopuli/train_contextual_biasing_shards/train_contextual_biasing__OP_0..32_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.125
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/train_shards/train__OP_0..110_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.45
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/events/train_shards/train__OP_0..110_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/disfluencies/train_shards/train__OP_0..110_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..189_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.2819
+    tags:
+      lang: de
+    type: group
+    weight: 0.08
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/CommonVoice/train_shards/train__OP_0..70_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..86_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2361
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0108
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_TEDx/train_shards/train__OP_0..20_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_TEDx/events/train_shards/train__OP_0..20_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..22_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1258
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..44_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..48_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1863
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/VoxPopuli/train_shards/train__OP_0..10_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/VoxPopuli/train_contextual_biasing_shards/train_contextual_biasing__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0896
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/train_shards/train__OP_0..156_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.95
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..215_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/events/train_silence_shards/train_silence__OP_0..6_CL_.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.3515
+    tags:
+      lang: es
+    type: group
+    weight: 0.08
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/CommonVoice/train_shards/train__OP_0..34_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..38_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2647
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0155
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_TEDx/train_shards/train__OP_0..9_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_TEDx/events/train_shards/train__OP_0..9_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..10_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1414
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..11_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..13_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1555
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/VoxPopuli/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/VoxPopuli/train_contextual_biasing_shards/train_contextual_biasing__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0956
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/train_shards/train__OP_0..52_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.45
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/events/train_shards/train__OP_0..52_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/disfluencies/train_shards/train__OP_0..52_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..74_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.3273
+    tags:
+      lang: it
+    type: group
+    weight: 0.06
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/CommonVoice/train_shards/train__OP_0..8_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..9_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1606
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.018
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..74_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..82_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.4708
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/VoxPopuli/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/VoxPopuli/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1115
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/train_shards/train__OP_0..19_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.45
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/events/train_shards/train__OP_0..19_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/disfluencies/train_shards/train__OP_0..19_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..21_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.2392
+    tags:
+      lang: nl
+    type: group
+    weight: 0.05
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/CommonVoice/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/CommonVoice/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.1282
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0172
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..7_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_LibriSpeech/train_contextual_biasing_shards/train_contextual_biasing__OP_0..8_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.164
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_TEDx/train_shards/train__OP_0..17_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_TEDx/events/train_shards/train__OP_0..17_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..19_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.2525
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/train_shards/train__OP_0..53_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.45
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/events/train_shards/train__OP_0..53_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/disfluencies/train_shards/train__OP_0..53_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..70_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.4382
+    tags:
+      lang: pt
+    type: group
+    weight: 0.05
+  - input_cfg:
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/CommonVoice/train_shards/train__OP_0..5_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/CommonVoice/train_contextual_biasing_shards/train_contextual_biasing__OP_0..5_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0878
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0065
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train.jsonl
+        type: multimodal_conversation
+        weight: 0.72
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0357
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ARABIC-SPEECH/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ARABIC-SPEECH/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0056
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ESCWA/all.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ESCWA/all_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0026
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/MASC/train_shards/train__OP_0..78_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/MASC/train_contextual_biasing_shards/train_contextual_biasing__OP_0..87_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.3485
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/MGB2/train_shards/train__OP_0..54_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/MGB2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..60_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.29
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB5/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB5/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0031
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TARIC/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TARIC/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0462
+    - input_cfg:
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TunSwitch/train.jsonl
+        type: multimodal_conversation
+        weight: 0.97
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TunSwitch/train_contextual_biasing.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      type: group
+      weight: 0.0162
+    - input_cfg:
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/train_shards/train__OP_0..16_CL_.jsonl
+        type: multimodal_conversation
+        weight: 0.45
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/events/train_shards/train__OP_0..16_CL_.jsonl
+        tags:
+          sub_task: events
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/disfluencies/train_shards/train__OP_0..16_CL_.jsonl
+        tags:
+          sub_task: disfluencies
+        type: multimodal_conversation
+        weight: 0.25
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..17_CL_.jsonl
+        tags:
+          sub_task: contextual_biasing
+        type: multimodal_conversation
+        weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train_silence.jsonl
+        tags:
+          sub_task: silence
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/events/train_silence.jsonl
+        tags:
+          sub_task: events_silence
+        type: multimodal_conversation
+        weight: 0.01
+      type: group
+      weight: 0.1578
+    tags:
+      lang: ar
+    type: group
+    weight: 0.1
+  tags:
+    task: asr
+  type: group
+  weight: 0.65
+- input_cfg:
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-de/clean/CoVoST/train_shards/train__OP_0..85_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-de/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..162_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: en
+      target_lang: de
+    type: group
+    weight: 0.0524
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-fr/clean/CommonVoiceEN2FR/train_shards/train__OP_0..227_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-fr/clean/CommonVoiceEN2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..264_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: en
+      target_lang: fr
+    type: group
+    weight: 0.0853
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-de/clean/CommonVoiceFR2DE/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-de/clean/CommonVoiceFR2DE/train_contextual_biasing_shards/train_contextual_biasing__OP_0..231_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: de
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-es/clean/CommonVoiceFR2ES/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-es/clean/CommonVoiceFR2ES/train_contextual_biasing_shards/train_contextual_biasing__OP_0..131_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: es
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: es
+    type: group
+    weight: 0.0113
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-it/clean/CommonVoiceFR2IT/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-it/clean/CommonVoiceFR2IT/train_contextual_biasing_shards/train_contextual_biasing__OP_0..131_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: it
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-nl/clean/CommonVoiceFR2NL/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-nl/clean/CommonVoiceFR2NL/train_contextual_biasing_shards/train_contextual_biasing__OP_0..131_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: nl
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-pt/clean/CommonVoiceFR2PT/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-pt/clean/CommonVoiceFR2PT/train_contextual_biasing_shards/train_contextual_biasing__OP_0..131_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: pt
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: pt
+    type: group
+    weight: 0.009
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/CoVoST/train_shards/train__OP_0..49_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..54_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: group
+    weight: 0.0398
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/CommonVoiceFR2EN/train_shards/train__OP_0..118_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/CommonVoiceFR2EN/train_contextual_biasing_shards/train_contextual_biasing__OP_0..136_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: group
+    weight: 0.0616
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/Multilingual_TEDx/train_shards/train__OP_0..5_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-en/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..6_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: en
+    type: group
+    weight: 0.0137
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/de-fr/clean/CommonVoiceDE2FR/train_shards/train__OP_0..121_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/de-fr/clean/CommonVoiceDE2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..134_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: de
+      target_lang: fr
+    type: group
+    weight: 0.0623
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/de-en/clean/CoVoST/train_shards/train__OP_0..52_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/de-en/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..58_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: de
+      target_lang: en
+    type: group
+    weight: 0.0411
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-fr/clean/CommonVoiceES2FR/train_shards/train__OP_0..70_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-fr/clean/CommonVoiceES2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..78_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: fr
+    type: group
+    weight: 0.0475
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: fr
+    type: group
+    weight: 0.0028
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: it
+    type: group
+    weight: 0.0043
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: pt
+    type: group
+    weight: 0.0114
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-en/clean/CoVoST/train_shards/train__OP_0..18_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-en/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..20_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: en
+    type: group
+    weight: 0.0242
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-en/clean/Multilingual_TEDx/train_shards/train__OP_0..6_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/es-en/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..7_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: es
+      target_lang: en
+    type: group
+    weight: 0.0149
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/it-fr/clean/CommonVoiceIT2FR/train_shards/train__OP_0..21_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/it-fr/clean/CommonVoiceIT2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..24_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: it
+      target_lang: fr
+    type: group
+    weight: 0.0265
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: it
+      target_lang: es
+    type: group
+    weight: 0.0017
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/it-en/clean/CoVoST/train_shards/train__OP_0..8_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/it-en/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..9_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: it
+      target_lang: en
+    type: group
+    weight: 0.0165
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/it-en/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..5_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: it
+      target_lang: en
+    type: group
+    weight: 0.0124
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/nl-fr/clean/CommonVoiceNL2FR/train_shards/train__OP_0..8_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/nl-fr/clean/CommonVoiceNL2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..9_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: nl
+      target_lang: fr
+    type: group
+    weight: 0.0167
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-fr/clean/CommonVoicePT2FR/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/pt-fr/clean/CommonVoicePT2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..5_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: pt
+      target_lang: fr
+    type: group
+    weight: 0.0121
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: pt
+      target_lang: es
+    type: group
+    weight: 0.0084
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/CoVoST/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/CoVoST/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: pt
+      target_lang: en
+    type: group
+    weight: 0.0098
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/pt-en/clean/Multilingual_TEDx/train_shards/train__OP_0..5_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/pt-en/clean/Multilingual_TEDx/train_contextual_biasing_shards/train_contextual_biasing__OP_0..6_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: pt
+      target_lang: en
+    type: group
+    weight: 0.0138
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/ar-fr/clean/CommonVoiceAR2FR/train_shards/train__OP_0..5_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/ar-fr/clean/CommonVoiceAR2FR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..6_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: ar
+      target_lang: fr
+    type: group
+    weight: 0.0135
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-ar/clean/CommonVoiceFR2AR/train_shards/train__OP_0..22_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/fr-ar/clean/CommonVoiceFR2AR/train_contextual_biasing_shards/train_contextual_biasing__OP_0..24_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: fr
+      target_lang: ar
+    type: group
+    weight: 0.0265
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/clean/CoVoST/train.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/ar-en/clean/CoVoST/train_contextual_biasing.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: ar
+      target_lang: en
+    type: group
+    weight: 0.0003
+  - input_cfg:
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-ar/clean/CoVoST/train_shards/train__OP_0..85_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.99
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/ast/en-ar/clean/CoVoST/train_contextual_biasing_shards/train_contextual_biasing__OP_0..95_CL_.jsonl
+      tags:
+        sub_task: contextual_biasing
+      type: multimodal_conversation
+      weight: 0.01
+    tags:
+      source_lang: en
+      target_lang: ar
+    type: group
+    weight: 0.0524
+  tags:
+    task: ast
+  type: group
+  weight: 0.25
+- input_cfg:
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/ami/mixed/train.jsonl
+      type: multimodal_conversation
+      weight: 0.5055
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/en/icsi/mixed/train.jsonl
+      type: multimodal_conversation
+      weight: 0.4945
+    tags:
+      lang: en
+    type: group
+    weight: 0.25
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/cfpp2000/mixed/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0816
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/train.jsonl
+      type: multimodal_conversation
+      weight: 0.2737
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/diarization/fr/eslo/mixed/train_shards/train__OP_0..8_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.6447
+    tags:
+      lang: fr
+    type: group
+    weight: 0.75
+  tags:
+    task: diarization
+  type: group
+  weight: 0.02
+- input_cfg:
+  - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/misc/multilang/clean/CVMultiTurn/mixed_asr_ast/train_shards/train__OP_0..199_CL_.jsonl
+    type: multimodal_conversation
+  tags:
+    lang: mixed
+    task: multiturn_asr_ast
+  type: group
+  weight: 0.05
+- input_cfg:
+  - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/misc/multilang/context/VoxCeleb/chat/train_shards/train__OP_0..39_CL_.jsonl
+    type: multimodal_conversation
+  tags:
+    lang: mixed
+    task: speaker_verification
+  type: group
+  weight: 0.01
+- input_cfg:
+  - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/text_only/en/nemotron_posttraining_v3_chat_chat/train_shards/train__OP_0..42_CL_.jsonl
+    tags:
+      sub_task: chat
+    type: multimodal_conversation
+    weight: 0.6195
+  - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/text_only/en/nemotron_posttraining_v3_chat_instruction_following/train_shards/train__OP_0..15_CL_.jsonl
+    tags:
+      sub_task: instruction_following
+    type: multimodal_conversation
+    weight: 0.3805
+  tags:
+    lang: en
+    task: text_only
+  type: group
+  weight: 0.02

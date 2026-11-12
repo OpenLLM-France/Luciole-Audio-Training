@@ -1,0 +1,50 @@
+# @package data.validation_ds.datasets
+# Validation for the v5 transcribe runs (ASR / AST / diarization): v3_2 without
+# the tasks these runs do not train (QA, sound and music captioning).
+# Same manifests as v3_2, so the val losses stay comparable with earlier runs.
+
+asr_fr:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/context/CommonVoice/dev.jsonl
+      tags: {lang: fr}
+
+asr_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/context/CommonVoice/dev.jsonl
+      tags: {lang: en}
+
+asr_es:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/context/CommonVoice/dev.jsonl
+      tags: {lang: es}
+
+asr_ar:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/context/CommonVoice/dev.jsonl
+      tags: {lang: ar}
+
+ast_fr_en:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/context/Multilingual_TEDx/dev.jsonl
+      tags: {lang: en}
+
+ast_es_fr:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/context/Multilingual_TEDx/dev.jsonl
+      tags: {lang: fr}
+
+# Diarization: "mixed" task like the train (asr / timestamps / timestamps_asr).
+# limit_val_batches=16 x batch 8 -> only the first ~512 rows (4 GPUs) are scored, and
+# the files are ordered by recording: TCOF covers 21 of its 30 recordings there
+# (AMI 12, ESLO 6, ICSI 2, CFPP2000 1).
+diar_fr_tcof:
+  input_cfg:
+    - type: multimodal_conversation
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/diarization/fr/tcof/mixed/validation.jsonl
+      tags: {lang: fr}

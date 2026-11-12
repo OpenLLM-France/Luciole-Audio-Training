@@ -11,12 +11,14 @@ Examples:
   python slurm_launcher.py --config run/xp/automodel_8b --conda-env $SCRATCH/speechlm/envs/salm_automodel
   python slurm_launcher.py --subdir xp_from_lora --job-name stage2   # -> .../Luciole-1B/xp_from_lora/stage2
 
-Output layout (both roots, results and logs):
-  <root>/<model-family>/[<subdir>/]<job_name>
+Output layout:
+  <root>/<model-family>/[<subdir>/]<job_name>          (checkpoints, tensorboard, ...)
+  <root>/<model-family>/[<subdir>/]<job_name>/logs     (.out/.err, .slurm + config snapshots)
 The model family is derived from the LLM being trained (Luciole-1B / Luciole-8B /
 Luciole-23B), so a run always lands next to the other runs of the same model without
 each launch script having to spell the path out. Pass --experiment-folder / --save-dir
-to bypass the derivation entirely.
+to bypass the derivation entirely. Runs launched before 2026-11-12 have their logs
+under the old separate root, $ALL_CCFRSCRATCH/audio/training/logs/<model-family>/.
 """
 import argparse
 import os
@@ -36,10 +38,11 @@ QOS_MAP = {
 
 CPUS_PER_GPU = 24
 
-# Roots under which the per-model-family tree is built. Kept here rather than in the
-# launch scripts so every run shares one layout.
+# Root under which the per-model-family tree is built. Kept here rather than in the
+# launch scripts so every run shares one layout. Logs live inside each run's folder,
+# in LOGS_SUBDIR (run_train.slurm's --overwrite wipe spares it).
 DEFAULT_EXPERIMENT_ROOT = "$ALL_CCFRSCRATCH/audio/training/speechlm2_experiments"
-DEFAULT_LOGS_ROOT = "$ALL_CCFRSCRATCH/audio/training/logs"
+LOGS_SUBDIR = "logs"
 
 # exp_manager.max_time_per_run = SLURM --time minus this many minutes, clamped to >= MIN
 MAX_TIME_MARGIN_MIN = 15
@@ -269,8 +272,7 @@ def main():
     g_train.add_argument("--save-dir", default=None,
                          help="Override the log + snapshot directory verbatim, "
                               "bypassing the model-family derivation "
-                              f"(default: {DEFAULT_LOGS_ROOT}/<model-family>/"
-                              "[<subdir>/]<job_name>)")
+                              f"(default: <experiment-folder>/<job_name>/{LOGS_SUBDIR})")
     g_train.add_argument("--checkpoint-dir", default=None,
                          help="Directory to resolve CHECKPOINT from at job RUNTIME via "
                               "`ls -td <dir>/*-last.ckpt` (e.g. the previous curriculum "
@@ -318,10 +320,8 @@ def main():
         args.experiment_folder or f"{DEFAULT_EXPERIMENT_ROOT}/{group}",
         "--experiment-folder",
     )
-    save_dir = expand_or_die(
-        args.save_dir or f"{DEFAULT_LOGS_ROOT}/{group}/{job_name}",
-        "--save-dir",
-    )
+    save_dir = (expand_or_die(args.save_dir, "--save-dir") if args.save_dir
+                else f"{exp_folder}/{job_name}/{LOGS_SUBDIR}")
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(parents=True, exist_ok=True)
     if args.overwrite_log:
