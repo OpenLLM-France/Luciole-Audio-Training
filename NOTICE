@@ -1,0 +1,20 @@
+Copyright (c) 2025-2026 LINAGORA SAS, 37 rue Pierre Poli, 92130 Issy-les-Moulineaux, France
+
+This repository contains the training, data preparation, export and evaluation
+code of the Luciole Audio models, speech and audio augmented language models
+(SALM) built on the Luciole models, developed by LINAGORA within the
+OpenLLM-France consortium.
+PROJET FRANCE2030 OpenLLM-France, funded by Bpifrance under the call
+"Communs numériques pour l'intelligence artificielle générative".
+
+The Luciole Audio models (Luciole-1B-Audio-1.0, Luciole-8B-Audio-1.0 and
+Luciole-23B-Audio-1.0) are the property of LINAGORA SAS and are released under
+the Apache License 2.0.
+The Luciole-Audio-Training-Dataset and Luciole-Audio-Evaluation-Dataset are
+collections curated by LINAGORA SAS: the curation layer and each collection as a
+whole are released under CC-BY-NC-SA-4.0, while every source dataset remains
+under its own licence (see the dataset cards).
+
+This code is licensed under the GNU Affero General Public License v3.0
+(see LICENSE). Third-party components keep their own licenses (see their
+respective notices).

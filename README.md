@@ -48,3 +48,5 @@ Models are evaluated with [our fork of AudioBench](https://github.com/OpenLLM-Fr
 ## License
 
 AGPL v3, see [LICENSE](LICENSE).
+
+See [NOTICE](NOTICE) for copyright and attribution, including the ownership and licenses of the Luciole Audio models and datasets.
