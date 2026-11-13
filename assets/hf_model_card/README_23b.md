@@ -41,6 +41,7 @@ library_name: nemo
   * [With NeMo](#with-nemo)
   * [Example prompts for each task](#example-prompts-for-each-task)
 * [Acknowledgements](#acknowledgements)
+* [License](#license)
 * [Contact](#contact)
 
 ## Model Description
@@ -285,6 +286,10 @@ Hédi Naouara (LINAGORA)
 Jérôme Louradour (LINAGORA)
 
 We thank the support teams from IDRIS and [NVIDIA](https://www.nvidia.com/en-eu/) for technical guidance throughout the project.
+
+## License
+
+Copyright (c) 2025-2026 LINAGORA SAS. Luciole-23B-Audio-1.0 is developed by LINAGORA within the OpenLLM-France consortium (PROJET FRANCE2030 OpenLLM-France, funded by Bpifrance) and released under the Apache License 2.0.
 
 ## Contact
 

@@ -23,8 +23,6 @@ tags:
 
 # Luciole Audio Training Dataset
 
-## Table of Contents
-
 - [Dataset description](#dataset-description)
   - [Dataset structure](#dataset-structure)
   - [Data fields](#data-fields)
@@ -213,6 +211,8 @@ Where to obtain the audio for each source dataset, grouped by what is published 
 <!-- AUTOGEN:AUDIO_AVAILABILITY -->
 
 ## Licensing
+
+Copyright (c) 2025-2026 LINAGORA SAS (compilation, preprocessing and project-generated data). Each source dataset remains under its original licence, listed in the "Datasets and licenses" section. Released under CC-BY-NC-SA-4.0.
 
 **No single license covers the whole collection** — it is a *collection* in which each source
 dataset retains its own license (see the table above). The curator's added layer (the
