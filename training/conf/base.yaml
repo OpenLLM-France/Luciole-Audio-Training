@@ -130,6 +130,13 @@ data:
     # from the exact next batch instead of restarting the epoch.
     indexed: true
     use_stateful_dataloader: true
+    # How often (in batches) the workers send their state to the main process.
+    # Each snapshot is costly (~13 worker states per window, ~25 s on the 1B), so
+    # 1 (torchdata default) runs ~7x slower. Resume stays exact with a larger N:
+    # the batches produced since the last snapshot are replayed (~0.36 s/batch),
+    # which needs concurrent_bucketing: false and a fixed shard_seed.
+    # Requires the NeMo fork's snapshot_every_n_steps option.
+    snapshot_every_n_steps: 1000
     # .idx sidecars are mirrored here (mirroring the source path layout) rather
     # than written next to the data, since the training data under
     # $ALL_CCFRSCRATCH/audio is shared/group-owned and not meant for ad-hoc

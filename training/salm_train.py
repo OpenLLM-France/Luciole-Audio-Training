@@ -79,6 +79,23 @@ class ValidationSchedule(Callback):
         loop._max_batches = list(self._full) if run else [0] * len(self._full)
 
 
+class BatchIdLogger(Callback):
+    """Debug aid for resume tests: append `global_step<TAB>example ids` of every training
+    batch to `<out_dir>/rank<R>.tsv`. Enabled by the env var LOG_BATCH_IDS_DIR; comparing the
+    files of a continuous run and of an interrupted + resumed run checks that the resume
+    gives the same batches."""
+
+    def __init__(self, out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+        rank = int(os.environ.get("RANK", 0))
+        self._f = open(os.path.join(out_dir, f"rank{rank}.tsv"), "a", buffering=1)
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        convs = batch.get("conversations") if isinstance(batch, dict) else None
+        ids = [getattr(c, "id", "?") for c in convs] if convs is not None else ["?"]
+        self._f.write(f"{trainer.global_step}\t{','.join(map(str, ids))}\n")
+
+
 def _normalize_for_automodel(cfg):
     """Rewrite DDP/HF-PEFT-shaped config blocks into NeMo-Automodel shapes.
 
@@ -195,6 +212,10 @@ def train(cfg):
 
     dataset = SALMDataset(tokenizer=model.tokenizer)
     datamodule = DataModule(cfg.data, tokenizer=model.tokenizer, dataset=dataset)
+
+    if ids_dir := os.environ.get("LOG_BATCH_IDS_DIR"):
+        trainer.callbacks.append(BatchIdLogger(ids_dir))
+        logging.info(f"[batch-ids] logging training batch ids to {ids_dir}")
 
     if (sched := cfg.get("validation_schedule", None)) and trainer.limit_val_batches:
         cb = ValidationSchedule(sched.steps, sched.get("then_every", None))
