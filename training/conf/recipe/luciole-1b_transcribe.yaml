@@ -9,6 +9,9 @@ model:
     lora_dropout: 0.0
   optimizer:
     lr: 2e-4
+  # Liger fused lm_head + cross-entropy (needs liger-kernel in the env): the v5 data OOMs at
+  # step 1112 with the plain logits path (worst bucket ~61 GiB per H100).
+  fused_linear_cross_entropy: true
 data:
   train_ds:
     num_buckets: 27

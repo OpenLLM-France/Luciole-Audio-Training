@@ -253,6 +253,7 @@ echo "======================================"
 # =====================================================
 # Launch training
 # =====================================================
+status=0
 torchrun ${DISTRIBUTED_ARGS} \
   "${LOCAL_FOLDER}/${TRAIN_SCRIPT}" \
   --config-path="$CONFIG_PATH" \
@@ -262,4 +263,9 @@ torchrun ${DISTRIBUTED_ARGS} \
   ++exp_manager.exp_dir="$EXPERIMENT_FOLDER" \
   ++exp_manager.name="$EXPERIMENT_NAME" \
   ++exp_manager.max_time_per_run="$MAX_TIME_PER_RUN" \
-  ${EXTRA_OVERRIDES:-}
+  ${EXTRA_OVERRIDES:-} || status=$?
+
+# Lightning saves checkpoints through an fsspec tempfile (mkstemp: mode 0600, user group) moved
+# into place, so they ignore umask/setgid. Give them back to the shared qgz group.
+chgrp -R qgz "$RUN_DIR" && chmod -R g+rwX "$RUN_DIR" || echo "⚠ could not fix permissions in $RUN_DIR"
+exit $status

@@ -93,3 +93,9 @@ python $LOCAL_FOLDER/export_experiment.py \
     $LAST_ARG \
     $CLASS_PATH_ARG \
     $FORCE_ARG
+status=$?
+
+# safetensors are written through a tempfile (mode 0600) moved into place, so umask 007 does not
+# apply: give the exported checkpoints back to the qgz group.
+chmod -R g+rwX "$EXPERIMENT_FOLDER/$XP/hf_checkpoints" || echo "⚠ could not fix permissions in hf_checkpoints"
+exit $status

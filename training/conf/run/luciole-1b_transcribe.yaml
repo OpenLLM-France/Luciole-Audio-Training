@@ -2,6 +2,9 @@
 defaults:
   - /base
   - /recipe: luciole-1b_transcribe
+  # ASR / AST / diarization only: the v3_2 QA and sound/music sets are not trained by the
+  # transcribe mix and would flatten val_loss.
+  - override /data/val: v5_transcribe
   - _self_
 trainer:
   max_steps: 100_000

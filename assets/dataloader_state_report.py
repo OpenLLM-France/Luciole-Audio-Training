@@ -119,7 +119,7 @@ def main():
     print(f"Checkpoint : {selected[1]}")
     print(f"input_cfg  : {input_cfg}  ({len(leaves)} leaves)")
 
-    state = _consumption_from_meta(selected[1] / "meta.pt", cfg, leaves, ctx)
+    state = _consumption_from_meta(_meta_path(selected[1]), cfg, leaves, ctx)
     datasets = _datasets_table(leaves, state["seen"], state["max_epoch"])
     datasets.to_csv(output_dir / "datasets.csv", index=False)
     groups = {
@@ -142,7 +142,7 @@ def main():
         rows = []
         for step, ckpt in checkpoints:
             print(f"  evolution: {ckpt.name}")
-            st = _consumption_from_meta(ckpt / "meta.pt", cfg, leaves, ctx)
+            st = _consumption_from_meta(_meta_path(ckpt), cfg, leaves, ctx)
             total = sum(st["seen"])
             for leaf, seen in zip(leaves, st["seen"]):
                 rows.append(
@@ -189,7 +189,7 @@ def _list_checkpoints(exp_dir: Path) -> list:
     """Return [(step, path)] sorted by step; for equal steps the non '-last' copy wins."""
     ckpts = {}
     for p in sorted((exp_dir / "checkpoints").glob("*.ckpt")):
-        if not (p / "meta.pt").exists():
+        if not _meta_path(p).exists():
             continue
         m = re.search(r"step=(\d+)", p.name)
         if not m:
@@ -198,8 +198,13 @@ def _list_checkpoints(exp_dir: Path) -> list:
         if step not in ckpts or ckpts[step].name.endswith("-last.ckpt"):
             ckpts[step] = p
     if not ckpts:
-        raise SystemExit(f"No distributed checkpoint with meta.pt found under {exp_dir / 'checkpoints'}.")
+        raise SystemExit(f"No checkpoint (single file or dir with meta.pt) found under {exp_dir / 'checkpoints'}.")
     return sorted(ckpts.items())
+
+
+def _meta_path(ckpt: Path) -> Path:
+    """Distributed checkpoints are dirs holding meta.pt; DDP ones (e.g. the 1B) are one .ckpt file."""
+    return ckpt if ckpt.is_file() else ckpt / "meta.pt"
 
 
 def _select_checkpoint(checkpoints: list, which):
@@ -343,7 +348,8 @@ def _read_avg_durations(metadata_csv, ctx: _Context) -> dict:
 
 
 def _consumption_from_meta(meta_path: Path, cfg, leaves: list, ctx: _Context) -> dict:
-    meta = torch.load(meta_path, map_location="cpu", weights_only=False)
+    # mmap: a single-file DDP .ckpt also holds the weights (GBs), only the loop state is read.
+    meta = torch.load(meta_path, map_location="cpu", weights_only=False, mmap=True)
     try:
         per_rank = meta["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]["train_dataloader_per_rank"]
     except (KeyError, IndexError, TypeError):

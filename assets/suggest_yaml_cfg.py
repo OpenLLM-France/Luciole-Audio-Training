@@ -152,6 +152,7 @@ def compute_weights(
     temperature: float = _TEMPERATURE,
     min_weight: float = 0.0,
     max_passes: float = 0.0,
+    total_samples: float = 0.0,
     input_task_w: dict = None,
     input_lang_w: dict = None,
     input_weights_mode: str = "hard",
@@ -236,7 +237,7 @@ def compute_weights(
         df["effective_prob"] = df["effective_prob"] / df["effective_prob"].sum()
         df["effective_prob_pct"] = df["effective_prob"] * 100.0
 
-    total_n = float(df["num_samples"].sum(skipna=True)) or 1.0
+    total_n = total_samples or float(df["num_samples"].sum(skipna=True)) or 1.0
 
     # ── max_passes: cap L3 weights so no dataset exceeds the threshold
     if max_passes > 0:
@@ -337,6 +338,36 @@ def _apply_input_weights(ta, tl, input_task_w, input_lang_w, mode):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _base_size(node, df_map, size_field):
+    """For a dataset group (unweighted group of manifests where the variants carry a
+    ``tags.sub_task``): the size of its base manifest, the one without ``sub_task``.
+    None for any other node."""
+    children = [c for c in node.get("input_cfg", []) if isinstance(c, dict)]
+    if node.get("type") != "group" or node.get("weight") is not None or not children:
+        return None
+    if any(c.get("type") != "multimodal_conversation" for c in children):
+        return None
+    base = [c for c in children if "sub_task" not in (c.get("tags") or {})]
+    if len(base) != 1 or len(children) == 1:
+        return None
+    return float(df_map.get(base[0].get("manifest_filepath", ""), {}).get(size_field, 0) or 0)
+
+
+def _variant_samples(nodes, df_map):
+    """Samples of the variants of the dataset groups (same audio as their base)."""
+    extra = 0.0
+    for n in nodes:
+        if not isinstance(n, dict) or n.get("type") != "group":
+            continue
+        base = _base_size(n, df_map, "num_samples")
+        if base is None:
+            extra += _variant_samples(n.get("input_cfg", []), df_map)
+        else:
+            extra += sum(float(df_map.get(c.get("manifest_filepath", ""), {}).get("num_samples", 0) or 0)
+                         for c in n["input_cfg"] if isinstance(c, dict)) - base
+    return extra
+
+
 def _compute_tree_leaf_probs(nodes, prefix_prob, df_map, size_field, temperature):
     """Walk a YAML sub-tree and assign an effective probability to each leaf.
 
@@ -345,8 +376,9 @@ def _compute_tree_leaf_probs(nodes, prefix_prob, df_map, size_field, temperature
         the sibling pool (so ``weight: 0.18`` literally means 18% of the
         parent's budget — same intuition as the top-level weights).
       - Siblings *without* an explicit weight share the remaining
-        ``1 − sum(explicit)`` data-driven: leaves by ``size**(1/T)``, plain
-        groups by a default score of 1.0.
+        ``1 − sum(explicit)`` data-driven: leaves by ``size**(1/T)``, dataset
+        groups (base + variants tagged ``sub_task``) like their base manifest,
+        other plain groups by a default score of 1.0.
       - If every sibling is explicit, their values are renormalised to sum to 1.
 
     Returns a list of dicts: {node, effective_prob, path, samples,
@@ -370,7 +402,9 @@ def _compute_tree_leaf_probs(nodes, prefix_prob, df_map, size_field, temperature
             size = float(d.get(size_field, 0) or 0)
             default_score.append(size ** (1.0 / temperature) if size > 0 else 0.0)
         else:
-            default_score.append(1.0)
+            # a dataset group (base + variants) competes like its base manifest
+            size = _base_size(n, df_map, size_field)
+            default_score.append(size ** (1.0 / temperature) if size else 1.0)
     default_sum = sum(default_score)
 
     weights = [0.0] * len(siblings)
@@ -456,11 +490,13 @@ def write_yaml_preserving_structure(
     metric: str,
     temperature: float,
     max_passes: float = 0.0,
+    total_samples: float = 0.0,
 ) -> None:
     """Mirror the input YAML tree, copying every group's weight and tags
     verbatim, and filling in per-leaf weights computed as data-driven shares
     within each sibling group (size^(1/T)). Optionally caps per-leaf passes
-    via max_passes (redistributing excess to uncapped siblings)."""
+    via max_passes (redistributing excess to uncapped siblings), passes being
+    counted over *total_samples* draws (0 = one pass over the YAML's data)."""
 
     with open(input_yaml_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -479,7 +515,10 @@ def write_yaml_preserving_structure(
         }
 
     size_field = "total_duration_sec" if metric == "duration" else "num_samples"
-    total_samples = sum(d["num_samples"] for d in df_map.values()) or 1.0
+    # max_passes counts each dataset once: its variants (same audio) do not grow the total
+    total_samples = total_samples or (
+        sum(d["num_samples"] for d in df_map.values()) - _variant_samples(cfg.get("input_cfg", []), df_map) or 1.0
+    )
 
     leaves = _compute_tree_leaf_probs(cfg.get("input_cfg", []), 1.0, df_map, size_field, temperature)
     if max_passes > 0:
@@ -571,6 +610,142 @@ def write_yaml_preserving_structure(
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"✅ YAML (tree-preserving) → {output_path}")
+
+
+def write_yaml_fill_missing_weights(
+    input_yaml_path: str,
+    df: pd.DataFrame,
+    output_path: Path,
+    metric: str,
+    temperature: float,
+    max_passes: float = 0.0,
+    total_samples: float = 0.0,
+) -> None:
+    """Copy the input YAML text as is (weights, comments, layout) and only insert
+    a ``weight:`` on each node that has siblings but no weight.
+
+    Same rule as ``_compute_tree_leaf_probs``: the unweighted siblings share
+    ``1 − sum(explicit weights)`` by ``size**(1/T)``, a dataset group (base +
+    variants tagged ``sub_task``) counting as its base manifest.
+
+    With *max_passes*, a node may not be drawn more than *max_passes* times over
+    *total_samples* draws (0 = one pass over the YAML's data); for a dataset
+    group, passes = its effective probability × total / base rows, since every
+    variant reuses the base audio. The excess only goes to the uncapped new
+    weights of the same level: existing weights, hence task / language shares,
+    never change."""
+    import re
+
+    text = Path(input_yaml_path).read_text(encoding="utf-8").split("\n")
+    cfg = yaml.safe_load("\n".join(text))
+    nodes = cfg if isinstance(cfg, list) else cfg.get("input_cfg", [])
+
+    df_map = {
+        row["raw_manifest_path"]: {
+            "num_samples": float(row.get("num_samples", 0) or 0),
+            "total_duration_sec": float(row.get("total_duration_sec", 0) or 0),
+        }
+        for _, row in df.iterrows()
+        if row.get("raw_manifest_path")
+    }
+    size_field = "total_duration_sec" if metric == "duration" else "num_samples"
+    total_samples = total_samples or (
+        sum(d["num_samples"] for d in df_map.values()) - _variant_samples(nodes, df_map) or 1.0
+    )
+
+    # manifest path -> (line index, indent of "manifest_filepath:")
+    line_of = {}
+    for i, l in enumerate(text):
+        m = re.match(r"^(\s*)manifest_filepath:\s*(\S+)", l)
+        if m:
+            if m.group(2) in line_of:
+                raise SystemExit(f"❌ {m.group(2)} appears twice in {input_yaml_path}")
+            line_of[m.group(2)] = (i, len(m.group(1)))
+
+    def _type_line(path, indent):
+        i = line_of[path][0]
+        while not re.match(r"^ {%d}- type: " % indent, text[i]):
+            i -= 1
+        return i
+
+    def _stats(path):
+        d = df_map.get(path)
+        if not d or not d["num_samples"]:
+            raise SystemExit(f"❌ {path} missing from the CSV (needed to weight its dataset)")
+        return d
+
+    inserts = {}  # index of the node's "- type:" line -> (indent, weight, comment)
+    report = []
+
+    def walk(nodes, prefix):
+        sib = [n for n in nodes if isinstance(n, dict)]
+        explicit = sum(float(n["weight"]) for n in sib if n.get("weight") is not None)
+        new = {}  # id(node) -> (path whose size counts, indent of the node's "- type:")
+        for n in sib:
+            if len(sib) < 2 or n.get("weight") is not None:
+                continue
+            if n.get("type") == "multimodal_conversation":
+                path = n["manifest_filepath"]
+                new[id(n)] = (path, line_of[path][1] - 2)
+            else:
+                base = [c for c in n.get("input_cfg", []) if isinstance(c, dict) and "sub_task" not in (c.get("tags") or {})]
+                if len(base) != 1 or base[0].get("type") != "multimodal_conversation":
+                    raise SystemExit(f"❌ unweighted group with no single base manifest: {n}")
+                path = base[0]["manifest_filepath"]
+                new[id(n)] = (path, line_of[path][1] - 6)
+
+        w = {}
+        if new:
+            score = {k: float(_stats(p)[size_field]) ** (1.0 / temperature) for k, (p, _) in new.items()}
+            remaining, free = max(0.0, 1.0 - explicit), set(new)
+            while free:  # water-filling: cap, give the rest to the uncapped ones
+                tot = sum(score[k] for k in free)
+                for k in free:
+                    w[k] = score[k] / tot * remaining
+                over = {
+                    k for k in free
+                    if max_passes > 0 and prefix * w[k] * total_samples / _stats(new[k][0])["num_samples"] > max_passes
+                }
+                if not over:
+                    break
+                for k in over:
+                    w[k] = max_passes * _stats(new[k][0])["num_samples"] / (prefix * total_samples)
+                    remaining -= w[k]
+                free -= over
+            if not free and remaining > 1e-9:
+                print(f"⚠️  every new weight capped next to {new[next(iter(new))][0]}: "
+                      f"{remaining:.4f} of the level left to the existing weights")
+            for k, (path, indent) in new.items():
+                rows = _stats(path)["num_samples"]
+                passes = prefix * w[k] * total_samples / rows
+                report.append((passes, path))
+                comment = f"{int(rows):,} rows in base manifest"
+                if max_passes > 0:
+                    comment += f", {passes:.1f} passes"
+                inserts[_type_line(path, indent)] = (indent, w[k], comment)
+
+        allw = [w.get(id(n), float(n.get("weight", 1.0) or 1.0)) for n in sib]
+        s = sum(allw) or 1.0
+        for n, x in zip(sib, allw):
+            if n.get("input_cfg"):
+                walk(n["input_cfg"], prefix * x / s)
+
+    walk(nodes, 1.0)
+
+    out = []
+    for i, l in enumerate(text):
+        out.append(l)
+        if i in inserts:
+            indent, wt, comment = inserts[i]
+            out.append(" " * (indent + 2) + f"weight: {wt:.4f}   # {comment}")
+    output_path.write_text("\n".join(out), encoding="utf-8")
+
+    capped = sum(1 for p, _ in report if max_passes > 0 and p >= max_passes - 1e-6)
+    print(f"\n{len(inserts)} weights inserted ({capped} capped at {max_passes:g} passes, "
+          f"total={total_samples:,.0f} samples)")
+    for passes, path in sorted(report, reverse=True)[:10]:
+        print(f"   {passes:6.1f} passes  {path}")
+    print(f"✅ YAML (missing weights filled) → {output_path}")
 
 
 def write_yaml(df: pd.DataFrame, metric: str, temperature: float, output_path: Path) -> None:
@@ -690,6 +865,19 @@ def main():
         "Caps L3 weights and redistributes excess within each group.",
     )
     parser.add_argument(
+        "--total_samples",
+        type=float,
+        default=0.0,
+        help="Number of samples drawn during training, used to count --max_passes "
+        "(default: 0 = one pass over the data, i.e. the sum of num_samples).",
+    )
+    parser.add_argument(
+        "--fill_missing_weights",
+        action="store_true",
+        help="With --yaml: keep the input YAML as is (weights, comments) and only add a "
+        "weight to each node without one; --max_passes then caps only those new weights.",
+    )
+    parser.add_argument(
         "--skip_missing", action="store_true", help="Drop rows where file_exists=False before computing weights."
     )
     parser.add_argument(
@@ -759,21 +947,26 @@ def main():
         temperature=args.temperature,
         min_weight=args.min_weight,
         max_passes=args.max_passes,
+        total_samples=args.total_samples,
         input_task_w=input_task_w,
         input_lang_w=input_lang_w,
         input_weights_mode=args.input_weights_mode,
     )
 
-    print_summary(df, title=f"metric={args.metric}  T={args.temperature}")
+    if not args.fill_missing_weights:
+        # flat task × lang × dataset model: does not reflect the tree kept by --fill_missing_weights
+        print_summary(df, title=f"metric={args.metric}  T={args.temperature}")
     if args.output:
         if args.yaml:
-            write_yaml_preserving_structure(
+            write = write_yaml_fill_missing_weights if args.fill_missing_weights else write_yaml_preserving_structure
+            write(
                 args.yaml,
                 df,
                 Path(args.output),
                 metric=args.metric,
                 temperature=args.temperature,
                 max_passes=args.max_passes,
+                total_samples=args.total_samples,
             )
             return
         write_yaml(df, args.metric, args.temperature, Path(args.output))
