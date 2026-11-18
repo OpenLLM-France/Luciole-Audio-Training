@@ -1726,17 +1726,21 @@ class ChoosePrompt:
 
 class AstPrompt:
     """In place of ChoosePrompt (`prompts: ast`): a translation prompt for the pair of the dataset's
-    name ("fr-en/CoVoST"), composed by data/contexts/compose_ast_prompts.py."""
+    name ("fr-en/CoVoST"), composed by data/contexts/compose_ast_prompts.py. keep: the markers the
+    output keeps; an output that keeps the events asks for their [tags] in every prompt."""
     label = "prompt"
     nocasepunc = lowercase = False
 
-    def __init__(self, dataset):
+    def __init__(self, dataset, keep=()):
         from compose_ast_prompts import DEFAULT_DIR, AstPromptComposer
+        if set(keep) - {"events"}:
+            raise SystemExit(f"{dataset}: an AST output keeps the events or nothing, not {sorted(keep)}")
         source, target = dataset.split("/")[0].split("-")
         self.composer = AstPromptComposer(DEFAULT_DIR, source, target)
+        self.events = "events" in keep
 
     def __call__(self, s):
-        s.prompt = self.composer.compose(s.rng)
+        s.prompt = self.composer.compose(s.rng, events=self.events)
         return True
 
 
@@ -1936,7 +1940,7 @@ def main():
             # a few prompts state what the text does not have (no markers, case and punctuation),
             # more when another output keeps the markers or some lines are lowercase unpunctuated
             favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
-            prompt = AstPrompt(name) if prompts == "ast" else \
+            prompt = AstPrompt(name, keep) if prompts == "ast" else \
                 ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
                              nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
             # output_lines: an output but base takes that many lines at random, other ones than the

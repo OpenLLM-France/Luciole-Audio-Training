@@ -20,9 +20,15 @@ and clean_asr.py reads them with the dataset's other inputs: in the base output 
 stripped ("alone" lines are dropped, the others are plain lines over a longer audio), in
 events/ it is kept.
 
+A dataset with no clean/<Dataset>/intermediate/ input (cleaned from context/, e.g. Multilingual_TEDx
+in de/es/it/pt/ar) and translation (`--task ast`, `--lang` a pair: fr-en) read the context/ file; the
+lines go to clean/<Dataset>/intermediate/train_silence.jsonl, which the config lists with the
+dataset's inputs. In AST: "<previous translation> [silence] <next translation>".
+
 Usage:
     python data/processing/clean_asr/build_silence.py --datasets ESLO Multilingual_TEDx
     python data/processing/clean_asr/build_silence.py --lang de --datasets Yodas2
+    python data/processing/clean_asr/build_silence.py --task ast --lang fr-en --datasets Multilingual_TEDx
 """
 import argparse
 import collections
@@ -166,7 +172,9 @@ def make_line(kind, gap, max_duration):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datasets", nargs="+", default=DATASETS)
-    p.add_argument("--lang", default="fr", help="nemo/asr/<lang>/clean and context")
+    p.add_argument("--task", choices=["asr", "ast"], default="asr")
+    p.add_argument("--lang", default="fr", help="nemo/<task>/<lang>/clean and context (ast: a pair, fr-en)")
+    p.add_argument("--output-root", help="write under this directory instead of $DATA_FOLDER/nemo (a test)")
     p.add_argument("--fraction", type=float, default=0.02, help="silence lines per line of the input")
     p.add_argument("--max-per-dataset", type=int, default=5000)
     p.add_argument("--min-gap", type=float, default=2.0, help="shorter gaps are pauses, untagged elsewhere")
@@ -180,20 +188,26 @@ def main():
     p.add_argument("--max-hours", type=float, default=0, help="stop checking gaps after that long and write what was found")
     args = p.parse_args()
     deadline = time.time() + args.max_hours * 3600 if args.max_hours else float("inf")
-    clean, context = (d.replace("/asr/fr/", f"/asr/{args.lang}/") for d in (CLEAN, CONTEXT))
+    clean, context = (d.replace("/asr/fr/", f"/{args.task}/{args.lang}/") for d in (CLEAN, CONTEXT))
+    nemo = os.path.dirname(os.path.dirname(os.path.dirname(CLEAN)))      # $DATA_FOLDER/nemo
 
     with Pool(args.workers, initializer=_init) as pool:
         for ds in args.datasets:
-            inputs = [f for f in sorted(glob.glob(f"{clean}/{ds}/intermediate/train*.jsonl"))
-                      if "max30" not in os.path.basename(f) and "_silence" not in os.path.basename(f)]
+            # the rebuilt intermediate/ inputs, else (AST, and ASR datasets cleaned from context/) context/
+            src = f"{clean}/{ds}/intermediate"
+            if args.task == "ast" or not glob.glob(f"{src}/train*.jsonl"):
+                src = f"{context}/{ds}"
+            inputs = [f for f in sorted(glob.glob(f"{src}/train*.jsonl"))
+                      if "max30" not in os.path.basename(f) and "_silence" not in os.path.basename(f)
+                      and not (src.startswith(context) and "_randomorder" in os.path.basename(f))]   # context/ copies unused by the configs
             if not inputs:
-                raise SystemExit(f"[{ds}] no input in {clean}/{ds}/intermediate/")
+                raise SystemExit(f"[{ds}] no input in {src}/")
             per_file = -(-args.max_per_dataset // max(len(inputs), 1))
             for path in inputs:
                 rng = random.Random(f"{args.seed}:{ds}:{os.path.basename(path)}")
                 recs = load(path)
                 ctx_path = f"{context}/{ds}/{os.path.basename(path)}"
-                extra = load(ctx_path) if os.path.exists(ctx_path) else []
+                extra = load(ctx_path) if os.path.exists(ctx_path) and ctx_path != path else []
                 gaps = find_gaps(recs, extra, args.min_gap, args.max_gap)
                 rng.shuffle(gaps)
                 target = min(round(args.fraction * len(recs)), per_file)
@@ -217,7 +231,10 @@ def main():
                                 lines.append(line)
                                 stats["kind:" + k] += 1
                                 break
-                out = path[: -len(".jsonl")] + "_silence.jsonl"
+                out = f"{clean}/{ds}/intermediate/{os.path.basename(path)}"[: -len(".jsonl")] + "_silence.jsonl"
+                if args.output_root:
+                    out = os.path.join(args.output_root, os.path.relpath(out, nemo))
+                os.makedirs(os.path.dirname(out), exist_ok=True)
                 with open(out + ".tmp", "w", encoding="utf-8") as f:
                     for line in sorted(lines, key=lambda r: r["id"]):
                         f.write(json.dumps(line, ensure_ascii=False) + "\n")

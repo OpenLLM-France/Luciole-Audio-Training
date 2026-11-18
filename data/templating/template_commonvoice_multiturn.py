@@ -50,24 +50,22 @@ the clip stem (``common_voice_fr_19344297``); joining on it is 100% on fr->en,
 against ~17% when joining AST manifests to each other. So a French clip carries
 the transcript plus 7 translations, and an ar/de/en/es/it/nl/pt clip the
 transcript plus the French one -- three distinct asks minimum either way.
+With --asr-root, the transcript is the cleaned one of
+``<asr_root>/<lang>/clean/CommonVoice/<split>.jsonl`` instead (same clip stem), and the
+clips missing there are left out.
 
 Where the instructions come from
 --------------------------------
-Turn 1 is drawn from ``data/contexts`` (--contexts-root), never rewritten:
-
-* transcription -- ``{src}_asr_contexts.json``. Its ``0.95`` bucket is written in the
-  audio's OWN language, so it only applies on the diagonal (French instructions over
-  French audio: 31 prompts, English over English: 38). Off the diagonal the ``0.05``
-  bucket gives 4 per instruction language, all of which either name the audio language
-  or point at "its original language".
-* translation -- ``translation/{src}-{tgt}_ast_contexts.json``, 10 per instruction
-  language on every one of the 56 pairs (20 counting fr and en together): 5 naming
-  source and target, 5 naming the target alone. The 3 bare stubs ("Traduis") are
-  skipped -- turn 1 has to say what language to answer in.
+Turn 1 is composed like the prompts of the clean/ manifests, by
+``data/contexts/compose_asr_prompts.py`` and ``compose_ast_prompts.py``, in the
+conversation's instruction language. A transcription prompt names the audio language
+when it is written in another one; 20% of them ask explicitly for case and punctuation,
+no event tags or no hesitations (what CommonVoice has). A translation prompt names the
+target, and the source 30% of the time; the bare "Traduis cet audio." only when the
+instructions are in the target language.
 
 Every later turn is templated in this file, in fr/en only, which is why the
 instruction language is drawn from {fr, en}.
-``data/assets/instruction_transcription_and_translation_fr-en.txt`` is no longer used.
 
 Usage
 -----
@@ -76,10 +74,18 @@ Usage
         --ast-root $DATA_FOLDER/nemo/ast \
         --source-langs fr en de es it nl pt ar \
         --output-dir out/ --mode all
+
+ASR/AST only, one audio per turn, on the clean/ text (transcripts and translations):
+    python template_commonvoice_multiturn.py --cv-root ... --ast-root $DATA_FOLDER/nemo/ast \
+        --variant clean --asr-root $DATA_FOLDER/nemo/asr \
+        --accent-rate 0 --gender-rate 0 --age-rate 0 --dual-transcription-rate 0 \
+        --mode mixed --max-samples 1000000 \
+        --output-dir out/    # then out/mixed/ -> clean/CVMultiTurn/mixed_asr_ast/
 """
 
 import argparse
 import csv
+import itertools
 import json
 import random
 import re
@@ -119,44 +125,9 @@ def fmt(template, tgt, ilang, **extra):
 
 # Templates. Every list is sampled uniformly and independently, for surface variety.
 
-# Turn-1 instructions come from data/contexts: per audio language for ASR, per pair for
-# AST. Both banks are already multilingual, so a prompt is TAKEN in the instruction
-# language rather than written fr->en and string-substituted.
-#
-# They replace data/assets/instruction_transcription_and_translation_fr-en.txt, whose
-# transcription section asked for things CommonVoice never contains ("include all pauses
-# and hesitations", "including any background noises or interjections"): the reference is
-# the written sentence being read aloud, so there are no disfluencies and no noise tags
-# to produce, and the instruction trains the model to ignore what it is told. The
-# combined transcribe-then-translate ask has no counterpart in data/contexts and is now
-# assembled from the fragments in `compound_turns`, which covered every wider shape
-# already.
-CONTEXTS_RELPATH = ("contexts",)
-ASR_BANK_NAME = "{lang}_asr_contexts.json"
-AST_BANK_RELNAME = "translation/{src}-{tgt}_ast_contexts.json"
-# ASR files split prompts into a bucket written in the audio's own language and a
-# smaller cross-lingual one. The keys are the sampling weights they were generated
-# with; we index them by role, not by weight.
-ASR_SAME_LANG_BUCKET = "0.95"
-ASR_CROSS_LANG_BUCKET = "0.05"
-ASR_VARIANT = "default_contexts"   # `nocasepunc` asks for lowercase-no-punct output
-AST_VARIANT = "default_contexts"
-
-# The cross-lingual ASR bucket mixes every instruction language in one list, with no
-# tag. These are the four templates it was generated from, per language: formatting
-# them with the audio language's name reconstructs exactly the entries that belong to
-# `ilang`. Two name the language, two point at it as "its original language" -- all
-# four are answerable, which is why the thin pool is acceptable.
-ASR_CROSS_LANG_TEMPLATES = {
-    "fr": ["Transcrivez l'audio dans sa langue originelle.",
-           "Écrivez exactement en {lang} ce qui est dit dans cet enregistrement audio.",
-           "Transcris en {lang}",
-           "Peux-tu rédiger le texte de ce fichier audio dans sa langue source?"],
-    "en": ["Transcribe the audio in its original language.",
-           "Write exactly in {lang} what is said in this audio recording.",
-           "Transcribe in {lang}",
-           "Can you write the text of this audio file in its source language?"],
-}
+# Turn-1 instructions are composed like the clean/ manifests' (see `bank_prompt`); every
+# later turn is templated below. CommonVoice is read text: no disfluencies nor noise tags
+# to produce, so the prompts never ask for them.
 
 # Elliptical follow-ups, the point of `sequential`: meaningless without the previous
 # turns, so they force the model to keep attending to the audio.
@@ -629,75 +600,58 @@ BUNDLE_SIZES = (2, 2, 3)
 _MISSING = object()
 
 
-# Set in main(); the builders read it rather than taking a ninth parameter.
-CONTEXTS_ROOT = None
-# (kind, key, ilang) -> list of prompts. Filled on first draw; a conversation only ever
-# touches the pairs its clips can answer, so loading all 56 AST files up front is waste.
-_CONTEXT_CACHE = {}
+# The share of composed transcription prompts that state constraints explicitly, as the
+# base outputs of conf/{lang}.yaml do (explicit_fraction default); each such prompt asks
+# for a non-empty combination of these, CommonVoice being cased, punctuated, read speech.
+EXPLICIT_FRACTION = 0.2
+EXPLICIT_BLOCKS = (("nocasepunc", "no"), ("events", False), ("disfluencies", False))
+# The prompts drawn so far: the shape statistics read the output back by membership.
+COMPOSED_PROMPTS = set()
+_COMPOSERS = {}
 
 
-def _load_json(path):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def asr_prompts(src, ilang):
-    """Turn-1 transcription prompts for `src` audio, written in `ilang`.
-
-    Two regimes, and they differ by an order of magnitude. On the diagonal
-    (`ilang == src`, so French instructions over French audio) the whole same-language
-    bucket applies: 31 prompts for fr, 38 for en. Off it, only the four cross-lingual
-    templates match -- the rest of the file is written in the audio's own language and
-    would silently switch the conversation's instruction language mid-way.
-    """
-    key = ("asr", src, ilang)
-    if key not in _CONTEXT_CACHE:
-        bank = _load_json(CONTEXTS_ROOT / ASR_BANK_NAME.format(lang=src))[ASR_VARIANT]
-        if ilang == src:
-            pool = list(bank[ASR_SAME_LANG_BUCKET])
+def _composer(task, src, tgt, ilang):
+    key = (task, src, tgt, ilang)
+    if key not in _COMPOSERS:
+        contexts = Path(__file__).resolve().parent.parent / "contexts"
+        sys.path.insert(0, str(contexts))
+        sys.path.insert(0, str(contexts.parent / "processing" / "clean_asr"))
+        from compose_asr_prompts import DEFAULT_DIR, PromptComposer
+        from compose_ast_prompts import MENTION, AstPromptComposer
+        from rules import rules as language_rules
+        if task == "transcription":
+            # Only the disfluency prompts use the hesitations, and they are never asked
+            # for here; the composer wants them all the same.
+            hesitations = list(language_rules(src).get("disfluencies", {})
+                               .get("hesitations", {})) or ["euh"]
+            _COMPOSERS[key] = PromptComposer(DEFAULT_DIR, src, hesitations,
+                                             instruction_languages={ilang: 1.0})
         else:
-            want = {t.format(lang=LANG_NAMES[ilang][src])
-                    for t in ASR_CROSS_LANG_TEMPLATES[ilang]}
-            pool = [p for p in bank[ASR_CROSS_LANG_BUCKET] if p in want]
-        if not pool:
-            raise ValueError(f"no {ilang} transcription prompt for {src} audio "
-                             f"in {CONTEXTS_ROOT / ASR_BANK_NAME.format(lang=src)}")
-        _CONTEXT_CACHE[key] = pool
-    return _CONTEXT_CACHE[key]
+            # An implicit prompt ("Traduis cet audio.") names the target only by being
+            # written in it: allowed when the instruction language is the target.
+            mention = {k: v for k, v in MENTION.items() if k != "implicit" or ilang == tgt}
+            _COMPOSERS[key] = AstPromptComposer(DEFAULT_DIR, src, tgt,
+                                                instruction_languages={ilang: 1.0},
+                                                mention=mention)
+    return _COMPOSERS[key]
 
 
-def ast_prompts(src, tgt, ilang):
-    """Turn-1 translation prompts for src->tgt, written in `ilang`.
-
-    The pair file pools every instruction language into weight buckets with no tag, but
-    every prompt names its TARGET language -- in its own language, so "en néerlandais"
-    marks a French prompt and "naar het Nederlands" a Dutch one. Matching on the target
-    name as spelled in `ilang` selects exactly the ten that belong to it: five naming
-    both languages, five naming only the target. The three bare stubs ("Traduis") are
-    dropped by the same rule, which is what we want here -- turn 1 has to say what
-    language to answer in.
-    """
-    key = ("ast", (src, tgt), ilang)
-    if key not in _CONTEXT_CACHE:
-        path = CONTEXTS_ROOT / AST_BANK_RELNAME.format(src=src, tgt=tgt)
-        bank = _load_json(path)[AST_VARIANT]
-        name = LANG_NAMES[ilang][tgt]
-        pool = [p for bucket in bank.values() for p in bucket if name in p]
-        if not pool:
-            raise ValueError(f"no {ilang} translation prompt for {src}->{tgt} in {path}")
-        _CONTEXT_CACHE[key] = pool
-    return _CONTEXT_CACHE[key]
-
-
-def bank_prompt(task, ilang, src, tgt=None):
-    """Draw one turn-1 instruction for `task` from data/contexts.
-
-    No retargeting: the banks are stored per audio language and per pair, so the prompt
-    already names the right languages in the right instruction language.
-    """
+def turn1_prompt(task, ilang, src, tgt=None):
+    """One turn-1 instruction for `task`, composed like the clean/ manifests'
+    (data/contexts/compose_{asr,ast}_prompts.py) but forced into `ilang`, the
+    conversation's instruction language, so that it matches the templated follow-ups."""
+    composer = _composer(task, src, tgt, ilang)
     if task == "transcription":
-        return random.choice(asr_prompts(src, ilang))
-    return random.choice(ast_prompts(src, tgt, ilang))
+        constraints = {}
+        if random.random() < EXPLICIT_FRACTION:
+            combos = [c for n in range(1, len(EXPLICIT_BLOCKS) + 1)
+                      for c in itertools.combinations(EXPLICIT_BLOCKS, n)]
+            constraints = dict(random.choice(combos))
+        prompt = composer.compose(random, instruction_language=ilang, **constraints)
+    else:
+        prompt = composer.compose(random, instruction_language=ilang)
+    COMPOSED_PROMPTS.add(prompt)
+    return prompt
 
 
 def draw_turns(max_turns, dist=TURN_DIST):
@@ -1639,7 +1593,7 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
         if len(group) == 1:
             tgt, text = group[0]
             if tgt is None:
-                question = (bank_prompt("transcription", ilang, src) if first
+                question = (turn1_prompt("transcription", ilang, src) if first
                             else followup_transcribe(ilang, src, asked))
                 if dual_clip is not None:
                     question = qualify_first_clip(question, ilang)
@@ -1648,7 +1602,7 @@ def build_hybrid(stem, clip, transcript, targets, ilang, meta, probs, max_asks,
             elif tgt == DUAL_KEY2:
                 question = dual_question(ilang, 1, dual2_task, first)
             else:
-                question = (bank_prompt("translation", ilang, src, tgt) if first
+                question = (turn1_prompt("translation", ilang, src, tgt) if first
                             else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
                 if dual_clip is not None:
                     question = qualify_first_clip(question, ilang)
@@ -1815,7 +1769,7 @@ def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_as
     for i, (tgt, text) in enumerate(items[:n_turns]):
         first = i == 0
         if tgt is None:
-            question = (bank_prompt("transcription", ilang, src) if first
+            question = (turn1_prompt("transcription", ilang, src) if first
                         else followup_transcribe(ilang, src, asked))
             if dual_clip is not None:
                 question = qualify_first_clip(question, ilang)
@@ -1824,7 +1778,7 @@ def build_sequential(stem, clip, transcript, targets, ilang, meta, probs, max_as
         elif tgt == DUAL_KEY2:
             question = dual_question(ilang, 1, dual2_task, first)
         else:
-            question = (bank_prompt("translation", ilang, src, tgt) if first
+            question = (turn1_prompt("translation", ilang, src, tgt) if first
                         else fmt(random.choice(FOLLOWUP_TRANSLATE[ilang]), tgt, ilang))
             if dual_clip is not None:
                 question = qualify_first_clip(question, ilang)
@@ -2070,6 +2024,14 @@ def load_source(cv_root, ast_root, src, split, args):
     # Manifests first, so the TSV can be filtered to joinable stems: eight full
     # CommonVoice TSVs are ~1.4 GB of text.
     cv = load_cv_index(cv_root, src, args.tsv_name, keep=set(by_stem))
+    if args.asr_root:
+        # The cleaned transcripts replace the TSV sentence, and a clip the cleaning
+        # dropped (or that is not in this split of the ASR manifests) is left out.
+        path = Path(args.asr_root) / src / args.asr_variant / "CommonVoice" / f"{split}.jsonl"
+        clean = {stem: payload["text"] for stem, payload in load_ast_manifest(path).items()}
+        print(f"[{split}][{src}] {len(clean)} transcripts from {path}", file=sys.stderr)
+        for stem, meta in cv.items():
+            meta["sentence"] = clean.get(stem, "")
 
     records = []
     for stem, per_target in by_stem.items():
@@ -2186,7 +2148,7 @@ def derive_shape_prob(pools, weights, split):
     return prob
 
 
-def build_reference_sets(source_langs):
+def build_reference_sets():
     """Every user turn we can emit that asks for exactly ONE thing.
 
     Shape is read back off the output by exact membership rather than trusted from the
@@ -2220,14 +2182,10 @@ def build_reference_sets(source_langs):
         single_ask |= set(CONTINUATION_ELLIPTIC[ilang])
         single_ask |= qualified[ilang]
         single_ask |= voice_questions
-        for src in source_langs:
-            single_ask |= set(asr_prompts(src, ilang))
+        # The turn-1 prompts are composed, with no finite bank: COMPOSED_PROMPTS.
         for tgt in LANG_NAMES[ilang]:
             for tpl in FOLLOWUP_TRANSLATE[ilang]:
                 single_ask.add(fmt(tpl, tgt, ilang))
-            for src in source_langs:
-                if src != tgt:
-                    single_ask |= set(ast_prompts(src, tgt, ilang))
     prefixes = tuple(p for ilang in INSTRUCTION_LANGS for p in CONTINUATION_EXPLICIT[ilang])
     elliptic = {p for ilang in INSTRUCTION_LANGS
                 for p in list(CONTINUATION_ELLIPTIC[ilang]) + list(qualified[ilang])}
@@ -2245,7 +2203,7 @@ def generate(args):
     shares = parse_lang_shares(args.lang_share)
     modes = ALL_MODES if args.mode == "all" else [args.mode]
     single_ask, voice_questions, voice_kind, cont_prefixes, elliptic_leads, recap_questions = \
-        build_reference_sets(args.source_langs)
+        build_reference_sets()
 
     for split in args.splits:
         pools = {}
@@ -2439,7 +2397,8 @@ def generate(args):
                 # position with the previous segment length, and counting the whole
                 # conversation labelled every multi-audio compound a hybrid.
                 first = content[:leads[0]] if leads else content
-                bundles = [i for i, v in enumerate(first) if v not in single_ask]
+                bundles = [i for i, v in enumerate(first)
+                           if v not in single_ask and v not in COMPOSED_PROMPTS]
                 if not bundles:
                     shape_counts[mode]["sequential"] += 1
                 elif len(first) == 1:
@@ -2564,8 +2523,13 @@ def parse_args():
     p.add_argument("--targets", nargs="*", default=None,
                    help="Restrict to these target languages (default: every one discovered)")
     p.add_argument("--splits", nargs="+", default=["train"])
-    p.add_argument("--variant", default="context", choices=["context", "nocontext"],
+    p.add_argument("--variant", default="context", choices=["context", "nocontext", "clean"],
                    help="AST manifest variant to read translations from")
+    p.add_argument("--asr-root", default=None,
+                   help="$DATA_FOLDER/nemo/asr: take the transcripts from "
+                        "<asr-root>/<lang>/<asr-variant>/CommonVoice/<split>.jsonl instead of "
+                        "the TSV sentence, and keep only the clips found there")
+    p.add_argument("--asr-variant", default="clean")
     p.add_argument("--tsv-name", default="validated.tsv",
                    help="validated.tsv is a superset of train.tsv and joins more clips")
     p.add_argument("--mode", default="all", choices=ALL_MODES + ["all"])
@@ -2591,10 +2555,6 @@ def parse_args():
                         "together' turn, answered by restructuring what was already said "
                         f"and nothing else. Eligible = at least {RECAP_MIN_TURNS} content "
                         "turns. 0 disables.")
-    p.add_argument("--contexts-root", default=None,
-                   help="Override data/contexts, source of the turn-1 transcription "
-                        "({lang}_asr_contexts.json) and translation "
-                        "(translation/{src}-{tgt}_ast_contexts.json) instructions.")
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args()
 
@@ -2602,7 +2562,4 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     random.seed(args.seed)
-    CONTEXTS_ROOT = Path(args.contexts_root) if args.contexts_root else \
-        Path(__file__).resolve().parent.parent.joinpath(*CONTEXTS_RELPATH)
-    print(f"instruction banks: {CONTEXTS_ROOT}", file=sys.stderr)
     generate(args)
