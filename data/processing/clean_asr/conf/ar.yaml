@@ -79,7 +79,7 @@ datasets:
     filters: [speech_rate, normalize_spacing]
 
   Multilingual_TEDx:               # some lines are very long: max_duration at training
-    input: [context/Multilingual_TEDx/train.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
+    input: [context/Multilingual_TEDx/train.jsonl, clean/Multilingual_TEDx/intermediate/train_silence.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
     output: clean/Multilingual_TEDx
     outputs: [base, events]
     nocasepunc: true

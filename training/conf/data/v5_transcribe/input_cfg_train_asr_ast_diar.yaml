@@ -6,8 +6,9 @@
 #   markers, the audio has none): not used for now, the variants of
 #   spontaneous speech already have many lines without markers.
 # - contextual biasing variant: 3% (ASR), 1% (AST).
+# - AST Multilingual_TEDx: events variant 25% + silence lines 1% each (files of >= 100 lines), as in ASR.
 # - silence lines (gaps of long recordings, build_silence.py; fr datasets
-#   with >= 100 lines, and Yodas2 in every language): 1% each, events
+#   with >= 100 lines, Multilingual_TEDx and Yodas2 in every language): 1% each, events
 #   version ([silence] kept) and base version (tag stripped, longer audio).
 #   Few draws on purpose: there are few lines anyway (but Yodas2 en).
 # - recasepunc and non-recasepunc versions of the same data: equal weights.
@@ -778,7 +779,7 @@
         - type: group
           input_cfg:
             - type: multimodal_conversation
-              weight: 0.72
+              weight: 0.7
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train.jsonl # 10.1h, max_dur=79.26, 6 640 rows
             - type: multimodal_conversation
               weight: 0.25
@@ -788,6 +789,14 @@
               weight: 0.03
               tags: {sub_task: contextual_biasing}
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 7 034 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_silence.jsonl # 100 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train_silence.jsonl # 134 rows
         - type: group
           input_cfg:
             - type: multimodal_conversation
@@ -858,7 +867,7 @@
         - type: group
           input_cfg:
             - type: multimodal_conversation
-              weight: 0.72
+              weight: 0.7
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train.jsonl # 171.4h, max_dur=237.65, 100 496 rows
             - type: multimodal_conversation
               weight: 0.25
@@ -868,6 +877,14 @@
               weight: 0.03
               tags: {sub_task: contextual_biasing}
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 111 538 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train_silence.jsonl # 1 572 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/events/train_silence.jsonl # 2 042 rows
         - type: group
           input_cfg:
             - type: multimodal_conversation
@@ -930,7 +947,7 @@
         - type: group
           input_cfg:
             - type: multimodal_conversation
-              weight: 0.72
+              weight: 0.7
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train.jsonl # 97.5h, max_dur=116.24, 49 269 rows
             - type: multimodal_conversation
               weight: 0.25
@@ -940,6 +957,14 @@
               weight: 0.03
               tags: {sub_task: contextual_biasing}
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 54 685 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train_silence.jsonl # 772 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/events/train_silence.jsonl # 999 rows
         - type: group
           input_cfg:
             - type: multimodal_conversation
@@ -1086,7 +1111,7 @@
         - type: group
           input_cfg:
             - type: multimodal_conversation
-              weight: 0.72
+              weight: 0.7
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train.jsonl # 149.0h, max_dur=303.92, 88 919 rows
             - type: multimodal_conversation
               weight: 0.25
@@ -1096,6 +1121,14 @@
               weight: 0.03
               tags: {sub_task: contextual_biasing}
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 98 111 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train_silence.jsonl # 1 359 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/events/train_silence.jsonl # 1 803 rows
         - type: group
           input_cfg:
             - type: multimodal_conversation
@@ -1148,7 +1181,7 @@
         - type: group
           input_cfg:
             - type: multimodal_conversation
-              weight: 0.72
+              weight: 0.7
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train.jsonl # 15.6h, max_dur=860.01, 11 618 rows
             - type: multimodal_conversation
               weight: 0.25
@@ -1158,6 +1191,14 @@
               weight: 0.03
               tags: {sub_task: contextual_biasing}
               manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 12 195 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_silence.jsonl # 124 rows
+            - type: multimodal_conversation
+              weight: 0.01
+              tags: {sub_task: events_silence}
+              manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train_silence.jsonl # 171 rows
         - type: group
           input_cfg:
             - type: multimodal_conversation
@@ -1300,12 +1341,24 @@
       tags: {source_lang: fr, target_lang: es}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train.jsonl # 31.6h, max_dur=106.92, 20 090 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/events/train.jsonl # 20 289 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 22 267 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/train_silence.jsonl # 313 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-es/clean/Multilingual_TEDx/events/train_silence.jsonl # 417 rows
     - type: group
       tags: {source_lang: fr, target_lang: it}
       input_cfg:
@@ -1340,12 +1393,24 @@
       tags: {source_lang: fr, target_lang: pt}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train.jsonl # 19.4h, max_dur=69.32, 12 750 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/events/train.jsonl # 12 868 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 14 187 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/train_silence.jsonl # 196 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-pt/clean/Multilingual_TEDx/events/train_silence.jsonl # 266 rows
     - type: group
       tags: {source_lang: fr, target_lang: en}
       input_cfg:
@@ -1370,12 +1435,24 @@
       tags: {source_lang: fr, target_lang: en}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/train.jsonl # 44.0h, max_dur=106.92, 29 130 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/events/train.jsonl # 29 386 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 32 195 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/train_silence.jsonl # 457 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/fr-en/clean/Multilingual_TEDx/events/train_silence.jsonl # 603 rows
     # AST DE→X
     - type: group
       tags: {source_lang: de, target_lang: fr}
@@ -1412,8 +1489,12 @@
       tags: {source_lang: es, target_lang: fr}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.74
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/train.jsonl # 6.2h, max_dur=49.29, 3 504 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-fr/clean/Multilingual_TEDx/events/train.jsonl # 3 541 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
@@ -1422,22 +1503,42 @@
       tags: {source_lang: es, target_lang: it}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.73
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train.jsonl # 9.5h, max_dur=72.63, 5 399 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/events/train.jsonl # 5 454 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 5 982 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-it/clean/Multilingual_TEDx/events/train_silence.jsonl # 110 rows
     - type: group
       tags: {source_lang: es, target_lang: pt}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train.jsonl # 35.9h, max_dur=104.49, 20 221 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/events/train.jsonl # 20 439 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 22 296 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/train_silence.jsonl # 298 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-pt/clean/Multilingual_TEDx/events/train_silence.jsonl # 422 rows
     - type: group
       tags: {source_lang: es, target_lang: en}
       input_cfg:
@@ -1452,12 +1553,24 @@
       tags: {source_lang: es, target_lang: en}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/train.jsonl # 61.3h, max_dur=237.65, 34 785 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/events/train.jsonl # 35 143 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 38 627 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/train_silence.jsonl # 545 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/es-en/clean/Multilingual_TEDx/events/train_silence.jsonl # 725 rows
     # AST IT→X
     - type: group
       tags: {source_lang: it, target_lang: fr}
@@ -1473,8 +1586,12 @@
       tags: {source_lang: it, target_lang: es}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.74
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/train.jsonl # 4.6h, max_dur=47.20, 2 174 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-es/clean/Multilingual_TEDx/events/train.jsonl # 2 194 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
@@ -1493,12 +1610,24 @@
       tags: {source_lang: it, target_lang: en}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train.jsonl # 46.6h, max_dur=93.60, 23 915 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/events/train.jsonl # 24 131 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 26 524 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/train_silence.jsonl # 355 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/it-en/clean/Multilingual_TEDx/events/train_silence.jsonl # 492 rows
     # AST NL -> X
     - type: group
       tags: {source_lang: nl, target_lang: fr}
@@ -1525,12 +1654,24 @@
       tags: {source_lang: pt, target_lang: es}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train.jsonl # 19.6h, max_dur=182.67, 11 101 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/events/train.jsonl # 11 250 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 12 210 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/train_silence.jsonl # 164 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-es/clean/Multilingual_TEDx/events/train_silence.jsonl # 230 rows
     - type: group
       tags: {source_lang: pt, target_lang: en}
       input_cfg:
@@ -1545,12 +1686,24 @@
       tags: {source_lang: pt, target_lang: en}
       input_cfg:
         - type: multimodal_conversation
-          weight: 0.99
+          weight: 0.72
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/train.jsonl # 50.8h, max_dur=180.85, 29 826 rows
+        - type: multimodal_conversation
+          weight: 0.25
+          tags: {sub_task: events}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/events/train.jsonl # 30 097 rows
         - type: multimodal_conversation
           weight: 0.01
           tags: {sub_task: contextual_biasing}
           manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/train_contextual_biasing.jsonl # 33 122 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/train_silence.jsonl # 447 rows
+        - type: multimodal_conversation
+          weight: 0.01
+          tags: {sub_task: events_silence}
+          manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/ast/pt-en/clean/Multilingual_TEDx/events/train_silence.jsonl # 617 rows
     # AST AR <-> X
     - type: group
       tags: {source_lang: ar, target_lang: fr}
