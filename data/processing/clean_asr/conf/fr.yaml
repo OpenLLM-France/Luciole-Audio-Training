@@ -317,3 +317,15 @@ datasets:
     nocasepunc: true               # 6 % of lines fell back to the lowercase normalized text (no raw text)
     filters: [replace: {rules: missing_hyphens}, speech_rate, normalize_interjections, disfluencies, finish,
               uncased_no_punctuation]   # no hyphen in the source
+
+  Speech-MASSIVE:                  # voice-assistant commands read aloud (MASSIVE): lowercase, no punctuation, numbers in words
+    input: clean/Speech-MASSIVE/intermediate/train.jsonl   # datasets2nemo/jz/speech_massive2nemo.py (on JZ): train (or train_115) + validation
+    output: clean/Speech-MASSIVE
+    nocasepunc: true
+    filters: [speech_rate, normalize_spacing, french_typography]   # "l’après-midi" -> "l'après-midi"
+
+  Speech-MASSIVE_test:             # the official test, kept whole: no speech_rate
+    input: clean/Speech-MASSIVE/intermediate/test.jsonl
+    output: clean/Speech-MASSIVE
+    nocasepunc: true
+    filters: [french_typography]

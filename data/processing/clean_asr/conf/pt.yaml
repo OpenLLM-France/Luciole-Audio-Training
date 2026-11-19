@@ -91,3 +91,15 @@ datasets:
       - events
       - disfluencies: {lang: pt, truncations: false}   # "word-" is mostly a word cut by the cue
       - finish
+
+  Speech-MASSIVE:                  # voice-assistant commands read aloud (MASSIVE): lowercase, no punctuation, numbers in words
+    input: clean/Speech-MASSIVE/intermediate/train.jsonl   # datasets2nemo/jz/speech_massive2nemo.py (on JZ): train (or train_115) + validation
+    output: clean/Speech-MASSIVE
+    nocasepunc: true
+    filters: [speech_rate]
+
+  Speech-MASSIVE_test:             # the official test, kept whole: no speech_rate
+    input: clean/Speech-MASSIVE/intermediate/test.jsonl
+    output: clean/Speech-MASSIVE
+    nocasepunc: true
+    filters: []
