@@ -1,0 +1,33 @@
+# clean/ VERSION of input_cfg_duplex_asr_only.yaml (2026-11-19): word-aligned copies of the cleaned base
+# manifests (audio/duplex/nemo/asr/<lang>/clean/, alignment/align_asr.slurm SET=clean).
+# ASR head only: the ASR group of input_cfg_duplex_fr_en.yaml alone (same manifests, fr/en 50/50), with the
+# agent loss off everywhere (agent_loss: false). LoRA, audio projection, ASR head adapter and pad/bos/eos
+# rows are trained by the ASR loss only. Diagnostic run: can the ASR head transcribe in streaming (word
+# emitted at its end, no delay) when it does not share the LoRA with the agent?
+# ASR fr
+- type: conversation_as_duplex
+  manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/CommonVoice/train_shards/train__OP_0..118_CL_.jsonl
+  asr_only: true  # transcript for the ASR head; no prompt, no agent turn
+  agent_loss: false  # ASR head only
+  weight: 0.167
+- type: conversation_as_duplex
+  manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc_shards/train_recasepunc__OP_0..49_CL_.jsonl
+  asr_only: true  # transcript for the ASR head; no prompt, no agent turn
+  agent_loss: false  # ASR head only
+  weight: 0.167
+- type: conversation_as_duplex
+  manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/VoxPopuli/train_shards/train__OP_0..14_CL_.jsonl
+  asr_only: true  # transcript for the ASR head; no prompt, no agent turn
+  agent_loss: false  # ASR head only
+  weight: 0.166
+# ASR en
+- type: conversation_as_duplex
+  manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/en/clean/CommonVoice/train_shards/train__OP_0..227_CL_.jsonl
+  asr_only: true  # transcript for the ASR head; no prompt, no agent turn
+  agent_loss: false  # ASR head only
+  weight: 0.25
+- type: conversation_as_duplex
+  manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/en/clean/VoxPopuli/train_shards/train__OP_0..36_CL_.jsonl
+  asr_only: true  # transcript for the ASR head; no prompt, no agent turn
+  agent_loss: false  # ASR head only
+  weight: 0.25

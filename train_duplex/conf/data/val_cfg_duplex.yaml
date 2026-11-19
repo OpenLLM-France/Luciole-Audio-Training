@@ -1,0 +1,37 @@
+# Validation sets of the duplex runs, one per name (metrics are suffixed with it), read like the
+# train input_cfg: passed by run_duplex.slurm as data.validation_ds.datasets (duplex_launcher.py --val-cfg)
+# and loaded by duplex_train.py. Each entry is merged over data.validation_ds (batch_size, ...).
+# ASR: the word-aligned dev sets (alignment/align_asr.slurm), with `custom.user_words` for the ASR head.
+asr_fr:
+  input_cfg:
+    - type: conversation_as_duplex
+      asr_only: true
+      agent_loss: false  # as in training; decoded with a silent agent
+      manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/fr/context/CommonVoice/dev.jsonl
+asr_en:
+  input_cfg:
+    - type: conversation_as_duplex
+      asr_only: true
+      agent_loss: false  # as in training; decoded with a silent agent
+      manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/en/context/CommonVoice/dev.jsonl
+# Spontaneous French: CFPP2000 test, out for now (strip_tags_inplace.py also removed real "comment"
+# words there, see input_cfg_duplex_fr_en.yaml).
+# asr_fr_spont:
+#   input_cfg:
+#     - type: conversation_as_duplex
+#       asr_only: true
+#       agent_loss: false
+#       manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/fr/context/CFPP2000/test_recasepunc_randomorder.jsonl
+qa_fr:
+  input_cfg:
+    - type: conversation_as_duplex
+      manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/question-answering/qa_audio-question-only/fr/Vigogne--Alpaca/test.jsonl
+      max_agent_tokens: 200
+# SLUE-SQA5 gold test, documents absent from train only (alignment/slue_unseen_docs.py: 528 of 2375 questions,
+# 466 documents, shuffled). SLUE is split by question: ~77 % of its dev/test documents are train recordings.
+qa_slue_unseen:
+  batch_size: 8  # 40 s SLUE documents: half of validation_ds.batch_size
+  input_cfg:
+    - type: conversation_as_duplex
+      manifest_filepath: ${oc.env:SCRATCH}/speechlm/duplex_data/slue_gold/qa/test_unseen_docs.jsonl
+      max_agent_tokens: 200
