@@ -3,14 +3,27 @@
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
       weight: 0.0034
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0126
     - input_cfg:
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..49_CL_.jsonl
@@ -46,7 +59,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.1126
+      weight: 0.1104
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/PxSLU/train_recasepunc.jsonl
         type: multimodal_conversation
@@ -62,7 +75,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.002
+      weight: 0.0021
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/VoxForge/train_recasepunc.jsonl
         type: multimodal_conversation
@@ -73,7 +86,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0219
+      weight: 0.0215
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ACSYNT/train.jsonl
         type: multimodal_conversation
@@ -99,7 +112,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0036
+      weight: 0.0037
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LINAGORA_Meetings/train.jsonl
         type: multimodal_conversation
@@ -125,11 +138,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.005
+      weight: 0.0051
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_shards/train__OP_0..11_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.2
+        weight: 0.12
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_shards/train__OP_0..11_CL_.jsonl
         tags:
           sub_task: events
@@ -150,22 +163,22 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFAR/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0347
+      weight: 0.034
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_shards/train__OP_0..13_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.2
+        weight: 0.12
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_shards/train__OP_0..13_CL_.jsonl
         tags:
           sub_task: events
@@ -186,18 +199,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LVL-Atril-CTFNN1/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0384
+      weight: 0.0376
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/PFC/train_shards/train__OP_0..11_CL_.jsonl
         type: multimodal_conversation
@@ -223,11 +236,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0355
+      weight: 0.0348
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_TEDx/train_shards/train__OP_0..22_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Multilingual_TEDx/events/train_shards/train__OP_0..22_CL_.jsonl
         tags:
           sub_task: events
@@ -238,18 +251,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0492
+      weight: 0.0482
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/SimSamu/train.jsonl
         type: multimodal_conversation
@@ -265,7 +278,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0032
+      weight: 0.0033
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/VoxPopuli/train_shards/train__OP_0..14_CL_.jsonl
         type: multimodal_conversation
@@ -276,7 +289,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0397
+      weight: 0.0389
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/AfricanAccentedFrench/train_recasepunc.jsonl
         type: multimodal_conversation
@@ -292,11 +305,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0121
+      weight: 0.0123
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc.jsonl
         type: multimodal_conversation
-        weight: 0.22
+        weight: 0.2
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events/train_recasepunc.jsonl
         tags:
           sub_task: events
@@ -317,8 +330,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/train_recasepunc_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.01
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CFPB/events/train_recasepunc_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.01
       type: group
-      weight: 0.0187
+      weight: 0.019
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/CFPP2000/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
         type: multimodal_conversation
@@ -344,7 +367,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0245
+      weight: 0.024
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/CLAPI/train_recasepunc.jsonl
         type: multimodal_conversation
@@ -370,11 +393,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0139
+      weight: 0.0141
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/train_recasepunc_shards/train_recasepunc__OP_0..83_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.2
+        weight: 0.12
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/events/train_recasepunc_shards/train_recasepunc__OP_0..84_CL_.jsonl
         tags:
           sub_task: events
@@ -395,18 +418,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/train_recasepunc_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/train_recasepunc_nonspeech_shards/train_recasepunc_nonspeech__OP_0..7_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/ESLO/events/train_recasepunc_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/ESLO/events/train_recasepunc_nonspeech_shards/train_recasepunc_nonspeech__OP_0..7_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0944
+      weight: 0.0925
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/LesVocaux/train_recasepunc.jsonl
         type: multimodal_conversation
@@ -458,7 +481,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0384
+      weight: 0.0376
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/TCOF_Enfants/train_recasepunc_shards/train_recasepunc__OP_0..13_CL_.jsonl
         type: multimodal_conversation
@@ -484,7 +507,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0378
+      weight: 0.037
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/OFROM/train_recasepunc_shards/train_recasepunc__OP_0..22_CL_.jsonl
         type: multimodal_conversation
@@ -500,174 +523,174 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0489
+      weight: 0.0479
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/train_shards/train__OP_0..96_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.95
+        weight: 0.87
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..146_CL_.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..13_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..13_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.1016
+      weight: 0.0996
     - input_cfg:
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split0_shards/train_split0__OP_0..45_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split0_contextual_biasing_shards/train_split0_contextual_biasing__OP_0..53_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split0_silence.jsonl
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split0_nonspeech_shards/train_split0_nonspeech__OP_0..5_CL_.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split0_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/events/train_split0_nonspeech_shards/train_split0_nonspeech__OP_0..5_CL_.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1478
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split1_shards/train_split1__OP_0..45_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split1_contextual_biasing_shards/train_split1_contextual_biasing__OP_0..53_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split1_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split1_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split1_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1471
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split2_shards/train_split2__OP_0..45_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split2_contextual_biasing_shards/train_split2_contextual_biasing__OP_0..53_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split2_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split2_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split2_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1479
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split3_shards/train_split3__OP_0..45_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split3_contextual_biasing_shards/train_split3_contextual_biasing__OP_0..53_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split3_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split3_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split3_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1475
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split4_shards/train_split4__OP_0..43_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split4_contextual_biasing_shards/train_split4_contextual_biasing__OP_0..51_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split4_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split4_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split4_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1449
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split5_shards/train_split5__OP_0..40_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split5_contextual_biasing_shards/train_split5_contextual_biasing__OP_0..48_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split5_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split5_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split5_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1403
       - input_cfg:
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split6_shards/train_split6__OP_0..32_CL_.jsonl
           type: multimodal_conversation
-          weight: 0.95
+          weight: 0.87
         - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/fr/clean/YouTubeFr/train_split6_contextual_biasing_shards/train_split6_contextual_biasing__OP_0..37_CL_.jsonl
           tags:
             sub_task: contextual_biasing
           type: multimodal_conversation
           weight: 0.03
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6_silence.jsonl
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/train_split6_nonspeech.jsonl
           tags:
-            sub_task: silence
+            sub_task: nonspeech
           type: multimodal_conversation
-          weight: 0.01
-        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split6_silence.jsonl
+          weight: 0.05
+        - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/fr/clean/YouTubeFr/events/train_split6_nonspeech.jsonl
           tags:
-            sub_task: events_silence
+            sub_task: events_nonspeech
           type: multimodal_conversation
-          weight: 0.01
+          weight: 0.05
         type: group
         weight: 0.1246
       type: group
@@ -691,12 +714,22 @@
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/en/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
       weight: 0.0028
     - input_cfg:
@@ -834,7 +867,7 @@
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_shards/train__OP_0..1289_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/disfluencies/train_shards/train__OP_0..1290_CL_.jsonl
         tags:
           sub_task: disfluencies
@@ -845,16 +878,16 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_silence_shards/train_silence__OP_0..30_CL_.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..47_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/events/train_silence_shards/train_silence__OP_0..42_CL_.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/en/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..47_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
       weight: 0.2094
     tags:
@@ -872,22 +905,35 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.2962
+      weight: 0.2838
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.0114
+      weight: 0.0116
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0397
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train.jsonl
         tags:
           sub_task: events
@@ -898,18 +944,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0255
+      weight: 0.0259
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..93_CL_.jsonl
         type: multimodal_conversation
@@ -920,7 +966,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.2599
+      weight: 0.249
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/VoxPopuli/train_shards/train__OP_0..21_CL_.jsonl
         type: multimodal_conversation
@@ -931,11 +977,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.125
+      weight: 0.1198
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/train_shards/train__OP_0..110_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.45
+        weight: 0.37
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/events/train_shards/train__OP_0..110_CL_.jsonl
         tags:
           sub_task: events
@@ -951,18 +997,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..24_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/de/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/de/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..24_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.2819
+      weight: 0.2701
     tags:
       lang: de
     type: group
@@ -978,22 +1024,35 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.2361
+      weight: 0.2343
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.0108
+      weight: 0.0109
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0072
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_TEDx/train_shards/train__OP_0..20_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_TEDx/events/train_shards/train__OP_0..20_CL_.jsonl
         tags:
           sub_task: events
@@ -1004,18 +1063,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.1258
+      weight: 0.1249
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..44_CL_.jsonl
         type: multimodal_conversation
@@ -1026,7 +1085,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.1863
+      weight: 0.1849
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/VoxPopuli/train_shards/train__OP_0..10_CL_.jsonl
         type: multimodal_conversation
@@ -1037,28 +1096,28 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0896
+      weight: 0.0889
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/train_shards/train__OP_0..156_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.95
+        weight: 0.87
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/train_contextual_biasing_shards/train_contextual_biasing__OP_0..215_CL_.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/es/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..34_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/events/train_silence_shards/train_silence__OP_0..6_CL_.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/es/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..34_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.3515
+      weight: 0.3489
     tags:
       lang: es
     type: group
@@ -1078,18 +1137,28 @@
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.0155
+      weight: 0.0158
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_TEDx/train_shards/train__OP_0..9_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_TEDx/events/train_shards/train__OP_0..9_CL_.jsonl
         tags:
           sub_task: events
@@ -1100,18 +1169,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.1414
+      weight: 0.1413
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..11_CL_.jsonl
         type: multimodal_conversation
@@ -1137,7 +1206,7 @@
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/train_shards/train__OP_0..52_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.45
+        weight: 0.37
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/events/train_shards/train__OP_0..52_CL_.jsonl
         tags:
           sub_task: events
@@ -1153,18 +1222,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..7_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/it/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/it/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..7_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.3273
+      weight: 0.3272
     tags:
       lang: it
     type: group
@@ -1180,18 +1249,31 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.1606
+      weight: 0.1586
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.018
+      weight: 0.0182
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0116
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..74_CL_.jsonl
         type: multimodal_conversation
@@ -1202,7 +1284,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.4708
+      weight: 0.4651
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/VoxPopuli/train.jsonl
         type: multimodal_conversation
@@ -1213,11 +1295,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.1115
+      weight: 0.1101
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/train_shards/train__OP_0..19_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.45
+        weight: 0.37
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/nl/clean/Yodas2/events/train_shards/train__OP_0..19_CL_.jsonl
         tags:
           sub_task: events
@@ -1233,18 +1315,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/nl/clean/Yodas2/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.2392
+      weight: 0.2363
     tags:
       lang: nl
     type: group
@@ -1260,18 +1342,31 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.1282
+      weight: 0.1266
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.0172
+      weight: 0.0174
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0116
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_LibriSpeech/train_shards/train__OP_0..7_CL_.jsonl
         type: multimodal_conversation
@@ -1282,11 +1377,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.164
+      weight: 0.162
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_TEDx/train_shards/train__OP_0..17_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Multilingual_TEDx/events/train_shards/train__OP_0..17_CL_.jsonl
         tags:
           sub_task: events
@@ -1297,22 +1392,22 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.2525
+      weight: 0.2495
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/train_shards/train__OP_0..53_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.45
+        weight: 0.37
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/events/train_shards/train__OP_0..53_CL_.jsonl
         tags:
           sub_task: events
@@ -1328,18 +1423,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/train_nonspeech_shards/train_nonspeech__OP_0..10_CL_.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/pt/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/pt/clean/Yodas2/events/train_nonspeech_shards/train_nonspeech__OP_0..10_CL_.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.4382
+      weight: 0.4329
     tags:
       lang: pt
     type: group
@@ -1355,22 +1450,35 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0878
+      weight: 0.0891
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train.jsonl
         type: multimodal_conversation
-        weight: 0.97
+        weight: 0.87
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train_contextual_biasing.jsonl
         tags:
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/train_nonspeech.jsonl
+        tags:
+          sub_task: nonspeech
+        type: multimodal_conversation
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/FLEURS/events/train_nonspeech.jsonl
+        tags:
+          sub_task: events_nonspeech
+        type: multimodal_conversation
+        weight: 0.05
       type: group
-      weight: 0.0065
+      weight: 0.0066
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Speech-MASSIVE/train.jsonl
+      type: multimodal_conversation
+      weight: 0.0058
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train.jsonl
         type: multimodal_conversation
-        weight: 0.7
+        weight: 0.62
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train.jsonl
         tags:
           sub_task: events
@@ -1381,18 +1489,18 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Multilingual_TEDx/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.0357
+      weight: 0.0363
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ARABIC-SPEECH/train.jsonl
         type: multimodal_conversation
@@ -1403,7 +1511,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0056
+      weight: 0.0057
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/ESCWA/all.jsonl
         type: multimodal_conversation
@@ -1425,7 +1533,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.3485
+      weight: 0.3446
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/MGB2/train_shards/train__OP_0..54_CL_.jsonl
         type: multimodal_conversation
@@ -1436,7 +1544,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.29
+      weight: 0.2867
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/MGB5/train.jsonl
         type: multimodal_conversation
@@ -1447,7 +1555,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0031
+      weight: 0.0032
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TARIC/train.jsonl
         type: multimodal_conversation
@@ -1458,7 +1566,7 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0462
+      weight: 0.0469
     - input_cfg:
       - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/TunSwitch/train.jsonl
         type: multimodal_conversation
@@ -1469,11 +1577,11 @@
         type: multimodal_conversation
         weight: 0.03
       type: group
-      weight: 0.0162
+      weight: 0.0164
     - input_cfg:
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/train_shards/train__OP_0..16_CL_.jsonl
         type: multimodal_conversation
-        weight: 0.45
+        weight: 0.37
       - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/asr/ar/clean/Yodas2/events/train_shards/train__OP_0..16_CL_.jsonl
         tags:
           sub_task: events
@@ -1489,22 +1597,34 @@
           sub_task: contextual_biasing
         type: multimodal_conversation
         weight: 0.03
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train_silence.jsonl
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/train_nonspeech.jsonl
         tags:
-          sub_task: silence
+          sub_task: nonspeech
         type: multimodal_conversation
-        weight: 0.01
-      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/events/train_silence.jsonl
+        weight: 0.05
+      - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/asr/ar/clean/Yodas2/events/train_nonspeech.jsonl
         tags:
-          sub_task: events_silence
+          sub_task: events_nonspeech
         type: multimodal_conversation
-        weight: 0.01
+        weight: 0.05
       type: group
-      weight: 0.1578
+      weight: 0.1561
     tags:
       lang: ar
     type: group
     weight: 0.1
+  - input_cfg:
+    - manifest_filepath: ${oc.env:DATA_FOLDER}/nemo/misc/codeswitching/CS-FLEURS/train.jsonl
+      type: multimodal_conversation
+      weight: 0.2
+    - manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/nemo/misc/codeswitching/CVCodeSwitching/train_shards/train__OP_0..18_CL_.jsonl
+      type: multimodal_conversation
+      weight: 0.8
+    tags:
+      lang: mixed
+      sub_task: codeswitching
+    type: group
+    weight: 0.015
   tags:
     task: asr
   type: group

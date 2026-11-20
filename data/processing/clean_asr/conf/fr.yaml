@@ -311,6 +311,12 @@ datasets:
     output: clean/FLEURS
     filters: [add_final_period, finish_hand_punctuated]   # read: no events nor disfluencies
 
+  FLEURS_nonspeech:                # build_nonspeech.py --every-line: each train line with noise / music before, after or around
+    input: clean/FLEURS/intermediate/train_nonspeech.jsonl
+    output: clean/FLEURS
+    outputs: [base, events]
+    filters: [events, add_final_period, finish_hand_punctuated]
+
   VoxPopuli:
     input: context/VoxPopuli/train.jsonl
     output: clean/VoxPopuli

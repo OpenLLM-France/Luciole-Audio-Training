@@ -198,7 +198,7 @@ def main():
             if args.task == "ast" or not glob.glob(f"{src}/train*.jsonl"):
                 src = f"{context}/{ds}"
             inputs = [f for f in sorted(glob.glob(f"{src}/train*.jsonl"))
-                      if "max30" not in os.path.basename(f) and "_silence" not in os.path.basename(f)
+                      if "max30" not in os.path.basename(f) and "_silence" not in os.path.basename(f) and "_nonspeech" not in os.path.basename(f)
                       and not (src.startswith(context) and "_randomorder" in os.path.basename(f))]   # context/ copies unused by the configs
             if not inputs:
                 raise SystemExit(f"[{ds}] no input in {src}/")

@@ -12,7 +12,9 @@ Each dataset of the config (conf/fr.yaml, its header says how to write one) has:
 A filter rewrites the text of the Assistant turn or drops the line; lines left with no letter
 nor digit (only "euh", "[laughter]" in an output without tags, a [silence] line) are dropped, but
 for `empty_fraction` of them (config), kept with an empty text: nothing to transcribe (train only:
-an empty reference has no place in dev and test files). Then the prompt (first User text turn) is chosen from the final text
+an empty reference has no place in dev and test files). In the `_silence` / `_nonspeech` inputs (build_silence.py, build_nonspeech.py)
+`silence_empty_fraction` of them (config, default 1.0: every "alone" gap, the yaml weight of the
+file sets how often the model sees one). Then the prompt (first User text turn) is chosen from the final text
 (ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
 (config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
 (composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says) or
@@ -1253,19 +1255,28 @@ class SpeakerLabels(Filter):
         return True
 
 
+def _read_lengths(paths):
+    """{audio path: seconds} of TSV files "<audio path>\\t<seconds>"."""
+    lengths = {}
+    for p in paths:
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                path, seconds = line.rstrip("\n").rsplit("\t", 1)
+                lengths[path] = float(seconds)
+    return lengths
+
+
 class _AudioLengths:
     """Length of audio files: headers, or a TSV "<audio path>\\t<seconds>" relative to root
     (audio_durations.py) for audio not reachable from here (Yodas2, GigaSpeech: JZ only)."""
 
     def __init__(self, ctx, durations=None):
-        self.lengths = {}
-        if durations:
-            with open(os.path.join(ctx["root"], durations), encoding="utf-8") as f:
-                for line in f:
-                    path, seconds = line.rstrip("\n").rsplit("\t", 1)
-                    self.lengths[path] = float(seconds)
+        self.lengths = _read_lengths([os.path.join(ctx["root"], durations)] if durations else [])
+        self.extra = ctx.get("extra_lengths") or {}          # --durations, shared by every filter
 
     def __call__(self, path):
+        if path not in self.lengths and path in self.extra:
+            return self.extra[path]
         if path not in self.lengths:
             import soundfile as sf
             info = sf.info(path)                        # raises when missing: no silent keep
@@ -1526,7 +1537,7 @@ class PeriodIfNextSentence(Filter):
         """{wav: offsets of the cues followed by a cue starting with a capitalised common word}"""
         by_wav = defaultdict(list)
         for path in inputs:
-            if "_silence" in os.path.basename(path):
+            if re.search(r"_silence|_nonspeech", os.path.basename(path)):
                 continue
             with open(path, encoding="utf-8") as f:
                 for line in f:
@@ -1885,12 +1896,19 @@ def main():
     p.add_argument("--examples", type=int, default=3, help="examples printed per filter and file")
     p.add_argument("--output-dir", help="write <dir>/<dataset>/ instead of each dataset's output (e.g. to test in a scratch dir)")
     p.add_argument("--overwrite", action="store_true", help="overwrite existing outputs")
+    p.add_argument("--only", help="write only the inputs whose file name contains this (e.g. _silence); the "
+                   "filters still see every input of the dataset")
     p.add_argument("--root", help="override the config's root (e.g. to test on a local copy)")
     p.add_argument("--prompts", choices=["fixed", "compositional", "ast"], help="override the config's prompts")
+    p.add_argument("--durations", nargs="*", default=[],
+                   help="more audio_durations.tsv files or globs (absolute paths), read by every audio_bounds / "
+                   "fill_duration on top of the config's (e.g. build_nonspeech.py's *_nonspeech_durations.tsv: "
+                   "no header read per mixed file)")
     args = p.parse_args()
 
     cfg = load_config(args.config)
-    ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", [])}
+    ctx = {"tag_tables": cfg.get("tag_tables", {}), "tags": cfg.get("tags", []),
+           "extra_lengths": _read_lengths(sorted({f for g in args.durations for f in glob.glob(g, recursive=True)}))}
     prompts = args.prompts or cfg.get("prompts", "fixed")
     sys.path.insert(0, os.path.join(REPO_ROOT, "data", "contexts"))
     if prompts == "compositional":
@@ -1911,6 +1929,7 @@ def main():
         raise SystemExit(f"blocks named like a filter: {sorted(set(blocks) & set(FILTERS))}")
     explicit = cfg.get("explicit_fraction", {"default": 0.05, "with_output": 0.15})
     empty_fraction = cfg.get("empty_fraction", 0.0)
+    silence_empty_fraction = cfg.get("silence_empty_fraction", 1.0)
 
     datasets = cfg["datasets"]
     if args.datasets:
@@ -1948,6 +1967,8 @@ def main():
             # that a prompt asking for markers may get none (the filters may drop a few)
             lines = dcfg.get("output_lines") if output != "base" else None
             for path in paths:
+                if args.only and args.only not in os.path.basename(path):
+                    continue
                 select = None
                 if lines:
                     with open(path, "rb") as f:
@@ -1963,8 +1984,9 @@ def main():
                     print(f"skip {path}: {out} exists (use --overwrite)")
                     continue
                 is_eval = re.match(r"(dev|test)\b", os.path.basename(path))
+                is_silence = re.search(r"_silence|_nonspeech", os.path.basename(path)) is not None
                 process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples,
-                        0.0 if is_eval else empty_fraction, select)
+                        0.0 if is_eval else silence_empty_fraction if is_silence else empty_fraction, select)
 
 
 if __name__ == "__main__":

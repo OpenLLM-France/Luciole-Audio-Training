@@ -49,6 +49,12 @@ datasets:
     output: clean/FLEURS
     filters: [add_final_period, finish]
 
+  FLEURS_nonspeech:                # build_nonspeech.py --every-line: each train line with noise / music before, after or around
+    input: clean/FLEURS/intermediate/train_nonspeech.jsonl
+    output: clean/FLEURS
+    outputs: [base, events]
+    filters: [events, add_final_period, finish]
+
   Multilingual_LibriSpeech:        # lowercase, no punctuation
     input: [context/Multilingual_LibriSpeech/train.jsonl, context/Multilingual_LibriSpeech/dev.jsonl, context/Multilingual_LibriSpeech/test.jsonl]
     output: clean/Multilingual_LibriSpeech
@@ -62,7 +68,7 @@ datasets:
     filters: [speech_rate, finish, uncased_no_punctuation]
 
   Multilingual_TEDx:               # "(Applause)" notes; some lines are very long: max_duration at training
-    input: [context/Multilingual_TEDx/train.jsonl, clean/Multilingual_TEDx/intermediate/train_silence.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
+    input: [context/Multilingual_TEDx/train.jsonl, clean/Multilingual_TEDx/intermediate/train_nonspeech.jsonl, context/Multilingual_TEDx/dev.jsonl, context/Multilingual_TEDx/test.jsonl]
     output: clean/Multilingual_TEDx
     outputs: [base, events]
     filters:

@@ -40,6 +40,12 @@ datasets:
     output: clean/FLEURS
     filters: [add_final_period, finish]
 
+  FLEURS_nonspeech:                # build_nonspeech.py --every-line: each train line with noise / music before, after or around
+    input: clean/FLEURS/intermediate/train_nonspeech.jsonl
+    output: clean/FLEURS
+    outputs: [base, events]
+    filters: [events, add_final_period, finish]
+
   Multilingual_LibriSpeech:        # lowercase, no punctuation
     input: [context/Multilingual_LibriSpeech/train.jsonl, context/Multilingual_LibriSpeech/dev.jsonl, context/Multilingual_LibriSpeech/test.jsonl]
     output: clean/Multilingual_LibriSpeech

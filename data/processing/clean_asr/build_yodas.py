@@ -8,10 +8,12 @@ punctuation (no "?", most periods gone) and got commas inserted mid-phrase
     raw cues: "plus tard… la permutation et ainsi de suite. Bien, donc ce sont en quelque sorte"
     Yodas   : "plus tard la permutation et ainsi de suite Bien donc ce sont en quelque sorte,"
 
-Sources (raw/transcript/fr/YODAS):
-    audios_merged/fr000/audio/<shard>/<video>-<first cue>-<start>-<end>.wav   segments merged from
-                                                                             consecutive cues (times in 10 ms)
-    fr000/text/*.txt                                                         one cue per line: "<cue id> <text>"
+Sources:
+    raw/transcript/fr/YODAS/audios_merged/fr000/audio/<shard>/<video>-<first cue>-<start>-<end>.wav
+        segments merged from consecutive cues (times in 10 ms)
+    raw/transcript/multilang/yodas2/data/fr000/text/*.json
+        [{"audio_id": <video>, "text": {<cue id>: <text>}}], the same cues as YODAS v1
+        (raw/transcript/multilang/yodas, fr000/text/*.txt), which is no longer needed
 
 Each segment's text is the cues of its video lying within [start, end],
 joined with a space, written as is (digits, symbols, [Musique], [ __ ]).
@@ -49,9 +51,10 @@ from rebuild.common import audio_turn
 
 
 YODAS = f"{os.environ['DATA_FOLDER']}/raw/transcript/fr/YODAS"
+YODAS2 = f"{os.environ['DATA_FOLDER']}/raw/transcript/multilang/yodas2/data"
 OUTPUT = f"{os.environ['DATA_FOLDER']}/nemo/asr/fr/clean/Yodas/intermediate/train.jsonl"
-CONTEXTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "contexts",
-                        "fr_asr_contexts.json")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CONTEXTS = os.path.join(REPO_ROOT, "data", "contexts", "fr_asr_contexts.json")
 
 
 def parse_id(seg_id):
@@ -75,12 +78,13 @@ def list_segments(merged_dir, limit):
 
 def load_cues(text_dir, videos):
     cues = defaultdict(list)
-    for fn in tqdm(sorted(glob.glob(os.path.join(text_dir, "*.txt"))), desc="raw cues", leave=False):
+    for fn in tqdm(sorted(glob.glob(os.path.join(text_dir, "*.json"))), desc="raw cues", leave=False):
         with open(fn, encoding="utf-8") as f:
-            for line in f:
-                cue_id, _, text = line.rstrip("\n").partition(" ")
-                video, idx, start, end = parse_id(cue_id)
-                if video in videos:
+            for entry in json.load(f):
+                if entry["audio_id"] not in videos:
+                    continue
+                for cue_id, text in entry["text"].items():
+                    video, idx, start, end = parse_id(cue_id)
                     cues[video].append((start, end, idx, text.strip()))
     for v in cues.values():
         v.sort()
@@ -99,7 +103,8 @@ def draw_prompt(contexts, rng):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--yodas", default=YODAS, help="raw YODAS root")
+    p.add_argument("--yodas", default=YODAS, help="raw YODAS root (audios_merged)")
+    p.add_argument("--yodas2", default=YODAS2, help="YODAS2 data root (subtitle cues)")
     p.add_argument("--subset", default="fr000")
     p.add_argument("--output", default=OUTPUT)
     p.add_argument("--seed", type=int, default=1234)
@@ -116,7 +121,7 @@ def main():
 
     segs = list_segments(os.path.join(args.yodas, "audios_merged", args.subset, "audio"), args.limit)
     videos = {parse_id(os.path.basename(s)[:-4])[0] for s in segs}
-    cues = load_cues(os.path.join(args.yodas, args.subset, "text"), videos)
+    cues = load_cues(os.path.join(args.yodas2, args.subset, "text"), videos)
 
     records, n_empty, n_cross, n_first_mismatch = [], 0, 0, 0
     for path in tqdm(segs, desc="segments", leave=False):
