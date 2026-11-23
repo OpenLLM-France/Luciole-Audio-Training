@@ -1,6 +1,6 @@
-# clean/ VERSION of input_cfg_duplex_asr_only.yaml (2026-11-19): word-aligned copies of the cleaned base
+# clean/ VERSION of input_cfg_qa_asr_only.yaml (2026-11-19): word-aligned copies of the cleaned base
 # manifests (audio/duplex/nemo/asr/<lang>/clean/, alignment/align_asr.slurm SET=clean).
-# ASR head only: the ASR group of input_cfg_duplex_fr_en.yaml alone (same manifests, fr/en 50/50), with the
+# ASR head only: the ASR group of input_cfg_qa.yaml alone (same manifests, fr/en 50/50), with the
 # agent loss off everywhere (agent_loss: false). LoRA, audio projection, ASR head adapter and pad/bos/eos
 # rows are trained by the ASR loss only. Diagnostic run: can the ASR head transcribe in streaming (word
 # emitted at its end, no delay) when it does not share the LoRA with the agent?

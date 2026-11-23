@@ -61,9 +61,9 @@ def _validate_and_log(trainer, model, datamodule, step, tag, ckpt_path=None):
         logging.info(f"[{tag}] logged {len(scalars)} scalars at step {step}: {sorted(scalars)}")
 
 
-@hydra_runner(config_path="conf", config_name="duplex_luciole")
+@hydra_runner(config_path="conf", config_name="duplex_qa")
 def train(cfg):
-    # Validation sets in their own YAML (conf/data/val_cfg_duplex.yaml), passed as a path like the train
+    # Validation sets in their own YAML (conf/data/val_cfg_qa.yaml), passed as a path like the train
     # input_cfg; loaded before resolve so its ${oc.env:...} interpolations are resolved with the rest.
     if isinstance(val_sets := cfg.data.validation_ds.get("datasets"), str):
         with open_dict(cfg):

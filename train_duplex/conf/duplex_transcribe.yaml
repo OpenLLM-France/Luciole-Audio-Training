@@ -1,6 +1,11 @@
-# Duplex STT (streaming voice -> text, full-duplex turn-taking) for Luciole, single phase of 10k steps.
+# Luciole-Audio-Transcribe streaming: streaming ASR / AST for Luciole (the v5_transcribe logic, the instruction
+# in the system prompt sets the task and the style), single head. Derived from duplex_qa.yaml (2 heads,
+# ASR/QA, the v4 logic): only the differences are commented below, the rest is the same.
+# The agent channel writes the transcript (or translation) WHILE the user speaks: conversation_as_duplex with
+# `agent_timing: simultaneous` places each word from its end + lag (conf/data/input_cfg_transcribe.yaml).
+#
 # Run with the NeMo fork, branch luciole_duplexstt_3.1 (trainable_head_rows + conversation_as_duplex):
-#   examples/speechlm2/stt_duplex_train.py --config-path=<this dir> --config-name=duplex_luciole
+#   examples/speechlm2/stt_duplex_train.py --config-path=<this dir> --config-name=duplex_transcribe
 # Encoder: nvidia/nemotron-3.5-asr-streaming-0.6b (cache-aware FastConformer, 80 ms frames).
 # Every setting that differs from NeMo's examples/speechlm2/conf/duplex_stt.yaml is commented; the
 # reasons are measured in ../README.md (CPU tests of 2026-09-30).
@@ -28,27 +33,12 @@ model:
   # The text channel is mostly <pad>: down-weight it so the answers still drive the loss.
   token_loss_weight: {pad: 0.25, bos: 1.0, eos: 1.0, text: 1.0}
 
-  # Second head: the user transcript, written while the user speaks (streaming ASR). Its labels come from
-  # the word timestamps of alignment/align_asr_manifests.py (`custom.user_words`), placed by
-  # conversation_as_duplex from each word's end; examples without them do not train it (asr_loss_mask).
-  # With trainable_head_rows, the ASR head shares the frozen LM head and has its own pad/bos/eos rows.
-  predict_user_text: true
-  asr_loss_weight: 1.0
-  # Low-rank residual adapter on the hidden state read by the ASR head (0 = none): the two heads read the
-  # same hidden state and otherwise only differ by their special rows.
-  asr_head_adapter_rank: 128
-  # ASR channel input embedding: the frozen embed_tokens + a trainable channel vector (tells the two text
-  # channels apart) and pad/bos/eos rows (SpecialRowsEmbedding). false = a trainable copy of the whole
-  # table (262M params), if the shared one does not learn.
-  share_asr_embeddings: true
-  # Delay of the ASR channel, in frames. >= 1 puts a <pad> before the user channel, so the ASR input of frame 0
-  # is <pad> as in inference (_get_asr_bos_embedding) and the head learns to emit the user <bos> (used by the
-  # streaming barge-in logic). With 0, ASR cuts (user supervision at 0) have their <bos> at frame 0: fed as
-  # input, never predicted, and free running then gets <pad> there and stays silent (SLUE WER 0.99 vs 0.25).
-  delay_source_text_by: 1
-  # Probability of replacing each text token of the ASR channel input by <pad> in training (labels unchanged).
-  # Against exposure bias; measured before the frame-0 <bos> fix above, so its effect is still unknown.
-  asr_input_dropout: 0.0
+  # Single head: the transcript IS the agent channel (prompt-driven, streamed while the user speaks), so no
+  # separate prompt-less ASR head. Its BOS is placed one frame after the user turn start by the parser, so it
+  # is a label even without a system prompt (frame 0 is only an input, <pad> in inference).
+  predict_user_text: false
+  # Validation: WER of the agent channel (BLEU is still logged).
+  agent_wer: true
 
   # Trained: audio projection, LoRA, pad/bos/eos head rows. Frozen: encoder, LLM base weights.
   freeze_params:
@@ -121,9 +111,11 @@ data:
   input_roles: ["user"]
   output_roles: ["agent"]
   word_align_position: left
+  # The agent text is timestamped (agent_timing: simultaneous): place it word by word instead of in one block.
+  agent_text_timestamps: true
 
   train_ds:
-    input_cfg: null  # conf/data/input_cfg_duplex_fr_en.yaml, passed on the command line
+    input_cfg: null  # conf/data/input_cfg_transcribe.yaml, passed on the command line
     sample_rate: ${data.source_sample_rate}
     # Read by the multimodal_conversation adapter under conversation_as_duplex.
     audio_locator_tag: "<|audio|>"
@@ -147,7 +139,8 @@ data:
     min_duration: 0.5
     max_duration: 480
     use_bucketing: true
-    # Explicit bins, in frames (estimate_bins_duplex.slurm on input_cfg_duplex_fr_en.yaml, 30k examples, 24 buckets;
+    # TODO: re-estimate on input_cfg_transcribe.yaml (short ASR / AST segments only, no 2-min QA timelines).
+    # Explicit bins, in frames (estimate_bins_duplex.slurm on input_cfg_qa.yaml, 30k examples, 24 buckets;
     # 1-4 s and 110 s added by hand, timelines of 0.5-147 s). Without them lhotse estimates them at startup. The
     # default linspace(min_duration, max_duration) of batch_duration gave 40 s wide buckets, 2 s ASR segments padded
     # to 40 s QA timelines in the same batch, up to 3.6x the budget in frames: OOM in the ASR cross_entropy of
@@ -167,7 +160,7 @@ data:
     seed: 42
     shard_seed: 42
     force_finite: true
-    datasets: null  # conf/data/val_cfg_duplex.yaml, passed on the command line (like train_ds.input_cfg)
+    datasets: null  # conf/data/val_cfg_transcribe.yaml, passed on the command line (like train_ds.input_cfg)
 
 # Baseline validation at step 0, then validation at these steps (duplex_train.py, as in ../training/conf/base.yaml).
 validate_before_fit: true
@@ -178,7 +171,7 @@ validation_schedule:
 ############ Experiment Manager ############
 exp_manager:
   exp_dir: null
-  name: duplex-stt-luciole
+  name: duplex-transcribe-luciole
   create_tensorboard_logger: true
   create_checkpoint_callback: true
   use_datetime_version: false

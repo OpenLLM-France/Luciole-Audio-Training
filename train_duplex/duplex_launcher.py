@@ -13,7 +13,8 @@ this script creates it, like ../training/slurm_launcher.py does for the SALM run
 Examples:
   python duplex_launcher.py --job-name smoke --qos dev --gpus 1 --time 00:30:00 \
       --set ++trainer.max_steps=50 --set ++trainer.val_check_interval=25
-  python duplex_launcher.py --job-name duplex_test_v1
+  python duplex_launcher.py --model qa --job-name duplex_test_v1
+  python duplex_launcher.py --model transcribe --job-name transcribe_v1
   python duplex_launcher.py --job-name duplex_fr_v1 --input-cfg conf/data/input_cfg_duplex_fr.yaml
   python duplex_launcher.py --job-name duplex_test_v1 --resume    # continue from its last checkpoint
 """
@@ -51,13 +52,17 @@ def main():
                              "(default: run_duplex.slurm's --job-name)")
     parser.add_argument("--root", default=DEFAULT_ROOT,
                         help="Folder holding one subfolder per experiment (default: %(default)s)")
-    parser.add_argument("--config", default=None, help="CONFIG_NAME under conf/ (default: duplex_luciole)")
+    parser.add_argument("--model", choices=["qa", "transcribe"], default=None,
+                        help="qa: ASR/QA, 2 heads (v4 logic); transcribe: Luciole-Audio-Transcribe streaming, "
+                             "1 head (v5 logic). Picks conf/duplex_<model>.yaml, conf/data/input_cfg_<model>.yaml "
+                             "and conf/data/val_cfg_<model>.yaml (default in run_duplex.slurm: qa)")
+    parser.add_argument("--config", default=None, help="CONFIG_NAME under conf/ (default: duplex_<model>)")
     parser.add_argument("--input-cfg", default=None,
                         help="INPUT_CFG, relative to train_duplex/ or absolute "
-                             "(default: conf/data/input_cfg_duplex_fr_en.yaml)")
+                             "(default: conf/data/input_cfg_<model>.yaml)")
     parser.add_argument("--val-cfg", default=None,
                         help="VAL_CFG (validation sets), relative to train_duplex/ or absolute "
-                             "(default: conf/data/val_cfg_duplex.yaml)")
+                             "(default: conf/data/val_cfg_<model>.yaml)")
     parser.add_argument("--llm-model", default=None, help="Override LLM_MODEL")
     parser.add_argument("--nemo-dir", default=None, help="Override NEMO_DIR (default: $HOME/NeMo_Duplex)")
     parser.add_argument("--set", dest="overrides", action="append", default=[], metavar="KEY=VAL",
@@ -96,6 +101,7 @@ def main():
         "LOCAL_FOLDER": str(HERE),
     }
     for name, value in [
+        ("MODEL", args.model),
         ("CONFIG_NAME", args.config),
         ("INPUT_CFG", args.input_cfg),
         ("VAL_CFG", args.val_cfg),

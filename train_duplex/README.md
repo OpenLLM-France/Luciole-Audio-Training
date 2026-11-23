@@ -15,9 +15,11 @@ sur le canal texte de l'agent.
 
 | Fichier | Rôle |
 |---|---|
-| `conf/duplex_luciole.yaml` | La config : encodeur et LLM gelés ; on entraîne la projection, LoRA r=128 sur toutes les projections et les lignes pad/bos/eos de la tête |
-| `conf/data/input_cfg_duplex_fr_en.yaml` | Mix de test : 13 manifests, fr + en, QA 40 % / ASR 40 % / AST 20 % ; l'ASR pointe vers les copies alignées de `duplex/nemo` (MLS en recasepunc) |
-| `conf/data/val_cfg_duplex.yaml` | Jeux de validation (asr_fr, asr_en, qa_fr, qa_slue_unseen), passés comme l’input_cfg (`--val-cfg`) |
+| `conf/duplex_qa.yaml` | Modèle **ASR/QA** (v4, 2 têtes) : encodeur et LLM gelés ; on entraîne la projection, LoRA r=128 sur toutes les projections, la tête ASR et les lignes pad/bos/eos de la tête |
+| `conf/data/input_cfg_qa.yaml` | Son mix : fr + en, QA / ASR / AST ; ASR et AST pointent vers les copies alignées de `duplex/nemo/.../clean/` (MLS en recasepunc) |
+| `conf/data/val_cfg_qa.yaml` | Ses jeux de validation (asr_fr, asr_en, qa_fr, qa_slue_unseen), passés comme l’input_cfg (`--val-cfg`) |
+| `conf/data/input_cfg_qa_asr_only.yaml` | Diagnostic : la tête ASR seule (perte agent coupée) |
+| `conf/duplex_transcribe.yaml`, `conf/data/{input,val}_cfg_transcribe.yaml` | Modèle **Transcribe** (v5, 1 tête), voir [plus bas](#luciole-audio-transcribe-streaming-une-tête) |
 | `conf/data/input_cfg_duplex_fr.yaml` | Mix français complet (46 manifests), **généré** par `make_input_cfg.py` à partir du v4 |
 | `run_duplex.slurm` | Lance `duplex_train.py` avec le NeMo du fork (vérifie la branche) sur 1 nœud de 4×H100 |
 | `duplex_train.py` | `examples/speechlm2/stt_duplex_train.py` du fork + validation au step 0 et `validation_schedule` repris de `../training/salm_train.py` |
@@ -45,7 +47,7 @@ Il faut aussi l'encodeur dans
 `$SCRATCH/speechlm/models/nemotron-3.5-asr-streaming-0.6b.nemo` (copié le 2026-09-30).
 
 Les index `.idx` du duplex sont à part de ceux de SALM, sous `$ALL_CCFRSCRATCH/audio/duplex/idx`
-(`indexes_root` de `conf/duplex_luciole.yaml`). Il faut les construire une fois par mix avant d'entraîner :
+(`indexes_root` de `conf/duplex_qa.yaml`). Il faut les construire une fois par mix avant d'entraîner :
 sinon le job les crée à la volée, depuis chaque rang, au démarrage. `build_indexes.py` ignore le type
 `conversation_as_duplex`, donc `build_indexes_duplex.slurm` lui passe des copies où il devient
 `multimodal_conversation`. Un `.idx` ne contient que les positions des lignes du jsonl, donc le résultat est le même.
@@ -58,9 +60,11 @@ sbatch build_indexes_duplex.slurm   # mix de test + mix fr (780 + 1875 fichiers,
 ```bash
 cd train_duplex
 # Test court d'abord (dev QoS, 1 GPU, 50 pas)
-python duplex_launcher.py --job-name smoke --qos dev --gpus 1 --time 00:30:00 \
+# --model qa|transcribe choisit conf/duplex_<model>.yaml + conf/data/{input,val}_cfg_<model>.yaml (défaut : qa)
+python duplex_launcher.py --model qa --job-name smoke --qos dev --gpus 1 --time 00:30:00 \
     --set ++trainer.max_steps=50 --set ++trainer.val_check_interval=25
-python duplex_launcher.py --job-name duplex_test_v1                       # 10k pas, mix de test
+python duplex_launcher.py --model qa --job-name duplex_test_v1            # ASR/QA, 2 têtes
+python duplex_launcher.py --model transcribe --job-name transcribe_v1     # Transcribe, 1 tête
 python duplex_launcher.py --job-name duplex_fr_v1 --input-cfg conf/data/input_cfg_duplex_fr.yaml
 python duplex_launcher.py --job-name duplex_test_v1 --resume              # reprend au dernier checkpoint
 ```
@@ -115,6 +119,48 @@ Bugs trouvés et corrigés par cette répétition :
 - la présence des sidecars `.idx` pour les manifests `conversation_as_duplex` (mêmes fichiers que le v4) ;
 - les performances du dataloader : la tokenisation de la réponse se fait dans les workers.
 
+## Luciole-Audio-Transcribe streaming (une tête)
+
+Deux modèles streaming partagent le même code (`DuplexSTTModel`) :
+
+| | Logique | Têtes | Config | Mix |
+|---|---|---|---|---|
+| ASR/QA | v4 (luciole-audio) : écoute, puis répond | 2 : agent + tête ASR sans prompt | `conf/duplex_qa.yaml` | `input_cfg_qa.yaml` |
+| Transcribe | v5 (luciole-audio-transcribe) : transcrit ou traduit **pendant** l'audio | 1 : l'agent | `conf/duplex_transcribe.yaml` | `input_cfg_transcribe.yaml` |
+
+Dans le modèle transcribe, l'instruction de la ligne (tâche, style de casse et de ponctuation, langue cible) est le
+prompt système, et le canal agent écrit la réponse au fil de l'audio. Une tête ASR sans prompt ferait doublon : il n'y en a pas
+(`predict_user_text: false`). Le fork (branche `luciole_duplexstt_3.1`) ajoute pour ça :
+- `agent_timing: simultaneous` dans `conversation_as_duplex` (`cutset.py`) :
+  - BOS une trame après le début du tour utilisateur (jamais à la trame 0, qui n'est qu'une entrée, `<pad>` en inférence) ;
+  - en transcription (mots de la réponse = `user_words`), chaque mot émis à partir de sa fin + `lag` (0,16 s) ;
+  - en traduction, le mot i sur n à la fin du mot source `ceil((i+1)·n_src/n) − 1 + wait_words` (2), + `lag` ;
+  - EOS `hold` après le dernier token. Les lignes sans `user_words` sont écartées.
+- `data.agent_text_timestamps: true` : le dataset place le texte agent mot par mot au lieu d'un bloc ;
+- `model.agent_wer: true` : WER du canal agent en validation (en plus du BLEU).
+
+Vérifié sur CPU :
+- `tmp_tests/test_simultaneous_cpu.py` (ESLO, CV en, AST fr-en, 150 exemples, 0 erreur) : BOS à la trame 1, réponse
+  relue à l'identique, EOS après le dernier token, aucun mot avant sa fin + `lag` (délai médian 0,16 s, max 0,56 s
+  quand les tokens du mot précédent occupent encore les trames) ;
+- `tmp_tests/smoke_config_cpu.py --config duplex_transcribe --manifest <aligné> --agent-timing simultaneous` :
+  105,9M paramètres entraînés, prompt v5 en prompt système, loss finie, rechargement du checkpoint.
+
+```bash
+python duplex_launcher.py --model transcribe --job-name transcribe_v1
+```
+
+Pas encore fait :
+- les bins de bucketing, à réestimer sur ce mix (`estimate_bins_duplex.slurm`) ;
+- les index `.idx` du jeu de validation `context/`, déjà construits pour le mix 2 têtes ;
+- les variantes events, disfluences et biaisage, et les autres paires AST (leurs textes ne sont pas alignés) ;
+- une validation AST (pas de dev AST aligné) ;
+- le long format : un exemple n'a qu'un énoncé (BOS … EOS). Pour l'audio long, il faudra concaténer des énoncés
+  à l'entraînement, ou relancer à chaque segment VAD en inférence.
+
+`inference/stream_duplex.py` ne lit que le canal agent : il convient tel quel (avec `--prompt`, l'instruction de transcription
+ou de traduction), mais il n'a pas encore tourné sur un checkpoint transcribe.
+
 ## Alignement ASR
 
 La tête ASR (`predict_user_text`) écrit la transcription de l'utilisateur pendant qu'il parle : il lui faut
@@ -146,7 +192,7 @@ mkdir -p $SCRATCH/speechlm/duplex_align/logs && sbatch --array=0-37 align_asr.sl
 sautée : relancer la même commande ne refait que les fichiers manquants.
 `align_debug.slurm` affiche les tokens alignés et l'argmax CTC par trame de quelques lignes.
 
-**Version `clean/` (2026-11-19).** Le mix `conf/data/input_cfg_duplex_fr_en_clean.yaml` (et `input_cfg_duplex_asr_only_clean.yaml`)
+**Version `clean/` (2026-11-19).** Le mix `conf/data/input_cfg_qa.yaml` (et `input_cfg_qa_asr_only.yaml`)
 prend l'ASR et l'AST dans les manifests nettoyés de base (`audio/nemo/<tâche>/<langue>/clean/`, les mêmes que le
 v5_transcribe), réalignés sous `audio/duplex/nemo/.../clean/`. Ils sont sans tags d'événements et sans hésitations,
 y compris pour le spontané : la tête ASR n'apprend plus le verbatim. CFPP2000 revient dans le mix, et `strip_tags_inplace`
@@ -159,7 +205,7 @@ sbatch align_asr_test.slurm 200 clean; sbatch align_asr_test.slurm 200 clean_spo
 sbatch --export=ALL,SET=clean --array=0-37 align_asr.slurm         # lu : CV fr/en, VoxPopuli fr/en, MLS fr recasepunc (449 fichiers)
 sbatch --export=ALL,SET=clean_spont --array=0-9 align_asr.slurm    # spontané, MAX_WER 0.8 : ESLO, CFPP2000, LVL-Atril (116 fichiers)
 sbatch --dependency=afterok:<job SET=clean> --export=ALL,VARIANT=clean join_ast_words.slurm   # AST CV fr-en / en-fr
-cd .. && sbatch build_indexes_duplex.slurm conf/data/input_cfg_duplex_fr_en_clean.yaml conf/data/input_cfg_duplex_asr_only_clean.yaml
+cd .. && sbatch build_indexes_duplex.slurm conf/data/input_cfg_qa.yaml conf/data/input_cfg_qa_asr_only.yaml
 ```
 
 ## Tests CPU
@@ -230,7 +276,7 @@ Il n'a pas convergé (répétitions, pas encore d'EOS), ce qui est attendu d'un 
    - tête gelée : le modèle apprend le texte mais n'émet jamais `<pad>`, donc il parle sans arrêt ;
    - **ce qui marche** : embedding et tête gelés, avec un delta entraînable seulement sur les lignes
      `<pad>`, `<s>` et `<|im_end|>`. C'est `model.trainable_head_rows: [pad, bos, eos]` dans la branche
-     `luciole_duplexstt_3.1` du fork. Dans `duplex_luciole.yaml`, le BOS est ensuite passé à `<|im_start|>`
+     `luciole_duplexstt_3.1` du fork. Dans `duplex_qa.yaml`, le BOS est ensuite passé à `<|im_start|>`
      (`model.bos_token`) : le tokenizer de Luciole Instruct garde le `<s>` du pré-entraînement comme BOS,
      mais `<|im_end|>` comme EOS. Les lignes entraînées deviennent donc `<pad>`=3, `<|im_start|>`=260 et
      `<|im_end|>`=261. L'alternative serait un token de silence dédié, avec une ligne

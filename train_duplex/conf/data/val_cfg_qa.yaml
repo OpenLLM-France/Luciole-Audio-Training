@@ -15,7 +15,7 @@ asr_en:
       agent_loss: false  # as in training; decoded with a silent agent
       manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/en/context/CommonVoice/dev.jsonl
 # Spontaneous French: CFPP2000 test, out for now (strip_tags_inplace.py also removed real "comment"
-# words there, see input_cfg_duplex_fr_en.yaml).
+# words there, see input_cfg_qa.yaml).
 # asr_fr_spont:
 #   input_cfg:
 #     - type: conversation_as_duplex

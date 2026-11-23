@@ -23,7 +23,7 @@ NEMO_MODULE="${NEMO_MODULE:-nemo/2.7.3}"
 CONDA_ENV="${CONDA_ENV:-$SCRATCH/speechlm/envs/nemo27-salm_automodel_3}"
 NEMO_DIR="${NEMO_DIR:-$HOME/NeMo_Duplex}"
 HERE="${SLURM_SUBMIT_DIR:-$PWD}"
-INPUT_CFG="${1:-conf/data/input_cfg_duplex_fr_en.yaml}"
+INPUT_CFG="${1:-conf/data/input_cfg_qa.yaml}"
 [[ "$INPUT_CFG" == /* ]] || INPUT_CFG="$HERE/$INPUT_CFG"
 
 module purge

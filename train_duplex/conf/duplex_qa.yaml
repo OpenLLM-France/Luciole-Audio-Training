@@ -1,0 +1,198 @@
+# Duplex STT (streaming voice -> text, full-duplex turn-taking) for Luciole, single phase of 10k steps.
+# Run with the NeMo fork, branch luciole_duplexstt_3.1 (trainable_head_rows + conversation_as_duplex):
+#   examples/speechlm2/stt_duplex_train.py --config-path=<this dir> --config-name=duplex_qa
+# Encoder: nvidia/nemotron-3.5-asr-streaming-0.6b (cache-aware FastConformer, 80 ms frames).
+# Every setting that differs from NeMo's examples/speechlm2/conf/duplex_stt.yaml is commented; the
+# reasons are measured in ../README.md (CPU tests of 2026-09-30).
+
+############ Model ############
+model:
+  # Must NOT contain "Nemotron": DuplexSTTModel then switches to the Nemotron-H cache API (cache_params),
+  # while Luciole (NemotronForCausalLM) is a plain transformer using past_key_values.
+  pretrained_llm: ${oc.env:LLM_MODEL}
+  pretrained_asr: ${oc.env:SPEECH_ENCODER_MODEL}  # nemotron-3.5-asr-streaming-0.6b.nemo
+  pretrained_weights: true
+  trust_remote_code: false
+  source_sample_rate: 16000
+  # Luciole-Instruct's tokenizer_config keeps the pretraining <s> as BOS but <|im_end|> as EOS. Pair them
+  # ChatML-style: <|im_start|> (id 260) follows every <|im_end|> in SFT, so Luciole already predicts it,
+  # while <s> only ever appears as input. Used for agent/user turn starts and the system prompt.
+  bos_token: "<|im_start|>"
+  validation_save_path: ${exp_manager.exp_dir}/${exp_manager.name}/validation
+
+  # Luciole's tied embeddings with a ~0 <pad> row: training the whole head collapses to <pad> on every
+  # frame, a frozen head never emits <pad>. Freeze the head + embeddings except these rows.
+  trainable_head_rows: [pad, bos, eos]
+
+  text_loss_weight: 1.0
+  # The text channel is mostly <pad>: down-weight it so the answers still drive the loss.
+  token_loss_weight: {pad: 0.25, bos: 1.0, eos: 1.0, text: 1.0}
+
+  # Second head: the user transcript, written while the user speaks (streaming ASR). Its labels come from
+  # the word timestamps of alignment/align_asr_manifests.py (`custom.user_words`), placed by
+  # conversation_as_duplex from each word's end; examples without them do not train it (asr_loss_mask).
+  # With trainable_head_rows, the ASR head shares the frozen LM head and has its own pad/bos/eos rows.
+  predict_user_text: true
+  asr_loss_weight: 1.0
+  # Low-rank residual adapter on the hidden state read by the ASR head (0 = none): the two heads read the
+  # same hidden state and otherwise only differ by their special rows.
+  asr_head_adapter_rank: 128
+  # ASR channel input embedding: the frozen embed_tokens + a trainable channel vector (tells the two text
+  # channels apart) and pad/bos/eos rows (SpecialRowsEmbedding). false = a trainable copy of the whole
+  # table (262M params), if the shared one does not learn.
+  share_asr_embeddings: true
+  # Delay of the ASR channel, in frames. >= 1 puts a <pad> before the user channel, so the ASR input of frame 0
+  # is <pad> as in inference (_get_asr_bos_embedding) and the head learns to emit the user <bos> (used by the
+  # streaming barge-in logic). With 0, ASR cuts (user supervision at 0) have their <bos> at frame 0: fed as
+  # input, never predicted, and free running then gets <pad> there and stays silent (SLUE WER 0.99 vs 0.25).
+  delay_source_text_by: 1
+  # Probability of replacing each text token of the ASR channel input by <pad> in training (labels unchanged).
+  # Against exposure bias; measured before the frame-0 <bos> fix above, so its effect is still unknown.
+  asr_input_dropout: 0.0
+
+  # Trained: audio projection, LoRA, pad/bos/eos head rows. Frozen: encoder, LLM base weights.
+  freeze_params:
+    - "^perception\\.encoder\\..+$"
+    - "^llm\\..+$"
+  prevent_freeze_params: []
+
+  # Duplex changes the behaviour at every frame (when to stay silent), not only the answer style:
+  # adapt all projections, not only q/v like the SALM recipe.
+  lora:
+    # DuplexSTTModel keeps only the decoder body (llm.model, no LM head): CAUSAL_LM makes PEFT look up
+    # prepare_inputs_for_generation, which only the *ForCausalLM wrapper has.
+    task_type: FEATURE_EXTRACTION
+    r: 128
+    lora_alpha: 128
+    lora_dropout: 0.0
+    target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj]
+
+  perception:
+    target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
+    modality_adapter:
+      _target_: nemo.collections.speechlm2.modules.perception.IdentityConnector
+      d_model: 1024  # nemotron-3.5-asr encoder width (duplex_stt.yaml has 512, for FastConformer-L)
+    encoder:
+      # The checkpoint was trained with 4 lookaheads; left as a list, ConformerEncoder draws one at random
+      # every training step. [56, 3] = 320 ms chunks (240 ms lookahead), and streaming == offline to 6e-7.
+      att_context_size: [56, 3]
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 2e-4
+    betas: [0.9, 0.98]
+    weight_decay: 0.0
+    foreach: true
+
+  lr_scheduler:
+    _target_: nemo.core.optim.lr_scheduler.CosineAnnealing
+    warmup_steps: 500
+    min_lr: 1e-6
+    max_steps: ${trainer.max_steps}
+
+############ Trainer ############
+trainer:
+  devices: -1
+  accelerator: gpu
+  num_nodes: 1
+  precision: bf16-true
+  max_steps: 10_000
+  max_epochs: -1
+  limit_train_batches: 5000  # "epoch" size
+  val_check_interval: 500  # GCD of validation_schedule.steps: the schedule cancels the other checks
+  limit_val_batches: 4
+  num_sanity_val_steps: 1
+  log_every_n_steps: 10
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  inference_mode: false
+  logger: false
+  enable_checkpointing: false
+  use_distributed_sampler: false
+  strategy:
+    _target_: lightning.pytorch.strategies.DDPStrategy
+    gradient_as_bucket_view: true
+    find_unused_parameters: true
+
+############ Data ############
+data:
+  frame_length: 0.08
+  source_sample_rate: ${model.source_sample_rate}
+  input_roles: ["user"]
+  output_roles: ["agent"]
+  word_align_position: left
+
+  train_ds:
+    input_cfg: null  # conf/data/input_cfg_qa.yaml, passed on the command line
+    sample_rate: ${data.source_sample_rate}
+    # Read by the multimodal_conversation adapter under conversation_as_duplex.
+    audio_locator_tag: "<|audio|>"
+    token_equivalent_duration: ${data.frame_length}
+    seed: 42
+    shard_seed: 42
+    shuffle: true
+    num_workers: 4
+    # Same .idx sidecars as the SALM runs (same manifests), and resumable dataloader state.
+    indexed: true
+    indexes_root: ${oc.env:ALL_CCFRSCRATCH}/audio/duplex/idx
+    use_stateful_dataloader: true
+    concurrent_bucketing: false
+    # Batches are measured in frames (one token per 80 ms), as batch_tokens in the SALM runs. A duplex example is the
+    # whole timeline (all exchanges, silences included), plus its system prompt (custom["prompt_frames"]). Each token
+    # already occupies a frame: measure_total_length would count the text twice.
+    use_multimodal_sampling: true
+    measure_total_length: false
+    # Multi-turn QA reaches ~140 s. max_duration must stay = batch_tokens * frame_length: a longer example gets a
+    # batch of its own, over the memory budget (OOM in the 128k-vocab cross_entropy).
+    min_duration: 0.5
+    max_duration: 480
+    use_bucketing: true
+    # Explicit bins, in frames (estimate_bins_duplex.slurm on input_cfg_qa.yaml, 30k examples, 24 buckets;
+    # 1-4 s and 110 s added by hand, timelines of 0.5-147 s). Without them lhotse estimates them at startup. The
+    # default linspace(min_duration, max_duration) of batch_duration gave 40 s wide buckets, 2 s ASR segments padded
+    # to 40 s QA timelines in the same batch, up to 3.6x the budget in frames: OOM in the ASR cross_entropy of
+    # duplex_2heads_100k_4gpu at 11.3k steps. Re-estimate them when the mix changes a lot.
+    bucket_duration_bins: [12, 19, 25, 31, 38, 44, 50, 57, 67, 75, 82, 88, 95, 102, 111, 122,
+                           138, 159, 183, 206, 235, 286, 349, 416, 512, 572, 590, 616, 719, 1034, 1375]
+    num_buckets: 32  # len(bucket_duration_bins) + 1
+    batch_tokens: 6000  # 480 s
+    bucket_buffer_size: 20000
+
+  validation_ds:
+    sample_rate: ${data.source_sample_rate}
+    audio_locator_tag: "<|audio|>"
+    token_equivalent_duration: ${data.frame_length}
+    batch_size: 16
+    num_workers: 2
+    seed: 42
+    shard_seed: 42
+    force_finite: true
+    datasets: null  # conf/data/val_cfg_qa.yaml, passed on the command line (like train_ds.input_cfg)
+
+# Baseline validation at step 0, then validation at these steps (duplex_train.py, as in ../training/conf/base.yaml).
+validate_before_fit: true
+validation_schedule:
+  steps: [500, 1000, 2500, 5000, 7500, 10000, 15000, 20000, 25000]
+  then_every: 10000
+
+############ Experiment Manager ############
+exp_manager:
+  exp_dir: null
+  name: duplex-stt-luciole
+  create_tensorboard_logger: true
+  create_checkpoint_callback: true
+  use_datetime_version: false
+  resume_from_checkpoint: null
+  resume_if_exists: true
+  resume_ignore_no_checkpoint: true
+  create_wandb_logger: false
+  checkpoint_callback_params:
+    filename: "{step:06.0f}"
+    monitor: step
+    mode: max
+    save_top_k: -1
+    every_n_epochs: null
+    every_n_train_steps: 5_000
+    always_save_nemo: false
+    save_nemo_on_train_end: false
+    save_on_train_epoch_end: true

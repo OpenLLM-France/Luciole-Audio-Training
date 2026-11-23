@@ -1,0 +1,16 @@
+# Validation sets of the Luciole-Audio-Transcribe streaming runs (conf/duplex_transcribe.yaml), read like the train
+# input_cfg (duplex_launcher.py --val-cfg). The agent writes the transcript while the user speaks, as in training;
+# metrics: agent BLEU and WER (model.agent_wer).
+# ASR: the word-aligned CommonVoice dev sets of the context/ alignment (asr/fr/clean/CommonVoice has no dev.jsonl),
+# with their instruction as system prompt.
+# No AST set yet: no word-aligned AST dev (join_cv_words.py on the CoVoST / CommonVoiceFR2EN dev to do).
+asr_fr:
+  input_cfg:
+    - type: conversation_as_duplex
+      agent_timing: simultaneous
+      manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/fr/context/CommonVoice/dev.jsonl
+asr_en:
+  input_cfg:
+    - type: conversation_as_duplex
+      agent_timing: simultaneous
+      manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/en/context/CommonVoice/dev.jsonl

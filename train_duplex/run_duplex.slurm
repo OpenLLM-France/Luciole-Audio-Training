@@ -11,7 +11,7 @@
 #SBATCH --account=wuh@h100
 #SBATCH --constraint=h100
 
-# Duplex STT training, single phase (conf/duplex_luciole.yaml, 10k steps). See README.md.
+# Duplex STT training, single phase (conf/duplex_<MODEL>.yaml, MODEL=qa or transcribe). See README.md.
 # Needs the NeMo fork branch luciole_duplexstt_3.1 (trainable_head_rows + conversation_as_duplex) in
 # $NEMO_DIR: a `git archive` copy without .git, so the branch is in $NEMO_DIR/GIT_REVISION. The env has
 # $HOME/NeMo installed editable; PYTHONPATH makes this copy win.
@@ -19,7 +19,8 @@
 # Submit through duplex_launcher.py: it creates $ALL_CCFRSCRATCH/audio/training/duplex/<job_name>/ and
 # puts the Slurm logs, config snapshots and the exp_manager output (checkpoints, TensorBoard) in it:
 #
-#   python duplex_launcher.py --job-name <xp>
+#   python duplex_launcher.py --model qa --job-name <xp>
+#   python duplex_launcher.py --model transcribe --job-name <xp>
 #   python duplex_launcher.py --job-name smoke --qos dev --gpus 1 --time 00:30:00 \
 #       --set ++trainer.max_steps=50 --set ++trainer.val_check_interval=25
 #
@@ -32,9 +33,15 @@ LLM_MODEL="${LLM_MODEL:-$ALL_CCFRSCRATCH/OpenLLM-BPI-output/sft/final/Luciole-1B
 SPEECH_ENCODER_MODEL="${SPEECH_ENCODER_MODEL:-$SCRATCH/speechlm/models/nemotron-3.5-asr-streaming-0.6b.nemo}"
 DATA_FOLDER="$ALL_CCFRSCRATCH/audio"
 NEMO_DIR="${NEMO_DIR:-$HOME/NeMo_Duplex}"
-CONFIG_NAME="${CONFIG_NAME:-duplex_luciole}"
-INPUT_CFG="${INPUT_CFG:-conf/data/input_cfg_duplex_fr_en.yaml}"
-VAL_CFG="${VAL_CFG:-conf/data/val_cfg_duplex.yaml}"
+# Two models, each = conf/duplex_<MODEL>.yaml + conf/data/input_cfg_<MODEL>.yaml + conf/data/val_cfg_<MODEL>.yaml:
+#   qa         ASR/QA (v4 logic): the agent answers after the audio, 2 heads (agent + prompt-less ASR head)
+#   transcribe Luciole-Audio-Transcribe (v5 logic): the agent writes the transcript/translation while the
+#              user speaks, 1 head
+# CONFIG_NAME / INPUT_CFG / VAL_CFG override each file separately.
+MODEL="${MODEL:-qa}"
+CONFIG_NAME="${CONFIG_NAME:-duplex_$MODEL}"
+INPUT_CFG="${INPUT_CFG:-conf/data/input_cfg_$MODEL.yaml}"
+VAL_CFG="${VAL_CFG:-conf/data/val_cfg_$MODEL.yaml}"
 EXPERIMENT_FOLDER="${EXPERIMENT_FOLDER:-$ALL_CCFRSCRATCH/audio/training/duplex}"
 SAVE_DIR="${SAVE_DIR:-$(pwd)/logs}"  # config snapshots; duplex_launcher.py sets it to the experiment folder
 MAX_TIME_PER_RUN="${MAX_TIME_PER_RUN:-00:19:40:00}"  # SLURM --time minus 20 min: leaves room for the -last.ckpt
@@ -59,7 +66,7 @@ echo "NeMo from $nemo_file"
 revision="$(cat "$NEMO_DIR/GIT_REVISION")"
 [[ "$revision" == "luciole_duplexstt_3.1 "* ]] || { echo "❌ $NEMO_DIR is '$revision', expected luciole_duplexstt_3.1" >&2; exit 1; }
 [[ -f "$SPEECH_ENCODER_MODEL" ]] || { echo "❌ missing $SPEECH_ENCODER_MODEL" >&2; exit 1; }
-[[ "$LLM_MODEL" != *Nemotron* ]] || { echo "❌ LLM path must not contain 'Nemotron' (see conf/duplex_luciole.yaml)" >&2; exit 1; }
+[[ "$LLM_MODEL" != *Nemotron* ]] || { echo "❌ LLM path must not contain 'Nemotron' (see conf/duplex_qa.yaml)" >&2; exit 1; }
 
 export LLM_MODEL SPEECH_ENCODER_MODEL DATA_FOLDER
 export HYDRA_FULL_ERROR=1

@@ -1,4 +1,4 @@
-# clean/ VERSION of input_cfg_duplex_fr_en.yaml (2026-11-19): the ASR and AST manifests are the word-aligned
+# clean/ VERSION of input_cfg_qa.yaml (2026-11-19): the ASR and AST manifests are the word-aligned
 # copies of the cleaned BASE manifests (audio/nemo/<task>/<lang>/clean/, as in v5_transcribe), under
 # audio/duplex/nemo/.../clean/ (alignment/align_asr.slurm SET=clean and SET=clean_spont, join_ast_words.slurm
 # VARIANT=clean). Base only: no events tags, hesitations removed by the disfluency detector, so the

@@ -11,7 +11,7 @@
 #SBATCH --qos=qos_cpu-dev
 
 # Build the .idx sidecars of the duplex input_cfgs under the duplex indexes_root (read from
-# conf/duplex_luciole.yaml), apart from the SALM mirror ($ALL_CCFRSCRATCH/audio/idx). Without them the
+# conf/duplex_qa.yaml), apart from the SALM mirror ($ALL_CCFRSCRATCH/audio/idx). Without them the
 # training job builds the missing ones on the fly, from every rank at startup.
 #
 # build_indexes.py skips `conversation_as_duplex` entries (unknown type), so it is fed copies where that
@@ -20,16 +20,16 @@
 #
 # Submit from train_duplex/ (needs a logs/ dir):
 #   mkdir -p logs && sbatch build_indexes_duplex.slurm                                    # both mixes
-#   sbatch build_indexes_duplex.slurm conf/data/input_cfg_duplex_fr_en.yaml               # one mix
+#   sbatch build_indexes_duplex.slurm conf/data/input_cfg_qa.yaml               # one mix
 
 set -euo pipefail
 
 NEMO_DIR="${NEMO_DIR:-$HOME/NeMo_Duplex}"
-CONFIG="${CONFIG:-conf/duplex_luciole.yaml}"
+CONFIG="${CONFIG:-conf/duplex_qa.yaml}"
 NEMO_MODULE="${NEMO_MODULE:-nemo/2.7.3}"
 CONDA_ENV="${CONDA_ENV:-$SCRATCH/speechlm/envs/nemo27-salm_automodel_3}"
 INPUT_CFGS=("$@")
-(( ${#INPUT_CFGS[@]} )) || INPUT_CFGS=(conf/data/input_cfg_duplex_fr_en.yaml)
+(( ${#INPUT_CFGS[@]} )) || INPUT_CFGS=(conf/data/input_cfg_qa.yaml)
 
 module purge
 module load arch/h100 "$NEMO_MODULE"
