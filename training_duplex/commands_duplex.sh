@@ -12,13 +12,13 @@ python duplex_launcher.py --job-name duplex_2heads_4gpu --gpus 4 --qos dev --tim
 # 10k): much better -> the two heads compete in the LoRA; about the same -> streaming without delay is the
 # limit (try an ASR delay). The QA validation is meaningless here (agent untrained).
 python duplex_launcher.py --job-name duplex_asr_only_4gpu --gpus 4 --qos dev --time 02:00:00 \
-    --input-cfg conf/data/input_cfg_duplex_asr_only.yaml \
+    --input-cfg conf/data/input_cfg_qa_asr_only.yaml \
     --set ++trainer.max_steps=10000
 
 # Same ASR-only diagnostic with a fully trainable ASR channel input embedding (a copy of embed_tokens,
 # ~262M params, not tied to the frozen head) instead of the frozen shared one + channel vector + special rows.
 python duplex_launcher.py --job-name duplex_asr_only_embtrain_4gpu --gpus 4 --qos dev --time 02:00:00 \
-    --input-cfg conf/data/input_cfg_duplex_asr_only.yaml \
+    --input-cfg conf/data/input_cfg_qa_asr_only.yaml \
     --set ++trainer.max_steps=10000 --set model.share_asr_embeddings=false
 
 # Teacher-forcing diagnostic of the ASR head (inference/asr_teacher_forcing.py, ~10 min on 1 dev GPU):
@@ -29,14 +29,14 @@ cd inference && mkdir -p $SCRATCH/speechlm/duplex_diag && sbatch asr_teacher_for
 # so that the head must find the words in the audio instead of timing them from its transcript history
 # (teacher-forcing diagnostic of duplex_asr_only_4gpu: 0 word started without history, 82 % empty in free running).
 python duplex_launcher.py --job-name duplex_asr_only_drop50_4gpu --gpus 4 --qos dev --time 02:00:00 \
-    --input-cfg conf/data/input_cfg_duplex_asr_only.yaml \
+    --input-cfg conf/data/input_cfg_qa_asr_only.yaml \
     --set ++trainer.max_steps=10000 --set model.asr_input_dropout=0.5
 # then: cd inference && sbatch asr_teacher_forcing.slurm duplex_asr_only_drop50_4gpu step-010000
 # success: tf_pad starts words (start acc > 0) and free running is no longer mostly empty.
 
 # ASR-only on the SLUE SQA5 documents (en, 168 h) with SLUE's own word timestamps (alignment/slue_sqa5_asr.py,
 # manifests in $SCRATCH/speechlm/duplex_data/asr/en/SLUE-SQA5): our CTC alignment puts the first word of most
-# CommonVoice en lines at 0 s. Validation set asr_slue (in conf/duplex_luciole.yaml).
+# CommonVoice en lines at 0 s. Validation set asr_slue (in conf/duplex_qa.yaml).
 # Without dropout: compare with duplex_asr_only_4gpu (only the data changes).
 python duplex_launcher.py --job-name duplex_asr_slue_4gpu --gpus 4 --qos dev --time 02:00:00 \
     --input-cfg conf/data/input_cfg_duplex_asr_slue.yaml \
@@ -45,7 +45,7 @@ python duplex_launcher.py --job-name duplex_asr_slue_4gpu --gpus 4 --qos dev --t
 python duplex_launcher.py --job-name duplex_asr_slue_drop50_4gpu --gpus 4 --qos dev --time 02:00:00 \
     --input-cfg conf/data/input_cfg_duplex_asr_slue.yaml \
     --set ++trainer.max_steps=10000 --set model.asr_input_dropout=0.5
-# delay_source_text_by=1 (now the default in duplex_luciole.yaml): <pad> as ASR input of frame 0 and the user
+# delay_source_text_by=1 (now the default in duplex_qa.yaml): <pad> as ASR input of frame 0 and the user
 # <bos> is a label, as in NeMo's design. Compare with duplex_asr_slue_4gpu evaluated with <bos> at frame 0
 # (asr_teacher_forcing free_bos: SLUE WER 0.245); here the regular validation is meaningful.
 python duplex_launcher.py --job-name duplex_asr_slue_delay1_4gpu --gpus 4 --qos dev --time 02:00:00 \
@@ -54,14 +54,14 @@ python duplex_launcher.py --job-name duplex_asr_slue_delay1_4gpu --gpus 4 --qos 
 # Same on the regular ASR mix (fr+en, first-word timestamps fixed in place: fix_first_word_inplace.slurm).
 # Compare with duplex_asr_only_4gpu (same data before the fix, <bos> fed at frame 0).
 python duplex_launcher.py --job-name duplex_asr_only_delay1_4gpu --gpus 4 --qos dev --time 02:00:00 \
-    --input-cfg conf/data/input_cfg_duplex_asr_only.yaml \
+    --input-cfg conf/data/input_cfg_qa_asr_only.yaml \
     --set ++trainer.max_steps=10000
 # then: cd inference && sbatch asr_teacher_forcing.slurm <xp> step-010000 "asr_slue asr_en"
 
 # Two heads (agent + streaming ASR) again, now with delay_source_text_by=1 (duplex_asr_only_delay1_4gpu at 10k:
 # WER 0.56 fr / 0.60 en / 0.67 slue, 1-4 % empty), the first-word fix and the SLUE gold QA (both turns
 # transcribed). Same mix and steps as duplex_2heads_4gpu (0.89 fr / 0.81 en at 10k, 1h48 for 10k steps):
-# QA 40 % / ASR 40 % / AST 20 %. Validation sets asr_slue and qa_slue (in conf/duplex_luciole.yaml).
+# QA 40 % / ASR 40 % / AST 20 %. Validation sets asr_slue and qa_slue (in conf/duplex_qa.yaml).
 # If 10k steps don't fit (max_time_per_run 1h45): rerun the same command with --resume.
 python duplex_launcher.py --job-name duplex_2heads_delay1_4gpu --gpus 4 --qos dev --time 02:00:00 \
     --set ++trainer.max_steps=10000
@@ -74,23 +74,23 @@ python duplex_launcher.py --job-name duplex_2heads_delay1_4gpu --gpus 4 --qos de
     --resume \
     --set "++validate_ckpts=[$C/step-007500.ckpt,$C/step-010000.ckpt]"
 
-# Two heads, long run: 25k steps on t3 (14 h, max_time_per_run 13h45), default mix (input_cfg_duplex_fr_en.yaml)
-# and validation sets (val_cfg_duplex.yaml), batch_duration 480. duplex_2heads_delay1_4gpu at 360 s: ~0.66 s/step.
+# Two heads, long run: 25k steps on t3 (14 h, max_time_per_run 13h45), default mix (input_cfg_qa.yaml)
+# and validation sets (val_cfg_qa.yaml), batch_duration 480. duplex_2heads_delay1_4gpu at 360 s: ~0.66 s/step.
 # If it stops before 25k: same command with --resume (dataloader state is restored).
 python duplex_launcher.py --job-name duplex_2heads_25k_4gpu --gpus 4 --qos t3 --time 14:00:00 \
     --set ++trainer.max_steps=25000
 
 # Two heads, long run: max_steps 100k (cosine over 100k) with a 20 h limit (t3 maximum); we see how far it gets
 # (duplex_2heads_25k_4gpu: 4h55 for 25k with validations -> ~75-80k in 20 h, LR then still ~15-25 % of its peak:
-# the last checkpoint is not annealed). Mix reweighted for 50k (input_cfg_duplex_fr_en.yaml: QA 21 % / ASR 53 % /
+# the last checkpoint is not annealed). Mix reweighted for 50k (input_cfg_qa.yaml: QA 21 % / ASR 53 % /
 # AST 26 % of the examples, <= ~3 passes at 50k, so ~4.5 at 75k; duplex_2heads_25k_4gpu saw ComparIA 35x, HeySQuAD
 # 8.6x; ~33 % of the French ASR is spontaneous verbatim speech: ESLO, LVL-Atril; CFPP2000 and its validation
-# asr_fr_spont out for now, see input_cfg_duplex_fr_en.yaml).
+# asr_fr_spont out for now, see input_cfg_qa.yaml).
 # To continue after 20 h: same command with --resume.
 python duplex_launcher.py --job-name duplex_2heads_100k_4gpu --gpus 4 --qos t3 --time 20:00:00 \
     --set ++trainer.max_steps=100000
 
-# Same run from scratch with explicit bucket bins (conf/duplex_luciole.yaml: bucket_duration_bins). duplex_2heads_100k_4gpu
+# Same run from scratch with explicit bucket bins (conf/duplex_qa.yaml: bucket_duration_bins). duplex_2heads_100k_4gpu
 # hit an OOM at 11.3k steps (padded batches up to 3.6x batch_duration with the default 40 s wide buckets) and cannot
 # be resumed with other bins (lhotse restores the bucket buffers and max_cuts from the checkpoint).
 python duplex_launcher.py --job-name duplex_2heads_100k_v2_4gpu --gpus 4 --qos t3 --time 20:00:00 \
