@@ -1063,13 +1063,13 @@ class DisfluencyModel(Filter):
 class NormalizePunctuation(Filter):
     """Punctuation debris, safe on any text (hand-punctuated ones too):
       - byte-order marks / zero-width characters removed;
-      - leading punctuation removed (".elles étaient", "? C'est"), ".." -> ".", "...." -> "...",
+      - leading punctuation removed (".elles étaient", "? C'est", the "· · ·" separator of a book), ".." -> ".", "...." -> "...",
         "?." / ".?" -> "?", ". ," / ", ." -> "." (a tag removed between them), "quoi ??" -> "quoi ?".
     """
     name = "normalize_punctuation"
     INVISIBLE_RE = re.compile("[\ufeff\u200b\u200c\u200d\u2060]")
     RULES = [
-        (re.compile(r"^[\s.,;:?!…]+"), ""),
+        (re.compile(r"^[\s.,;:?!…·]+"), ""),
         (re.compile(r"\.{4,}"), "..."),
         (re.compile(r"(?<!\.)\.\.(?!\.)"), "."),
         (re.compile(r"([?!])\1+"), r"\1"),
