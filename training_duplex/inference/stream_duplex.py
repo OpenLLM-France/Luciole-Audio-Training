@@ -4,7 +4,7 @@ real-time pace, and the agent's replies are printed as the model emits them.
 Unlike DuplexSTTStreamingInference.offline_inference (whole audio encoded at once, then the LLM
 stepped frame by frame), this is the real serving loop:
   - the encoder runs cache-aware, one chunk at a time (encoder.cache_aware_stream_step; 320 ms
-    chunks with att_context_size [56, 3]);
+    chunks with att_context_size [56, 3], or the lookahead of --att-context-size);
   - the LLM advances one 80 ms frame at a time with its KV cache, the input of a frame being
     user audio frame + embedding of the token it emitted at the previous frame.
 The chunk is processed only once the wall clock has reached the end of its audio, so the
@@ -277,6 +277,11 @@ def run(args):
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     boosts = {"pad": args.pad_boost, "bos": args.bos_boost, "eos": args.eos_boost}
     model = load_model(args.ckpt, device, boosts, args.bf16)
+    if args.att_context_size:
+        # Before the streaming buffers are set up: they read the encoder's streaming_cfg.
+        model.perception.encoder.set_default_att_context_size([int(x) for x in args.att_context_size.split(",")])
+    print(f"[encoder] att_context_size={model.perception.encoder.att_context_size} "
+          f"(trained on {model.perception.encoder.att_context_size_all})")
     autocast = torch.autocast("cuda", dtype=torch.bfloat16, enabled=device == "cuda" and args.bf16)
     sr = model.source_sample_rate
     audio = load_audio(args.wav, sr, args.tail_silence)
@@ -380,6 +385,9 @@ def main():
     p.add_argument("--prompt", default=None, help="system prompt (the instruction at training time)")
     p.add_argument("--rnnt-lang", default=None, help="also decode the user transcript with the Nemotron RNNT: fr, en, auto...")
     p.add_argument("--asr", default=None, help="Nemotron .nemo for --rnnt-lang (default: the checkpoint's pretrained_asr)")
+    p.add_argument("--att-context-size", default=None,
+                   help="encoder lookahead 'left,right', e.g. 56,0 (80 ms chunks) ... 56,13 (1120 ms); default: the "
+                        "first of the checkpoint's list, 56,3 (320 ms)")
     p.add_argument("--tail-silence", type=float, default=10.0, help="seconds of silence appended to the file")
     p.add_argument("--no-realtime", dest="realtime", action="store_false", help="process chunks as fast as possible")
     p.add_argument("--check", action="store_true", help="compare with offline_inference on the same audio")

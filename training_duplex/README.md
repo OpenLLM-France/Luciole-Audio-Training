@@ -269,8 +269,14 @@ Il n'a pas convergé (répétitions, pas encore d'EOS), ce qui est attendu d'un 
 ## Pièges trouvés, à reporter dans une vraie config
 
 1. **`perception.modality_adapter.d_model: 1024`.** `duplex_stt.yaml` met 512 (FastConformer-L).
-2. **Fixer `perception.encoder.att_context_size`, par ex. `[56, 3]`.** Le checkpoint est multi-lookahead et
-   `ConformerEncoder` tire un lookahead au hasard à chaque pas d'entraînement si on le laisse en liste.
+2. **`perception.encoder.att_context_size` : une valeur ou une liste, jamais la liste seule.** Le checkpoint est
+   multi-lookahead, mais `ConformerEncoder` ne tire un lookahead par pas qu'en mode entraînement, et
+   `DuplexSTTModel.training_step` repasse l'encodeur gelé en `eval()` à chaque pas : une liste n'entraînerait que son
+   premier élément. `duplex_train.py` fait donc le tirage (`lookahead.py`, callback `RandomLookahead`) quand la
+   liste a plusieurs éléments : un lookahead par pas et par rang, uniforme sauf `att_context_probs`, le premier
+   en validation et en inférence. `duplex_transcribe.yaml` entraîne les 4 ([56,3] en premier), `duplex_qa.yaml`
+   fixe [56,3]. Le lookahead de chaque pas est loggé (`train_lookahead`, contexte droit en trames). À l'inférence :
+   `inference/stream_duplex.py --att-context-size 56,0` (80 ms) ... `56,13` (1 120 ms).
 3. **Le chemin du LLM ne doit pas contenir « Nemotron ».** `DuplexSTTModel` active alors un hack de cache prévu
    pour Nemotron-H (`cache_params`). Luciole est un `NemotronForCausalLM` transformer classique, qui doit
    passer par `past_key_values`.

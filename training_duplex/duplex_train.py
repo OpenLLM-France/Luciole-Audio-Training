@@ -29,6 +29,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from omegaconf import OmegaConf
 
 from agent_timing import apply_agent_timing
+from lookahead import RandomLookahead
 from nemo.collections.speechlm2 import DataModule, DuplexSTTDataset, DuplexSTTModel
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
@@ -95,6 +96,13 @@ def train(cfg):
         model_cfg=cfg.model,
     )
     datamodule = DataModule(cfg.data, tokenizer=model.tokenizer, dataset=dataset)
+
+    # Encoder att_context_size given as a list: one lookahead drawn per training step (lookahead.py).
+    if RandomLookahead.enabled(model):
+        trainer.callbacks.append(RandomLookahead(seed=cfg.data.train_ds.get("seed", 0)))
+        enc = model.perception.encoder
+        logging.info(f"[lookahead] training on {enc.att_context_size_all} (probs {enc.att_context_probs}), "
+                     f"validation on {enc.att_context_size_all[0]}")
 
     if (sched := cfg.get("validation_schedule", None)) and trainer.limit_val_batches:
         # Imported here, not at module level: salm_train sets the CUDA device on import, which the
