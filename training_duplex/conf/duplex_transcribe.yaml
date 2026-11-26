@@ -40,11 +40,16 @@ model:
   # Validation: WER of the agent channel (BLEU is still logged).
   agent_wer: true
 
-  # Trained: audio projection, LoRA, pad/bos/eos head rows. Frozen: encoder, LLM base weights.
+  # Trained: the top 6 of the 24 encoder layers, audio projection, LoRA, pad/bos/eos head rows. Frozen: the
+  # other encoder layers, LLM base weights. The frozen encoder makes a word readable only when its own RNNT
+  # emits it, ~4 frames after the user_words end: the top layers learn to make it readable at the agent's
+  # target frame. The encoder then runs in train mode (dropout 0.1 in every layer: training_step only puts
+  # fully frozen modules in eval).
   freeze_params:
     - "^perception\\.encoder\\..+$"
     - "^llm\\..+$"
-  prevent_freeze_params: []
+  prevent_freeze_params:
+    - "^perception\\.encoder\\.layers\\.(1[89]|2[0-3])\\..+$"
 
   # Duplex changes the behaviour at every frame (when to stay silent), not only the answer style:
   # adapt all projections, not only q/v like the SALM recipe.
@@ -55,7 +60,7 @@ model:
     r: 128
     lora_alpha: 128
     lora_dropout: 0.0
-    target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj]
+    target_modules: ["q_proj", "v_proj", "up_proj", "down_proj"]
 
   perception:
     target: nemo.collections.speechlm2.modules.perception.AudioPerceptionModule
