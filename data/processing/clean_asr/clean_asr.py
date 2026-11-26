@@ -7,6 +7,7 @@ Each dataset of the config (conf/fr.yaml, its header says how to write one) has:
               events, disfluencies, events_disfluencies (kept, in the subdirectory of that name)
   nocasepunc  which lines get a prompt asking for no case nor punctuation
   lowercase   true: the lines with punctuation and no uppercase get a prompt asking for lowercase with punctuation
+  numbers     false: no prompt about the format of the numbers (default true, see `numbers_prompts`)
   output_lines  the lines of each output but base, drawn at random (default: all)
   filters     filters and blocks (named lists of filters, `blocks` of the config), in order
 A filter rewrites the text of the Assistant turn or drops the line; lines left with no letter
@@ -18,7 +19,9 @@ file sets how often the model sees one). Then the prompt (first User text turn) 
 (ChoosePrompt): one asking for the markers the output keeps, or for none of them. `prompts`
 (config, or --prompts) says how: fixed (drawn from the lists of `contexts`) or compositional
 (composed by data/contexts/compose_asr_prompts.py, as the config's `compositional` says) or
-ast (a translation prompt: conf/ast.yaml).
+ast (a translation prompt: conf/ast.yaml). `numbers_prompts: true` (config) adds the format of the
+numbers to the prompts of train lines: always digits on a line with digits; words (the format when
+none is asked) or a format at random on some of the other lines, as an explicit block (ChoosePrompt).
 
 The words and spellings the filters use, per language, are in conf/rules.yaml, not in the code.
 
@@ -1643,6 +1646,106 @@ def category_constraints(category):
     return {"nocasepunc": category == "nocasepunc" or category.endswith("_nocasepunc") or None, **found}
 
 
+class NumberFormat:
+    """The format a text writes its numbers in, from the `numbers` rules of its language (conf/rules.yaml):
+    "digits" when some number is in digits (Roman numerals, hours, percentages and ordinals included:
+    "14h30", "50 %", "1er", "XIXe"), "words" when some is in words and none in digits, None when it
+    has no number ("un", "une" are determiners; digits glued to letters, "CO2", "3D", "COVID-19", are a name)."""
+
+    def __init__(self, lang):
+        r = language_rules(lang).get("numbers") or {}
+        self.words, self.joiners = as_words(r.get("words")), as_words(r.get("joiners"))
+        if not self.words:
+            raise ValueError(f"no `numbers` words for {lang!r} in conf/rules.yaml")
+        self.known = self.words | as_words(r.get("parts")) | self.joiners
+        suffixes = "|".join(sorted(map(re.escape, as_words(r.get("ordinal_suffixes"))), key=len, reverse=True))
+        self.digits_re = re.compile(rf"\d+(?:(?:{suffixes})\d*)?" if suffixes else r"\d+")
+        # Roman numerals, uppercase in the text: two letters or more of I, V, X ("XIV", "II"), or any
+        # one before a roman suffix but C, D, L, M alone ("XIXe", "Ier"; not "Ce", "Le", "De")
+        roman = r"M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})"
+        roman_suffixes = "|".join(sorted(map(re.escape, as_words(r.get("roman_suffixes"))), key=len, reverse=True))
+        alternatives = [r"[IVX]{2,}"] + ([rf"(?![CDLM](?:{roman_suffixes})\b)(?=[MDCLXVI]){roman}(?:{roman_suffixes})"]
+                                         if roman_suffixes else [])
+        self.roman_re = re.compile(rf"(?<![^\W\d_])(?:{'|'.join(alternatives)})(?![^\W\d_])")
+        self.cache = {}
+
+    def _pieces(self, word):
+        """The pieces of a word made only of number pieces, joiners only between two of them
+        ("vingtetun": [vingt, et, un]), or None."""
+        best = {0: []}
+        for i in range(1, len(word) + 1):
+            for j in range(max(0, i - 15), i):
+                piece = word[j:i]
+                if j in best and piece in self.known and \
+                        not (piece in self.joiners and (not best[j] or best[j][-1] in self.joiners)):
+                    best[i] = best[j] + [piece]
+                    break
+        found = best.get(len(word))
+        return None if not found or found[-1] in self.joiners else found
+
+    def is_number(self, word):
+        """A number word, or a compound of number pieces ("dix-sept", "einundzwanzig")."""
+        if word not in self.cache:
+            pieces = self._pieces(word.replace("-", "").replace("\u2011", ""))
+            self.cache[word] = bool(pieces) and (len([p for p in pieces if p not in self.joiners]) > 1
+                                                 or pieces[0] in self.words)
+        return self.cache[word]
+
+    def analyse(self, text):
+        """(some number in digits, some number in words)"""
+        text = TAG_RE.sub(" ", text)
+        digits, words = bool(self.roman_re.search(text)), False
+        for token in re.findall(r"[^\W_]+(?:[-\u2011][^\W_]+)*", text.lower()):
+            if any(c.isdigit() for c in token):
+                # digits glued to letters, by a hyphen too, are a name: "COVID-19", "HJR-3", "A1GP"
+                digits = digits or all(self.digits_re.fullmatch(p) for p in re.split(r"[-\u2011]", token))
+            elif not words:
+                words = self.is_number(token)
+        return digits, words
+
+    def __call__(self, text):
+        digits, words = self.analyse(text)
+        return "digits" if digits else "words" if words else None
+
+
+def has_numbers_rules(lang):
+    """False for a language with no `numbers` rules (Arabic: its number words are not told reliably):
+    no prompt about numbers."""
+    return bool(language_rules(lang).get("numbers"))
+
+
+class NumbersPrompt:
+    """Whether an AST prompt asks for a format of the numbers, and which one (AstPrompt; ChoosePrompt
+    has its `numbers` block). With no format asked, numbers are written in words. fraction: {words, without}: a line with some
+    number in digits (NumberFormat) always asks for digits; a line with its numbers in words asks for
+    words in `words` of the lines; a line with no number asks for one of the two formats at random in
+    `without` of them: the negative examples, a prompt about numbers with no number. Train files only:
+    the lines of dev and test files have no `numbers_rng` (process). The draws come from that
+    `numbers_rng`, the line's own, so that the other prompts stay the same. A language with no `numbers` rules (Arabic: its number
+    words are not told reliably) gets no such prompt: `make` gives None."""
+
+    @classmethod
+    def make(cls, lang, fraction):
+        return cls(lang, fraction) if fraction and has_numbers_rules(lang) else None
+
+    def __init__(self, lang, fraction):
+        if set(fraction) != {"words", "without"}:
+            raise ValueError(f"fraction: {sorted(fraction)}, expected words and without")
+        self.format, self.fraction = NumberFormat(lang), fraction
+
+    def __call__(self, s):
+        if s.numbers_rng is None or not s.text.strip():      # an eval file, an empty line
+            return None
+        fmt = self.format(s.text)
+        if fmt == "digits":
+            return "digits"
+        if fmt == "words":
+            return "words" if s.numbers_rng.random() < self.fraction["words"] else None
+        if s.numbers_rng.random() < self.fraction["without"]:
+            return s.numbers_rng.choice(("digits", "words"))
+        return None
+
+
 class ChoosePrompt:
     """Last step of every output: the prompt of each line, chosen from its final text.
 
@@ -1654,7 +1757,10 @@ class ChoosePrompt:
             no_events, no_disfluencies  the markers the output drops (compositional prompts; in
                                         fixed ones, only in an output keeping no marker);
             casepunc                    compositional prompts, cased lines with some uppercase
-                                        letter or punctuation: case and punctuation.
+                                        letter or punctuation: case and punctuation;
+            numbers                     `numbers` on, train lines with no number in digits: numbers
+                                        in words on a line with some (the format when none is
+                                        asked), a format at random on a line with none.
         with_output when some block is favored, default otherwise.
     favored: the blocks worth stating more often: the markers another output of the dataset keeps,
         casepunc when the dataset has nocasepunc lines.
@@ -1666,12 +1772,15 @@ class ChoosePrompt:
                  unpunctuated subtitles whose proper nouns kept their case. They are lowercased.
     lowercase: true -- the lines with punctuation and no uppercase letter (a corpus with no case to
         recover) get a prompt asking for lowercase with punctuation. Compositional prompts only.
+    numbers: true -- a train line (Sample.numbers_rng set by process) with some number in digits
+        (NumberFormat) always asks for digits, the others may get the `numbers` block.
+        Compositional prompts only.
     Fixed prompts: a line whose category has no _nocasepunc version (events_disfluencies) is
     dropped. Compositional prompts (ctx["composer"]) exist for every category: none is dropped.
     """
     label = "prompt"
 
-    def __init__(self, ctx, keep=(), explicit=None, favored=(), nocasepunc=False, lowercase=False):
+    def __init__(self, ctx, keep=(), explicit=None, favored=(), nocasepunc=False, lowercase=False, numbers=False):
         if lowercase and not ctx.get("composer"):
             raise ValueError("lowercase needs compositional prompts: the fixed lists have no such prompt")
         self.lowercase = lowercase
@@ -1681,6 +1790,10 @@ class ChoosePrompt:
         self.explicit, self.favored = explicit or {"default": 0.0, "with_output": 0.0}, set(favored)
         self.composer = ctx.get("composer")
         self.pools = {} if self.composer else {name: PromptPool(ctx, name) for name in ctx["contexts"]}
+        if numbers and not self.composer:
+            raise ValueError("numbers needs compositional prompts: the fixed lists have no such prompt")
+        lang = self.composer.audio_language if self.composer else None
+        self.number_format = NumberFormat(lang) if numbers and has_numbers_rules(lang) else None
 
     def _nocase(self, s):
         if not self.nocasepunc:
@@ -1692,14 +1805,20 @@ class ChoosePrompt:
             return True
         return False
 
-    def blocks(self, s, nocase):
-        """The explicit blocks of the line's prompt: a combination of no_events, no_disfluencies
-        and casepunc, or none."""
+    def number_format_of(self, s):
+        """"digits", "words", None (no number), or "off" (no prompt about numbers for this line)."""
+        if not self.number_format or getattr(s, "numbers_rng", None) is None or not s.text.strip():
+            return "off"
+        return self.number_format(s.text)
+
+    def blocks(self, s, nocase, numbers="off"):
+        """The explicit blocks of the line's prompt: a combination of no_events, no_disfluencies,
+        casepunc and numbers, or none. numbers: the line's number_format_of."""
         dropped = [m for m in MARKERS if m not in self.keep] if self.composer or not self.keep else []
         text = TAG_RE.sub(" ", s.text)
         cased = self.composer and not nocase and (has_case(text) or PUNCT_RE.search(text)) \
             and not (self.lowercase and is_lowercase_punctuated(s.text))
-        possible = dropped + (["casepunc"] if cased else [])
+        possible = dropped + (["casepunc"] if cased else []) + (["numbers"] if numbers in ("words", None) else [])
         combos = [c for n in range(1, len(possible) + 1) for c in itertools.combinations(possible, n)]
         rate = self.explicit["with_output" if self.favored & set(possible) else "default"]
         if not combos or s.rng.random() >= rate:
@@ -1713,7 +1832,8 @@ class ChoosePrompt:
 
     def __call__(self, s):
         nocase = self._nocase(s)
-        blocks = self.blocks(s, nocase)
+        numbers = self.number_format_of(s)
+        blocks = self.blocks(s, nocase, numbers)
         category = self.category(s, nocase, blocks)
         if nocase and category != "nocasepunc":
             category += "_nocasepunc"
@@ -1723,6 +1843,10 @@ class ChoosePrompt:
                 constraints["nocasepunc"] = False
             elif self.lowercase and is_lowercase_punctuated(s.text):
                 constraints["nocasepunc"] = "lowercase"
+            if numbers == "digits":            # numbers are in words when no format is asked
+                constraints["numbers"] = "digits"
+            elif "numbers" in blocks:
+                constraints["numbers"] = numbers or s.rng.choice(("digits", "words"))
             s.prompt = self.composer.compose(s.rng, **constraints)
             return True
         pool = self.pools.get(category)
@@ -1738,20 +1862,22 @@ class ChoosePrompt:
 class AstPrompt:
     """In place of ChoosePrompt (`prompts: ast`): a translation prompt for the pair of the dataset's
     name ("fr-en/CoVoST"), composed by data/contexts/compose_ast_prompts.py. keep: the markers the
-    output keeps; an output that keeps the events asks for their [tags] in every prompt."""
+    output keeps; an output that keeps the events asks for their [tags] in every prompt. numbers: as
+    in ChoosePrompt, from the translation (the target language)."""
     label = "prompt"
     nocasepunc = lowercase = False
 
-    def __init__(self, dataset, keep=()):
+    def __init__(self, dataset, keep=(), numbers=None):
         from compose_ast_prompts import DEFAULT_DIR, AstPromptComposer
         if set(keep) - {"events"}:
             raise SystemExit(f"{dataset}: an AST output keeps the events or nothing, not {sorted(keep)}")
         source, target = dataset.split("/")[0].split("-")
         self.composer = AstPromptComposer(DEFAULT_DIR, source, target)
         self.events = "events" in keep
+        self.numbers = NumbersPrompt.make(target, numbers)
 
     def __call__(self, s):
-        s.prompt = self.composer.compose(s.rng, events=self.events)
+        s.prompt = self.composer.compose(s.rng, events=self.events, numbers=self.numbers(s) if self.numbers else None)
         return True
 
 
@@ -1798,9 +1924,11 @@ def record_rng(seed, rec, lineno):
     return random.Random(int.from_bytes(hashlib.md5(key).digest()[:8], "little"))
 
 
-def process(path, out, filters, prompt, seed, dry_run, limit, n_examples, empty_fraction=0.0, select=None):
+def process(path, out, filters, prompt, seed, dry_run, limit, n_examples, empty_fraction=0.0, select=None,
+            numbers=True):
     """empty_fraction: the lines left with no letter nor digit kept, with an empty text.
-    select: the numbers of the only input lines read."""
+    select: the numbers of the only input lines read. numbers: false for no prompt about the
+    format of the numbers (NumbersPrompt: dev and test files)."""
     stats = defaultdict(Counter)
     examples = defaultdict(list)
     n = n_kept = 0
@@ -1822,6 +1950,7 @@ def process(path, out, filters, prompt, seed, dry_run, limit, n_examples, empty_
             for lineno, line in chunk:
                 rec = json.loads(line)
                 alive.append(Sample(rec, record_rng(seed, rec, lineno), prompt.nocasepunc, prompt.lowercase))
+                alive[-1].numbers_rng = record_rng(f"{seed}:numbers", rec, lineno) if numbers else None
             for f in filters:
                 if hasattr(f, "prepare"):
                     f.prepare(alive)
@@ -1874,7 +2003,7 @@ OUTPUTS = {"base": (), "events": ("events",), "disfluencies": ("disfluencies",),
            "events_disfluencies": ("events", "disfluencies")}
 # filters whose mode an output sets: the marker they handle
 MARKER_FILTERS = {"events": "events", "disfluencies": "disfluencies", "disfluency_model": "disfluencies"}
-DATASET_KEYS = {"input", "output", "outputs", "output_lines", "nocasepunc", "lowercase", "filters"}
+DATASET_KEYS = {"input", "output", "outputs", "output_lines", "nocasepunc", "lowercase", "numbers", "filters"}
 
 
 def load_config(path):
@@ -1928,6 +2057,7 @@ def main():
     if set(blocks) & set(FILTERS):
         raise SystemExit(f"blocks named like a filter: {sorted(set(blocks) & set(FILTERS))}")
     explicit = cfg.get("explicit_fraction", {"default": 0.05, "with_output": 0.15})
+    numbers_prompts = cfg.get("numbers_prompts", False)
     empty_fraction = cfg.get("empty_fraction", 0.0)
     silence_empty_fraction = cfg.get("silence_empty_fraction", 1.0)
 
@@ -1959,9 +2089,13 @@ def main():
             # a few prompts state what the text does not have (no markers, case and punctuation),
             # more when another output keeps the markers or some lines are lowercase unpunctuated
             favored = kept_somewhere | ({"casepunc"} if dcfg.get("nocasepunc", False) is not False else set())
-            prompt = AstPrompt(name, keep) if prompts == "ast" else \
+            numbers = numbers_prompts and dcfg.get("numbers", True)
+            # AST prompts have no explicit blocks: the format of the numbers in `default` of the lines
+            prompt = AstPrompt(name, keep, {"words": explicit["default"], "without": explicit["default"]}
+                               if numbers else None) if prompts == "ast" else \
                 ChoosePrompt(dctx, keep, explicit=explicit, favored=favored,
-                             nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False))
+                             nocasepunc=dcfg.get("nocasepunc", False), lowercase=dcfg.get("lowercase", False),
+                             numbers=numbers)
             # output_lines: an output but base takes that many lines at random, other ones than the
             # other outputs while there are enough: the outputs of read speech, only there to show
             # that a prompt asking for markers may get none (the filters may drop a few)
@@ -1986,7 +2120,8 @@ def main():
                 is_eval = re.match(r"(dev|test)\b", os.path.basename(path))
                 is_silence = re.search(r"_silence|_nonspeech", os.path.basename(path)) is not None
                 process(path, out, filters, prompt, seed, args.dry_run, args.limit, args.examples,
-                        0.0 if is_eval else silence_empty_fraction if is_silence else empty_fraction, select)
+                        0.0 if is_eval else silence_empty_fraction if is_silence else empty_fraction, select,
+                        numbers=not is_eval)
 
 
 if __name__ == "__main__":

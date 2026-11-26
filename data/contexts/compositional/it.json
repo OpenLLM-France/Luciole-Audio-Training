@@ -128,6 +128,46 @@
         "sentence": ["Elimina le esitazioni come {ex}.", "Ometti le esitazioni.", "Niente esitazioni come {ex}."],
         "kv": [["Esitazioni: eliminare"], ["Esitazioni: nessuna"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "con i numeri in cifre",
+          "scrivendo i numeri in cifre",
+          "usando le cifre per i numeri",
+          "con i numeri scritti in cifre"
+        ],
+        "sentence": [
+          "Scrivi i numeri in cifre.",
+          "Usa le cifre per i numeri, non le lettere.",
+          "I numeri vanno scritti in cifre.",
+          "Numeri in cifre."
+        ],
+        "kv": [
+          ["Numeri: in cifre"],
+          ["Formato dei numeri: cifre"],
+          ["Numeri: cifre"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "con i numeri in lettere",
+          "scrivendo i numeri in lettere",
+          "senza cifre per i numeri",
+          "con i numeri scritti per esteso"
+        ],
+        "sentence": [
+          "Scrivi i numeri in lettere.",
+          "Non usare cifre: scrivi i numeri in lettere.",
+          "I numeri vanno scritti per esteso.",
+          "Numeri in lettere."
+        ],
+        "kv": [
+          ["Numeri: in lettere"],
+          ["Formato dei numeri: lettere"],
+          ["Cifre: no"]
+        ]
+      }
     }
   },
   "ast": {

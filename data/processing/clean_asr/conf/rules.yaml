@@ -8,6 +8,24 @@
 common: {}
 
 fr:
+  # numbers: what tells the format a line writes its numbers in (NumberFormat in clean_asr.py): digits
+  # when some number is in digits, words when some is in words and none in digits:
+  #   words       the number words ("deux", "vingt", "dixième"); not "un", "une" (determiners), nor
+  #               "premier", "second" (premier ministre), nor the scale words alone ("des millions")
+  #   parts       pieces of a compound number that are no number alone ("vingt-et-un", "veintiuno")
+  #   joiners     inside a compound only, between two pieces ("einundzwanzig", "tweeëntwintig")
+  #   ordinal_suffixes  letters written after digits ("1er", "11th", "14h30"); digits glued to other
+  #               letters ("CO2", "3D") are no number
+  #   roman_suffixes  letters written after a Roman numeral ("XIXe", "Ier"): digits too, like "Louis XIV"
+  # Hours, percentages and ordinals ("14h30", "50 %", "1er", "XIXe") are digits.
+  # A language with no `numbers` (ar) gets no prompt about numbers.
+  numbers:
+    words: >-
+      zéro deux trois quatre cinq six sept huit neuf deuxième deuxièmes troisième quatrième cinquième sixième septième huitième neuvième dix cent mille onze douze treize quatorze quinze seize vingt vingts trente quarante cinquante soixante septante huitante octante nonante cents dixième onzième douzième treizième quatorzième quinzième seizième vingtième trentième quarantième cinquantième soixantième centième millième millionième
+    parts: un une unième
+    joiners: et
+    ordinal_suffixes: er re ère e ème è es èmes h
+    roman_suffixes: e er re ère ème es
   # the words lowercase mid-sentence (build_common_words.py), relative to this directory:
   # tells a common word ("Les", "Voilà") from a proper noun ("Gange")
   common_words: fr_common_words.txt
@@ -226,6 +244,11 @@ fr:
         - {pattern: '(?<![\w''-])M\.? ?M(?![\w''-])', repl: 'mm'}
 
 en:
+  numbers:
+    words: >-
+      zero two three four five six seven eight nine third fourth fifth sixth seventh eighth ninth ten hundred thousand eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth thirtieth fortieth fiftieth sixtieth seventieth eightieth ninetieth hundredth thousandth millionth
+    parts: one
+    ordinal_suffixes: st nd rd th s
   # the words lowercase mid-sentence (build_common_words.py --lang en)
   common_words: en_common_words.txt
 
@@ -284,6 +307,12 @@ en:
 # Hesitations: only the spellings that cannot be a word. Left out, because they are also words or
 # answers: es/it "eh", nl "em", pt "é", "em" and "um", ar "اه" ("yes").
 de:
+  numbers:
+    words: >-
+      null eins zwei drei vier fünf sechs sieben acht neun zweite zweiten zweiter dritte dritten dritter vierte vierten fünfte fünften zehn hundert tausend elf zwölf dreizehn vierzehn fünfzehn sechzehn siebzehn achtzehn neunzehn zwanzig dreißig dreissig vierzig fünfzig sechzig siebzig achtzig neunzig zehnte zehnten elfte elften zwölfte zwölften zwanzigste zwanzigsten dreißigste dreißigsten hundertste hundertsten tausendste tausendsten
+    parts: ein eine
+    joiners: und
+    ordinal_suffixes: er
   no_end_words: der die das den dem des ein eine einen einem einer und oder aber von zu mit für auf in an
   disfluencies:
     hesitations:
@@ -294,6 +323,11 @@ de:
     # not "der der", "die die", "das das": relative pronouns ("die, die")
     repeatable_not: ein eine einen einem einer und oder aber von zu mit für auf ich du er wir
 es:
+  numbers:
+    words: >-
+      cero dos tres cuatro cinco seis siete ocho nueve diez cien mil once doce trece catorce quince dieciséis diecisiete dieciocho diecinueve veinte treinta cuarenta cincuenta sesenta setenta ochenta noventa ciento doscientos doscientas trescientos trescientas cuatrocientos cuatrocientas quinientos quinientas seiscientos seiscientas setecientos setecientas ochocientos ochocientas novecientos novecientas décimo décima vigésimo vigésima trigésimo trigésima centésimo centésima milésimo milésima
+    parts: uno una un ún dós trés séis dieci veinti
+    ordinal_suffixes: º ª o a er
   no_end_words: el la los las un una unos unas de del a al con por para y o e u pero mi tu su
   disfluencies:
     hesitations:
@@ -301,6 +335,11 @@ es:
       hmm: ['[Hh]m+', '[Mm]m+h*']
     repeatable_not: el los las un una unos unas de del con por para y o pero yo tú mi tu su
 it:
+  numbers:
+    words: >-
+      zero due tre quattro cinque sei sette otto nove terzo terza dieci cento mille undici dodici tredici quattordici quindici sedici diciassette diciotto diciannove venti trenta quaranta cinquanta sessanta settanta ottanta novanta mila decimo decima ventesimo ventesima trentesimo trentesima centesimo centesima millesimo millesima
+    parts: uno una un tré vent trent quarant cinquant sessant settant ottant novant cent
+    ordinal_suffixes: º ª o a
   no_end_words: il lo la i gli le un uno una di del della a al alla da in con per e o ma mio tuo suo
   disfluencies:
     hesitations:
@@ -309,6 +348,12 @@ it:
       hmm: ['[Hh]m+', '[Mm]m+h*']
     repeatable_not: il lo gli un uno una di del della da con per e o ma io tu mio tuo suo
 nl:
+  numbers:
+    words: >-
+      nul één twee drie vier vijf zes zeven acht negen tweede derde vierde vijfde zesde zevende achtste negende tien honderd duizend elf twaalf dertien veertien vijftien zestien zeventien achttien negentien twintig dertig veertig vijftig zestig zeventig tachtig negentig tiende elfde twaalfde twintigste dertigste veertigste vijftigste honderdste duizendste
+    parts: een
+    joiners: en ën
+    ordinal_suffixes: e de ste
   no_end_words: de het een van voor met en of maar op in aan te mijn je
   disfluencies:
     hesitations:
@@ -320,6 +365,11 @@ nl:
     # not "dat dat", "die die": relative pronouns
     repeatable_not: de het een van voor met en of maar op ik jij hij zij wij mijn
 pt:
+  numbers:
+    words: >-
+      zero dois duas três quatro cinco seis sete oito nove terceiro terceira dez cem mil onze doze treze catorze quatorze quinze dezesseis dezasseis dezessete dezassete dezoito dezenove dezanove vinte trinta quarenta cinquenta sessenta setenta oitenta noventa cento duzentos duzentas trezentos trezentas quatrocentos quatrocentas quinhentos quinhentas seiscentos seiscentas setecentos setecentas oitocentos oitocentas novecentos novecentas décimo décima vigésimo vigésima trigésimo trigésima centésimo centésima milésimo milésima
+    parts: um uma
+    ordinal_suffixes: º ª o a
   no_end_words: o a os as um uma de do da dos das em no na com por para e ou mas meu teu seu
   disfluencies:
     hesitations:

@@ -19,6 +19,8 @@ Placeholders: {tgt} and {src_name} are the bare language_names, {src} is as abov
 `events`: the prompt also asks for the [tags] of non-speech events, with the `axes.events.yes`
 entries of the ASR prompts (compose_asr_prompts.py), in the register of the base: a clause after
 the request or a sentence after it (`EVENTS_FORMATS`).
+`numbers` (digits, words): the prompt also asks for that format of the numbers, with the
+`axes.numbers` entries, in the same way (after the events when both are asked for).
 
 Usage:
     python data/contexts/compose_ast_prompts.py --source de --target en --instruction-language fr -n 10
@@ -40,7 +42,7 @@ FAVORED_LANGUAGES = ("fr", "en")
 # what the entries of each mention must and must not name
 REQUIRED = {"target": ["{tgt}"], "source_target": ["{tgt}"], "implicit": []}
 FORBIDDEN = {"target": ["{src}", "{src_name}"], "source_target": [], "implicit": ["{tgt}", "{src}", "{src_name}"]}
-EVENTS_FORMATS = {"fused": 0.5, "sentences": 0.5}   # how an events prompt states the tags
+EVENTS_FORMATS = {"fused": 0.5, "sentences": 0.5}   # how an events / numbers prompt states them
 
 
 def instruction_weights(directory, source, target):
@@ -95,8 +97,9 @@ class AstPromptComposer:
                     raise ValueError(f"{where}: ast.{mention}: {n} entries in the register {register!r}, "
                                      f"expected {MIN_PER_REGISTER}")
 
-    def compose(self, rng, instruction_language=None, mention=None, events=False):
-        """One prompt; `instruction_language` and `mention` force them; `events` asks for the [tags]."""
+    def compose(self, rng, instruction_language=None, mention=None, events=False, numbers=None):
+        """One prompt; `instruction_language` and `mention` force them; `events` asks for the [tags],
+        `numbers` (digits, words) for that format of the numbers."""
         mention = mention or weighted(rng, self.mention)
         if mention == "implicit":          # the language of the instruction is what says the target
             if instruction_language not in (None, self.target):
@@ -114,22 +117,24 @@ class AstPromptComposer:
         text = text.replace("{tgt}", names[self.target]).replace("{src_name}", names[self.source]) \
             .replace("{src}", source)
         end = lang["question_mark"] if kind == "question" else "."
-        if not events:
+        wanted = ([("events", "yes")] if events else []) + ([("numbers", numbers)] if numbers else [])
+        if not wanted:
             return capitalize(text) + end
         # drawn after the base, so that the prompts without events stay those of before
         register = register or rng.choice(lang.get("registers") or [None])
 
-        def part(form):
-            entry = rng.choice(in_register(lang["axes"]["events"]["yes"][form], register))
+        def part(axis, value, form):
+            entry = rng.choice(in_register(lang["axes"][axis][value][form], register))
             entry = entry if isinstance(entry, str) else entry[register]
             if "{ex}" in entry:
-                pool = lang["examples"]["events"]
+                pool = lang["examples"][axis]
                 entry = entry.replace("{ex}", join_in(lang, rng.sample(pool, rng.randint(1, min(3, len(pool)))), "or"))
             return entry
 
         if weighted(rng, EVENTS_FORMATS) == "fused":
-            return f"{capitalize(text)}{lang.get('comma', ',')} {part('clause')}{end}"
-        return f"{capitalize(text)}{end} {part('sentence')}"
+            clauses = join_in(lang, [part(axis, value, "clause") for axis, value in wanted], "and")
+            return f"{capitalize(text)}{lang.get('comma', ',')} {clauses}{end}"
+        return " ".join([f"{capitalize(text)}{end}"] + [part(axis, value, "sentence") for axis, value in wanted])
 
 
 def main():
@@ -140,6 +145,7 @@ def main():
     p.add_argument("--instruction-language", help="language of the instructions (default: drawn)")
     p.add_argument("--mention", choices=list(MENTION), help="force the language mention")
     p.add_argument("--events", action="store_true", help="also ask for the [tags] of non-speech events")
+    p.add_argument("--numbers", choices=["digits", "words"], help="also ask for that format of the numbers")
     p.add_argument("-n", type=int, default=10, help="prompts (default: %(default)s)")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
@@ -149,7 +155,7 @@ def main():
     composer = AstPromptComposer(args.dir, args.source, args.target, instruction_languages=instruction, mention=mention)
     rng = random.Random(args.seed)
     for _ in range(args.n):
-        print(composer.compose(rng, args.instruction_language, args.mention, args.events))
+        print(composer.compose(rng, args.instruction_language, args.mention, args.events, args.numbers))
 
 
 if __name__ == "__main__":

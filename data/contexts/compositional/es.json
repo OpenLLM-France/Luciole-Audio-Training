@@ -126,6 +126,46 @@
         "sentence": ["Elimina las vacilaciones como {ex}.", "Omite las vacilaciones.", "Nada de vacilaciones como {ex}."],
         "kv": [["Vacilaciones: eliminar"], ["Vacilaciones: ninguna"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "con los números en cifras",
+          "escribiendo los números con dígitos",
+          "con cifras para los números",
+          "poniendo los números en cifras"
+        ],
+        "sentence": [
+          "Escribe los números en cifras.",
+          "Usa dígitos para los números, no letras.",
+          "Los números van en cifras.",
+          "Números en cifras."
+        ],
+        "kv": [
+          ["Números: en cifras"],
+          ["Formato de los números: dígitos"],
+          ["Números: cifras"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "con los números en letras",
+          "escribiendo los números con letras",
+          "sin cifras para los números",
+          "con los números escritos en letras"
+        ],
+        "sentence": [
+          "Escribe los números en letras.",
+          "No uses cifras: escribe los números con letras.",
+          "Los números van en letras.",
+          "Números en letras."
+        ],
+        "kv": [
+          ["Números: en letras"],
+          ["Formato de los números: letras"],
+          ["Cifras: no"]
+        ]
+      }
     }
   },
   "ast": {

@@ -129,6 +129,50 @@
         "sentence": ["Remove hesitations such as {ex}.", "Leave out hesitations.", "No hesitations like {ex}."],
         "kv": [["Hesitations: remove"], ["Hesitations: none"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "writing numbers as digits",
+          "with numbers in digits",
+          "using digits for numbers",
+          "with numbers written as numerals",
+          "writing numbers in figures"
+        ],
+        "sentence": [
+          "Write numbers as digits.",
+          "Use digits for numbers, not words.",
+          "Numbers should be written as numerals.",
+          "Numbers in digits.",
+          "Write any number in figures."
+        ],
+        "kv": [
+          ["Numbers: digits"],
+          ["Number format: numerals"],
+          ["Numbers: as digits"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "writing numbers out in words",
+          "with numbers spelled out",
+          "spelling out numbers",
+          "with numbers in words rather than digits",
+          "without digits for numbers"
+        ],
+        "sentence": [
+          "Spell out numbers in words.",
+          "Do not use digits: write numbers in words.",
+          "Numbers should be spelled out.",
+          "Numbers in words.",
+          "Write every number out in full."
+        ],
+        "kv": [
+          ["Numbers: spelled out"],
+          ["Number format: words"],
+          ["Digits: no"]
+        ]
+      }
     }
   },
   "ast": {

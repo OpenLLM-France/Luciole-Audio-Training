@@ -32,6 +32,12 @@ tag_tables:
 # Fraction of the lines whose prompt states what the text does not have (see fr_blocks.yaml).
 explicit_fraction: {default: 0.2, with_output: 0.25}
 
+# Prompts asking for the format of the numbers, train files only (ChoosePrompt in clean_asr.py). With
+# no format asked, numbers are in words: a line with some number in digits always asks for digits;
+# the others may get the `numbers` explicit block (explicit_fraction above): numbers in words on a line
+# with some, a format at random on a line with none (the negative examples).
+numbers_prompts: true
+
 blocks:
   finish:
     - normalize_spacing

@@ -124,6 +124,46 @@
         "sentence": ["Verwijder aarzelingen zoals {ex}.", "Laat aarzelingen weg.", "Geen aarzelingen zoals {ex}."],
         "kv": [["Aarzelingen: verwijderen"], ["Aarzelingen: geen"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "met getallen in cijfers",
+          "waarbij je getallen in cijfers schrijft",
+          "met cijfers voor getallen",
+          "met de getallen als cijfers"
+        ],
+        "sentence": [
+          "Schrijf getallen in cijfers.",
+          "Gebruik cijfers voor getallen, geen woorden.",
+          "Getallen worden in cijfers geschreven.",
+          "Getallen in cijfers."
+        ],
+        "kv": [
+          ["Getallen: in cijfers"],
+          ["Notatie van getallen: cijfers"],
+          ["Getallen: cijfers"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "met getallen voluit geschreven",
+          "waarbij je getallen voluit schrijft",
+          "zonder cijfers voor getallen",
+          "met getallen in letters"
+        ],
+        "sentence": [
+          "Schrijf getallen voluit.",
+          "Gebruik geen cijfers: schrijf getallen in letters.",
+          "Getallen worden voluit geschreven.",
+          "Getallen in letters."
+        ],
+        "kv": [
+          ["Getallen: voluit"],
+          ["Notatie van getallen: letters"],
+          ["Cijfers: nee"]
+        ]
+      }
     }
   },
   "ast": {

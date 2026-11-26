@@ -126,6 +126,46 @@
         "sentence": ["Entferne Zögerlaute wie {ex}.", "Lass Häsitationen weg.", "Keine Zögerlaute wie {ex}."],
         "kv": [["Zögerlaute: entfernen"], ["Häsitationen: keine"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "mit Zahlen in Ziffern",
+          "wobei du Zahlen als Ziffern schreibst",
+          "mit Ziffern für Zahlen",
+          "mit Zahlen als Ziffern"
+        ],
+        "sentence": [
+          "Schreib Zahlen als Ziffern.",
+          "Verwende Ziffern für Zahlen, keine Wörter.",
+          "Zahlen werden in Ziffern geschrieben.",
+          "Zahlen in Ziffern."
+        ],
+        "kv": [
+          ["Zahlen: Ziffern"],
+          ["Zahlenformat: Ziffern"],
+          ["Zahlen: als Ziffern"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "mit ausgeschriebenen Zahlen",
+          "wobei du Zahlen ausschreibst",
+          "ohne Ziffern für Zahlen",
+          "mit Zahlen in Worten"
+        ],
+        "sentence": [
+          "Schreib Zahlen aus.",
+          "Verwende keine Ziffern: Schreib Zahlen in Worten.",
+          "Zahlen werden ausgeschrieben.",
+          "Zahlen in Worten."
+        ],
+        "kv": [
+          ["Zahlen: ausgeschrieben"],
+          ["Zahlenformat: Wörter"],
+          ["Ziffern: nein"]
+        ]
+      }
     }
   },
   "ast": {

@@ -125,6 +125,46 @@
         "sentence": ["Remova as hesitações como {ex}.", "Omita as hesitações.", "Nada de hesitações como {ex}."],
         "kv": [["Hesitações: remover"], ["Hesitações: nenhuma"]]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "com os números em algarismos",
+          "escrevendo os números em algarismos",
+          "usando dígitos para os números",
+          "com os números escritos em algarismos"
+        ],
+        "sentence": [
+          "Escreva os números em algarismos.",
+          "Use dígitos para os números, não palavras.",
+          "Os números devem ser escritos em algarismos.",
+          "Números em algarismos."
+        ],
+        "kv": [
+          ["Números: em algarismos"],
+          ["Formato dos números: dígitos"],
+          ["Números: algarismos"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "com os números por extenso",
+          "escrevendo os números por extenso",
+          "sem algarismos para os números",
+          "com os números escritos por extenso"
+        ],
+        "sentence": [
+          "Escreva os números por extenso.",
+          "Não use algarismos: escreva os números por extenso.",
+          "Os números devem ser escritos por extenso.",
+          "Números por extenso."
+        ],
+        "kv": [
+          ["Números: por extenso"],
+          ["Formato dos números: por extenso"],
+          ["Algarismos: não"]
+        ]
+      }
     }
   },
   "ast": {

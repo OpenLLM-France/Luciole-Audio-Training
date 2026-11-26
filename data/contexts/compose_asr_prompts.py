@@ -6,6 +6,8 @@ A prompt is a transcription request (a base) that states each requested constrai
                 punctuation (lowercase)
   events        keep (yes) or drop (no) the [tags] of non-speech events
   disfluencies  keep (yes) or drop (no) the hesitations (euh, hmm)
+  numbers       numbers in digits (digits) or in words (words: also what an unset numbers means to
+                clean_asr.py's data)
 An unset constraint is not mentioned: the base alone is a plain transcription request.
 
 There is one file per instruction language, for audio of any language: the instruction language
@@ -53,7 +55,7 @@ import random
 
 
 AXES = {"language": ("explicit", "source"), "nocasepunc": ("yes", "no", "lowercase"), "events": ("yes", "no"),
-        "disfluencies": ("yes", "no")}
+        "disfluencies": ("yes", "no"), "numbers": ("digits", "words")}
 FORMATS = {"fused": 0.3, "sentences": 0.25, "lines": 0.15, "bullets": 0.15, "kv": 0.15}
 LANGUAGE_MENTION = {"none": 0.8, "explicit": 0.1, "source": 0.1}
 FORMS = ("clause", "sentence", "kv")
@@ -172,10 +174,10 @@ class PromptComposer:
             raise ValueError(f"{where}: quotes must be a template with {{}}, like \"« {{}} »\"")
 
     def compose(self, rng, nocasepunc=None, events=None, disfluencies=None, fmt=None, instruction_language=None,
-                mention=None):
+                mention=None, numbers=None):
         """A prompt asking for the given constraints: nocasepunc True (lowercase, no punctuation),
         False (case and punctuation), "lowercase" (lowercase, with punctuation) or None (not mentioned); events / disfluencies True (keep),
-        False (drop) or None. `fmt`, `instruction_language` and `mention`
+        False (drop) or None; numbers "digits", "words" or None. `fmt`, `instruction_language` and `mention`
         (none, explicit, source) force a format, an instruction language or the language mention."""
         name = instruction_language or weighted(rng, self.instruction_languages)
         lang = self.files[name]
@@ -186,7 +188,7 @@ class PromptComposer:
         mention = mention or weighted(rng, self.language_mention)
         wanted = [(axis, value if isinstance(value, str) else "yes" if value else "no")
                   for axis, value in (("nocasepunc", nocasepunc), ("events", events),
-                                      ("disfluencies", disfluencies)) if value is not None]
+                                      ("disfluencies", disfluencies), ("numbers", numbers)) if value is not None]
         if mention != "none":
             wanted.append(("language", mention))
         rng.shuffle(wanted)
@@ -246,6 +248,7 @@ def main():
                         "or lowercase with punctuation (lowercase)")
     p.add_argument("--events", choices=["yes", "no"], help="ask to keep (yes) or drop (no) the [tags]")
     p.add_argument("--disfluencies", choices=["yes", "no"], help="ask to keep (yes) or drop (no) the hesitations")
+    p.add_argument("--numbers", choices=AXES["numbers"], help="ask for numbers in digits or in words")
     p.add_argument("--all", action="store_true", help="every combination of the constraints")
     p.add_argument("--format", choices=list(FORMATS), help="only this format")
     p.add_argument("-n", type=int, default=5, help="prompts per combination")
@@ -263,7 +266,8 @@ def main():
     for nocasepunc, events, disfluencies in combos:
         print(f"### nocasepunc={nocasepunc} events={events} disfluencies={disfluencies}")
         for _ in range(args.n):
-            print(composer.compose(rng, nocasepunc, events, disfluencies, args.format, mention=args.mention))
+            print(composer.compose(rng, nocasepunc, events, disfluencies, args.format, mention=args.mention,
+                                   numbers=args.numbers))
             print("--")
 
 

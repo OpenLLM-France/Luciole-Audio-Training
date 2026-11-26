@@ -241,6 +241,52 @@
           ["Hésitations et répétitions : retirées"]
         ]
       }
+    },
+    "numbers": {
+      "digits": {
+        "clause": [
+          "en écrivant les nombres en chiffres",
+          "avec les nombres en chiffres",
+          "en notant les nombres en chiffres",
+          "en mettant les nombres en chiffres",
+          "avec des chiffres pour les nombres"
+        ],
+        "sentence": [
+          {"tu": "Écris les nombres en chiffres."},
+          {"tu": "Note les nombres en chiffres, pas en lettres."},
+          {"vous": "Écrivez les nombres en chiffres."},
+          {"vous": "Notez les nombres en chiffres."},
+          "Les nombres sont à écrire en chiffres.",
+          "Nombres en chiffres."
+        ],
+        "kv": [
+          ["Nombres : en chiffres"],
+          ["Format des nombres : chiffres"],
+          ["Nombres : chiffres"]
+        ]
+      },
+      "words": {
+        "clause": [
+          "en écrivant les nombres en toutes lettres",
+          "avec les nombres en lettres",
+          "en notant les nombres en toutes lettres",
+          "avec les nombres en lettres plutôt qu'en chiffres",
+          "sans chiffres pour les nombres"
+        ],
+        "sentence": [
+          {"tu": "Écris les nombres en toutes lettres."},
+          {"tu": "N'utilise pas de chiffres : écris les nombres en lettres."},
+          {"vous": "Écrivez les nombres en toutes lettres."},
+          {"vous": "N'utilisez pas de chiffres pour les nombres."},
+          "Les nombres sont à écrire en lettres.",
+          "Nombres en toutes lettres."
+        ],
+        "kv": [
+          ["Nombres : en toutes lettres"],
+          ["Format des nombres : lettres"],
+          ["Chiffres : non"]
+        ]
+      }
     }
   },
   "ast": {
