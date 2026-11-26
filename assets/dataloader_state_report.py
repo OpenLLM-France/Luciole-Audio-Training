@@ -23,13 +23,24 @@ before the global duration/token filter and including the bucketing buffer
 Weights are compared as per-sample probabilities (product of the normalised
 weights along the YAML tree), which is what the Lhotse multiplexer samples.
 
+Distinct samples: within one epoch a shard never repeats a line, so the number of
+distinct lines seen from a shard is ``shard_len`` once ``epoch >= 1``, else
+``position`` (max over the workers reading that same shard).
+
 Outputs (in --output_dir)
 -------------------------
+weights_check/   did the dataloader follow the weights of the input_cfg?
   summary.txt                  — global numbers + largest deviations
-  datasets.csv                 — one row per input_cfg leaf
+  datasets.csv                 — one row per input_cfg leaf (target vs actual share)
   tasks.csv / subtasks.csv / languages.csv / task_languages.csv
-  workers.csv                  — per (rank, worker) sampler diagnostics
-  evolution.csv                — per checkpoint x dataset (with --all_checkpoints)
+  evolution.csv                — per checkpoint x dataset shares (with --all_checkpoints)
+  plots/*.png                  — unless --no_plots
+data_usage/      how much of each corpus was seen, and how many times?
+  summary.txt                  — lines / hours available, seen, distinct, repeated; passes buckets
+  datasets.csv                 — one row per leaf: size, seen, distinct, coverage, passes, hours
+  tasks.csv / subtasks.csv / languages.csv / task_languages.csv
+  workers.csv                  — per (rank, worker) sampler diagnostics (drawn, kept, discarded)
+  evolution.csv                — per checkpoint x dataset seen / distinct / passes (with --all_checkpoints)
   plots/*.png                  — unless --no_plots
 
 Usage
@@ -103,7 +114,9 @@ def main():
         data_folder = os.path.join(os.environ["ALL_CCFRSCRATCH"], "audio")
     metadata_csv = args.metadata_csv or (Path(input_cfg).parent / "metadata.csv")
     output_dir = Path(args.output_dir or Path("dataloader_reports") / exp_dir.name)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    weights_dir, usage_dir = output_dir / "weights_check", output_dir / "data_usage"
+    for d in (weights_dir, usage_dir):
+        d.mkdir(parents=True, exist_ok=True)
 
     ctx = _Context(data_folder=data_folder, indexes_root=indexes_root)
     cfg = yaml.safe_load(open(input_cfg, encoding="utf-8"))
@@ -120,8 +133,7 @@ def main():
     print(f"input_cfg  : {input_cfg}  ({len(leaves)} leaves)")
 
     state = _consumption_from_meta(_meta_path(selected[1]), cfg, leaves, ctx)
-    datasets = _datasets_table(leaves, state["seen"], state["max_epoch"])
-    datasets.to_csv(output_dir / "datasets.csv", index=False)
+    datasets = _datasets_table(leaves, state)
     groups = {
         "tasks": ["task"],
         "subtasks": ["task", "sub_task"],
@@ -129,13 +141,21 @@ def main():
         "task_languages": ["task", "lang"],
     }
     tables = {name: _group_table(datasets, keys) for name, keys in groups.items()}
-    for name, table in tables.items():
-        table.to_csv(output_dir / f"{name}.csv", index=False)
-    pd.DataFrame(state["workers"]).to_csv(output_dir / "workers.csv", index=False)
+    usage_tables = {name: _usage_group_table(datasets, keys) for name, keys in groups.items()}
+
+    datasets[_WEIGHT_COLS].to_csv(weights_dir / "datasets.csv", index=False)
+    datasets[_USAGE_COLS].sort_values("passes", ascending=False).to_csv(usage_dir / "datasets.csv", index=False)
+    for name in groups:
+        tables[name].to_csv(weights_dir / f"{name}.csv", index=False)
+        usage_tables[name].to_csv(usage_dir / f"{name}.csv", index=False)
+    pd.DataFrame(state["workers"]).to_csv(usage_dir / "workers.csv", index=False)
 
     summary = _summary_text(exp_dir, selected[1], input_cfg, state, datasets, tables)
-    (output_dir / "summary.txt").write_text(summary)
+    (weights_dir / "summary.txt").write_text(summary)
+    usage_summary = _usage_summary_text(exp_dir, selected[1], input_cfg, state, datasets, usage_tables)
+    (usage_dir / "summary.txt").write_text(usage_summary)
     print(summary)
+    print(usage_summary)
 
     evolution = None
     if args.all_checkpoints:
@@ -144,7 +164,8 @@ def main():
             print(f"  evolution: {ckpt.name}")
             st = _consumption_from_meta(_meta_path(ckpt), cfg, leaves, ctx)
             total = sum(st["seen"])
-            for leaf, seen in zip(leaves, st["seen"]):
+            for leaf, seen, distinct in zip(leaves, st["seen"], st["distinct"], strict=True):
+                size = leaf.get("size")
                 rows.append(
                     dict(
                         step=st["global_step"],
@@ -156,14 +177,24 @@ def main():
                         target_pct=100 * leaf["prob"],
                         seen=seen,
                         actual_pct=100 * seen / total if total else float("nan"),
+                        size=size,
+                        distinct=distinct,
+                        coverage_pct=100 * distinct / size if size else float("nan"),
+                        passes=seen / size if size else float("nan"),
                     )
                 )
         evolution = pd.DataFrame(rows)
-        evolution.to_csv(output_dir / "evolution.csv", index=False)
+        keys = ["step", "checkpoint", "dataset", "task", "sub_task", "lang"]
+        evolution[keys + ["target_pct", "seen", "actual_pct"]].to_csv(weights_dir / "evolution.csv", index=False)
+        evolution[keys + ["size", "seen", "distinct", "coverage_pct", "passes"]].to_csv(
+            usage_dir / "evolution.csv", index=False
+        )
 
     if not args.no_plots:
-        _make_plots(datasets, tables, evolution, output_dir / "plots", title=f"{exp_dir.name} @ step {state['global_step']}")
-    print(f"\nWrote report to {output_dir}")
+        title = f"{exp_dir.name} @ step {state['global_step']}"
+        _make_plots(datasets, tables, evolution, weights_dir / "plots", title=title)
+        _make_usage_plots(datasets, usage_tables, evolution, usage_dir / "plots", title=title)
+    print(f"\nWrote report to {weights_dir} and {usage_dir}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -329,7 +360,9 @@ def _manifest_size(leaf: dict, ctx: _Context):
 def _canonical_manifest(path: str, ctx: _Context) -> str:
     """Map a randomorder / sharded manifest path back to the original manifest listed in metadata.csv."""
     path = _resolve_env(path, ctx) if ctx.data_folder else path
-    path = re.sub(r"_randomorder_shards/[^/]*$", ".jsonl", path)
+    # .../train_contextual_biasing_shards/train_contextual_biasing__OP_0..54_CL_.jsonl
+    #   -> .../train_contextual_biasing.jsonl
+    path = re.sub(r"(_randomorder)?_shards/[^/]*$", ".jsonl", path)
     return re.sub(r"_randomorder\.jsonl$", ".jsonl", path)
 
 
@@ -358,6 +391,8 @@ def _consumption_from_meta(meta_path: Path, cfg, leaves: list, ctx: _Context) ->
     entries = cfg if isinstance(cfg, list) else cfg["input_cfg"]
     seen = [0] * len(leaves)
     max_epoch = [0] * len(leaves)
+    # distinct lines per (leaf, shard): workers reading the same shard share the same line order.
+    shard_distinct = [dict() for _ in leaves]
     workers = []
     for rank_entry in per_rank:
         snapshots = rank_entry["state"]["_snapshot"]["_worker_snapshots"]
@@ -373,13 +408,18 @@ def _consumption_from_meta(meta_path: Path, cfg, leaves: list, ctx: _Context) ->
             drawn = 0
             for i, ls in enumerate(leaf_states):
                 epoch, position = int(ls.get("epoch", 0) or 0), int(ls["position"])
-                n = epoch * _shard_len(leaves[i], ls, ctx) + position if epoch else position
+                shard_len = _shard_len(leaves[i], ls, ctx) if epoch else None
+                n = epoch * shard_len + position if epoch else position
                 seen[i] += n
                 drawn += n
                 max_epoch[i] = max(max_epoch[i], epoch)
+                shard = (int(ls.get("shard_id") or 0), int(ls.get("num_shards") or 1))
+                d = shard_len if epoch else position
+                shard_distinct[i][shard] = max(shard_distinct[i].get(shard, 0), d)
             diag = _sum_diagnostics(sampler_state.get("diagnostics", {}))
             workers.append(dict(dp_rank=rank_entry["dp_rank"], worker=worker_name, drawn=drawn, **diag))
-    return dict(global_step=meta.get("global_step"), seen=seen, max_epoch=max_epoch, workers=workers)
+    distinct = [sum(d.values()) for d in shard_distinct]
+    return dict(global_step=meta.get("global_step"), seen=seen, max_epoch=max_epoch, distinct=distinct, workers=workers)
 
 
 def _walk_state(entries: list, state, out: list) -> None:
@@ -449,10 +489,23 @@ def _sum_diagnostics(diag: dict) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _datasets_table(leaves: list, seen: list, max_epoch: list) -> pd.DataFrame:
+_WEIGHT_COLS = [
+    "dataset", "task", "sub_task", "lang", "source_lang", "target_lang",
+    "target_pct", "actual_pct", "ratio", "seen", "size", "passes", "max_epoch", "hours_est", "manifest",
+]  # fmt: skip
+_USAGE_COLS = [
+    "dataset", "task", "sub_task", "lang", "source_lang", "target_lang",
+    "size", "seen", "distinct", "repeated", "coverage_pct", "passes", "max_epoch",
+    "avg_dur_sec", "hours_available", "hours_seen", "hours_distinct", "manifest",
+]  # fmt: skip
+_PASS_BUCKETS = [0, 0.1, 0.5, 1, 2, 5, 10, float("inf")]
+
+
+def _datasets_table(leaves: list, state: dict) -> pd.DataFrame:
+    seen, max_epoch, distinct = state["seen"], state["max_epoch"], state["distinct"]
     total = sum(seen)
     rows = []
-    for leaf, s, ep in zip(leaves, seen, max_epoch):
+    for leaf, s, ep, dist in zip(leaves, seen, max_epoch, distinct, strict=True):
         size = leaf.get("size")
         actual = s / total if total else float("nan")
         dur = leaf.get("avg_dur_sec")
@@ -472,6 +525,13 @@ def _datasets_table(leaves: list, seen: list, max_epoch: list) -> pd.DataFrame:
                 passes=s / size if size else float("nan"),
                 max_epoch=ep,
                 hours_est=s * dur / 3600 if dur else float("nan"),
+                distinct=dist,
+                repeated=s - dist,
+                coverage_pct=100 * dist / size if size else float("nan"),
+                avg_dur_sec=dur if dur else float("nan"),
+                hours_available=size * dur / 3600 if dur and size else float("nan"),
+                hours_seen=s * dur / 3600 if dur else float("nan"),
+                hours_distinct=dist * dur / 3600 if dur else float("nan"),
                 manifest=leaf["manifest"],
             )
         )
@@ -541,6 +601,115 @@ def _summary_text(exp_dir, ckpt, input_cfg, state, datasets: pd.DataFrame, table
     return "\n".join(lines) + "\n"
 
 
+def _usage_group_table(datasets: pd.DataFrame, keys: list) -> pd.DataFrame:
+    def hsum(x):
+        return x.sum(min_count=1)
+
+    g = (
+        datasets.assign(
+            fully_seen=datasets["coverage_pct"] >= 100,
+            over_5=datasets["passes"] > 5,
+        )
+        .groupby(keys, dropna=False)
+        .agg(
+            n_datasets=("dataset", "count"),
+            size=("size", "sum"),
+            seen=("seen", "sum"),
+            distinct=("distinct", "sum"),
+            repeated=("repeated", "sum"),
+            n_fully_seen=("fully_seen", "sum"),
+            n_over_5_passes=("over_5", "sum"),
+            min_passes=("passes", "min"),
+            max_passes=("passes", "max"),
+            hours_available=("hours_available", hsum),
+            hours_seen=("hours_seen", hsum),
+            hours_distinct=("hours_distinct", hsum),
+        )
+        .reset_index()
+    )
+    g["passes"] = g["seen"] / g["size"]
+    g["coverage_pct"] = 100 * g["distinct"] / g["size"]
+    g["repeated_pct_of_seen"] = 100 * g["repeated"] / g["seen"]
+    g["share_of_seen_pct"] = 100 * g["seen"] / datasets["seen"].sum()
+    cols = keys + [
+        "n_datasets", "size", "seen", "share_of_seen_pct", "distinct", "coverage_pct", "repeated",
+        "repeated_pct_of_seen", "passes", "min_passes", "max_passes", "n_fully_seen", "n_over_5_passes",
+        "hours_available", "hours_seen", "hours_distinct",
+    ]  # fmt: skip
+    return g[cols].sort_values("seen", ascending=False)
+
+
+def _usage_summary_text(exp_dir, ckpt, input_cfg, state, datasets: pd.DataFrame, tables: dict) -> str:
+    w = pd.DataFrame(state["workers"])
+    size, seen, distinct = int(datasets["size"].sum()), int(datasets["seen"].sum()), int(datasets["distinct"].sum())
+    kept = int(w["kept_cuts"].sum())
+    h_av, h_seen, h_dist = (datasets[c].sum() for c in ("hours_available", "hours_seen", "hours_distinct"))
+
+    buckets = pd.cut(datasets["passes"], _PASS_BUCKETS, right=False)
+    by_bucket = (
+        datasets.assign(bucket=buckets)
+        .groupby("bucket", observed=False)
+        .agg(n_datasets=("dataset", "count"), seen=("seen", "sum"), hours_seen=("hours_seen", "sum"))
+        .reset_index()
+    )
+    by_bucket["share_of_seen_pct"] = 100 * by_bucket["seen"] / seen
+    by_bucket["bucket"] = by_bucket["bucket"].astype(str).str.replace("inf", "∞")
+
+    lines = [
+        f"experiment        : {exp_dir}",
+        f"checkpoint        : {ckpt.name}",
+        f"input_cfg         : {input_cfg}",
+        f"global_step       : {state['global_step']}",
+        "",
+        f"lines available   : {size:,}  ({h_av:,.0f} h est.)  in {len(datasets)} manifests",
+        f"cuts drawn        : {seen:,}  ({h_seen:,.0f} h est.)  = {seen / size:.2f} passes over the whole mix",
+        f"sampler kept_cuts : {kept:,}  (drawn - kept = {seen - kept:,}: filtered + bucketing buffer)",
+        f"distinct lines    : {distinct:,}  ({h_dist:,.0f} h est.)  = {100 * distinct / size:.1f} % of the lines",
+        f"never seen        : {size - distinct:,}  ({h_av - h_dist:,.0f} h est.)",
+        f"repeated draws    : {seen - distinct:,}  = {100 * (seen - distinct) / seen:.1f} % of what was drawn",
+        f"fully seen (>= 1 pass on every shard): {int((datasets['coverage_pct'] >= 100).sum())} / {len(datasets)}",
+        "",
+        "Datasets by number of passes:",
+        by_bucket.to_string(index=False, float_format=lambda v: f"{v:.1f}"),
+        "",
+        "By task:",
+        _fmt_usage(tables["tasks"], ["task"]),
+        "",
+        "By sub-task:",
+        _fmt_usage(tables["subtasks"], ["task", "sub_task"]),
+        "",
+        "By language:",
+        _fmt_usage(tables["languages"], ["lang"]),
+        "",
+        f"Most repeated datasets (top {_TOP_DEVIATIONS}):",
+        _fmt_usage_datasets(datasets.sort_values("passes", ascending=False)),
+        "",
+        f"Least covered datasets (top {_TOP_DEVIATIONS}):",
+        _fmt_usage_datasets(datasets.sort_values("coverage_pct")),
+        "",
+        f"Most unseen hours (top {_TOP_DEVIATIONS}):",
+        _fmt_usage_datasets(
+            datasets.reindex(
+                (datasets["hours_available"] - datasets["hours_distinct"]).sort_values(ascending=False).index
+            )
+        ),
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _fmt_usage(df: pd.DataFrame, keys: list) -> str:
+    cols = keys + [
+        "n_datasets", "share_of_seen_pct", "passes", "min_passes", "max_passes", "coverage_pct",
+        "repeated_pct_of_seen", "hours_available", "hours_seen", "hours_distinct",
+    ]  # fmt: skip
+    return df[cols].to_string(index=False, float_format=lambda v: f"{v:.2f}")
+
+
+def _fmt_usage_datasets(df: pd.DataFrame) -> str:
+    cols = ["dataset", "size", "seen", "distinct", "coverage_pct", "passes", "hours_available", "hours_distinct"]
+    return df[cols].head(_TOP_DEVIATIONS).to_string(index=False, float_format=lambda v: f"{v:.2f}")
+
+
 def _fmt_group(df: pd.DataFrame, keys: list) -> str:
     cols = keys + ["n_datasets", "target_pct", "actual_pct", "ratio", "seen", "hours_est"]
     return df[cols].to_string(index=False, float_format=lambda v: f"{v:.3f}")
@@ -596,7 +765,22 @@ def _make_plots(datasets: pd.DataFrame, tables: dict, evolution, out_dir: Path, 
         labels = df[key].astype(str) if name != "subtasks" else df["task"] + "/" + df["sub_task"].replace("", "-")
         _bar_target_actual(plt, labels, df, out_dir / f"{name}.png", f"Share by {key} — {title}")
 
-    # 4. most repeated datasets
+    if evolution is not None and evolution["step"].nunique() > 1:
+        _plot_evolution(plt, evolution, task_color, out_dir)
+
+
+def _make_usage_plots(datasets: pd.DataFrame, tables: dict, evolution, out_dir: Path, title: str) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tasks = list(tables["tasks"].sort_values("task")["task"])
+    cmap = plt.get_cmap("tab20")
+    task_color = {t: cmap(i % 20) for i, t in enumerate(tasks)}
+
+    # 1. most repeated datasets
     top = datasets.sort_values("passes", ascending=False).head(_TOP_PASSES).iloc[::-1]
     fig, ax = plt.subplots(figsize=(9, 0.25 * len(top) + 1.5))
     ax.barh(top["dataset"], top["passes"], color=list(top["task"].map(task_color)))
@@ -613,12 +797,263 @@ def _make_plots(datasets: pd.DataFrame, tables: dict, evolution, out_dir: Path, 
     bins = [10**x for x in _linspace(math.log10(passes.min()), math.log10(passes.max()), 30)]
     ax.hist(passes, bins=bins, color="#4C72B0")
     ax.axvline(1.0, color="grey", lw=1, ls="--")
-    ax.set(xscale="log", xlabel="passes over the dataset", ylabel="# datasets")
+    ax.set(xscale="log", xlabel="passes over the dataset (log scale)", ylabel="# datasets")
+    _plain_log_ticks(ax.xaxis)
     ax.set_title(f"Passes per dataset — {title}")
     _save(fig, out_dir / "passes_hist.png")
 
+    # 3. passes vs dataset size: big corpora barely seen, small ones repeated
+    fig, ax = plt.subplots(figsize=(9, 6))
+    _scatter_passes(ax, datasets["size"], datasets["passes"], datasets["task"].map(task_color))
+    _task_legend(ax, task_color)
+    ax.set_title(f"Passes vs dataset size — {title}")
+    _save(fig, out_dir / "passes_vs_size.png")
+
+    # 4. hours available / distinct seen / seen, per task, sub-task and language
+    for name, key in (("tasks", "task"), ("subtasks", "sub_task"), ("languages", "lang")):
+        df = tables[name].sort_values("hours_available", ascending=False)
+        labels = df[key].astype(str) if name != "subtasks" else df["task"] + "/" + df["sub_task"].replace("", "-")
+        _bar_hours(plt, labels, df, out_dir / f"hours_{name}.png", f"Hours by {key} — {title}")
+
+    # 5. passes over training, per task
     if evolution is not None and evolution["step"].nunique() > 1:
-        _plot_evolution(plt, evolution, task_color, out_dir)
+        by_task = evolution.groupby(["step", "task"])[["seen", "distinct", "size"]].sum().reset_index()
+        for col, ylabel, fname in (
+            ("passes", "passes (seen / size)", "evolution_task_passes.png"),
+            ("coverage_pct", "distinct lines seen (% of size)", "evolution_task_coverage.png"),
+        ):
+            fig, ax = plt.subplots(figsize=(10, 6))
+            for task, df in by_task.groupby("task"):
+                y = df["seen"] / df["size"] if col == "passes" else 100 * df["distinct"] / df["size"]
+                ax.plot(df["step"], y, marker="o", ms=3, label=task, color=task_color.get(task))
+            if col == "passes":
+                ax.axhline(1.0, color="grey", lw=1, ls="--")
+            if col == "passes":
+                ax.set_yscale("log")
+                _plain_log_ticks(ax.yaxis)
+            ax.set(
+                xlabel="step", ylabel=ylabel + (" (log scale)" if col == "passes" else ""),
+                ylim=(None if col == "passes" else 0, None),
+            )  # fmt: skip
+            ax.legend(fontsize=7, ncol=2)
+            ax.set_title(f"Per-task {ylabel} over training")
+            _save(fig, out_dir / fname)
+
+    _make_detailed_usage_plots(plt, datasets, evolution, out_dir, title)
+
+
+def _make_detailed_usage_plots(plt, datasets: pd.DataFrame, evolution, out_dir: Path, title: str) -> None:
+    """by_task/<task>/, by_task/<task>/<lang>/ and by_language/<lang>/: hours, passes and coverage in detail."""
+    datasets = datasets.assign(corpus=datasets["dataset"].map(_corpus_label))
+    if evolution is not None:
+        evolution = evolution.assign(corpus=evolution["dataset"].map(_corpus_label))
+        if evolution["step"].nunique() < 2:
+            evolution = None
+
+    def evo(mask_fn):
+        return None if evolution is None else evolution[mask_fn(evolution)]
+
+    for task, df in datasets.groupby("task"):
+        d = out_dir / "by_task" / _safe_name(task)
+        name = f"{task} — {title}"
+        _detail_folder(plt, df, evo(lambda e: e["task"] == task), d, name, ("lang", "sub_task", "corpus"), "lang")
+        if df["lang"].nunique() < 2:
+            continue
+        for lang, dfl in df.groupby("lang"):
+            e = evo(lambda e: (e["task"] == task) & (e["lang"] == lang))
+            _detail_folder(
+                plt, dfl, e, d / _safe_name(lang), f"{task} {lang} — {title}", ("sub_task", "corpus"), "corpus",
+                with_datasets=True,
+            )  # fmt: skip
+
+    for lang, df in datasets.groupby("lang"):
+        d = out_dir / "by_language" / _safe_name(lang)
+        e = evo(lambda e: e["lang"] == lang)
+        _detail_folder(plt, df, e, d, f"{lang} — {title}", ("task", "sub_task", "corpus"), "task")
+
+
+def _detail_folder(plt, df, evolution, d: Path, name: str, group_keys, evo_key, with_datasets=False) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    for key in group_keys:
+        if key == "corpus":
+            base, all_variants = _corpus_tables(df)
+            views = ((base, "base", "base manifests only"), (all_variants, "all_variants", _ALL_VARIANTS))
+            for g, suffix, what in views:
+                g = g.sort_values("hours_available", ascending=False)
+                _bar_hours(plt, g["corpus"], g, d / f"hours_corpora_{suffix}.png", f"Hours by corpus, {what} — {name}")
+            continue
+        g = _usage_group_table(df, [key] if key != "sub_task" else ["task", "sub_task"])
+        if len(g) < 2:
+            continue
+        labels = _group_labels(g, key)
+        g = g.assign(_label=list(labels)).sort_values("hours_available", ascending=False)
+        _bar_hours(plt, g["_label"], g, d / f"hours_{_PLURAL[key]}.png", f"Hours by {key} — {name}")
+    if with_datasets:
+        g = df.sort_values("hours_available", ascending=False)
+        _bar_hours(plt, g["dataset"].map(_short_label), g, d / "hours_datasets.png", f"Hours by dataset — {name}")
+
+    if not ((df["size"] > 0) & (df["passes"] > 0)).any():
+        return
+    color_key = "sub_task" if with_datasets else group_keys[0]
+    values = sorted(df[color_key].astype(str).unique())
+    cmap = plt.get_cmap("tab20")
+    color = {v: cmap(i % 20) for i, v in enumerate(values)}
+    fig, ax = plt.subplots(figsize=(9, 6))
+    _scatter_passes(ax, df["size"], df["passes"], df[color_key].astype(str).map(color))
+    _task_legend(ax, {(v or "-"): c for v, c in color.items()})
+    ax.set_title(f"Passes vs dataset size (colour = {color_key}) — {name}", fontsize=9)
+    _save(fig, d / "passes_vs_size.png")
+
+    if evolution is None:
+        return
+    if evo_key != "corpus":
+        by = evolution.groupby(["step", evo_key])[["seen", "distinct", "size"]].sum().reset_index()
+        _plot_evolution_groups(plt, by, evo_key, d, name, _PLURAL[evo_key], coverage=True)
+        return
+    base_rows = _base_rows(evolution)
+    base = evolution[base_rows].groupby(["step", "corpus"])[["seen", "distinct", "size"]].sum()
+    _plot_evolution_groups(plt, base.reset_index(), "corpus", d, f"base manifests only — {name}", "corpora_base")
+    seen = evolution.groupby(["step", "corpus"])["seen"].sum()
+    all_variants = base[["size"]].join(seen.rename("seen"), how="inner").reset_index()
+    _plot_evolution_groups(
+        plt, all_variants, "corpus", d, f"all variants — {name}", "corpora_all_variants", coverage=False,
+        passes_label="passes per base line (all variants)",
+    )  # fmt: skip
+
+
+def _plot_evolution_groups(
+    plt, by, evo_key, d: Path, name: str, suffix: str, coverage=True, passes_label="passes (seen / size)"
+) -> None:
+    groups = sorted(by[evo_key].astype(str).unique())
+    cmap = plt.get_cmap("tab20")
+    styles = ["-", "--", ":", "-."]
+    plots = [("passes", passes_label, f"evolution_passes_{suffix}.png")]
+    if coverage:
+        plots.append(("coverage_pct", "distinct lines seen (% of size)", f"evolution_coverage_{suffix}.png"))
+    for col, ylabel, fname in plots:
+        fig, ax = plt.subplots(figsize=(11, 6.5))
+        for i, (key, g) in enumerate(by.groupby(evo_key)):
+            y = g["seen"] / g["size"] if col == "passes" else 100 * g["distinct"] / g["size"]
+            ax.plot(
+                g["step"], y, marker="o", ms=2, label=str(key) or "-", color=cmap(i % 20), ls=styles[(i // 20) % 4]
+            )
+        if col == "passes":
+            ax.axhline(1.0, color="grey", lw=1, ls="--")
+            ax.set_yscale("log")
+            _plain_log_ticks(ax.yaxis)
+        ax.set(
+                xlabel="step", ylabel=ylabel + (" (log scale)" if col == "passes" else ""),
+                ylim=(None if col == "passes" else 0, None),
+            )  # fmt: skip
+        ax.legend(
+            fontsize=6, ncol=1 + len(groups) // 25, loc="center left", bbox_to_anchor=(1.0, 0.5), handlelength=4
+        )
+        ax.set_title(f"{ylabel} over training, per {evo_key} — {name}", fontsize=9)
+        _save(fig, d / fname)
+
+
+_ALL_VARIANTS = "all variants, passes per base line"
+
+
+def _base_rows(df: pd.DataFrame) -> pd.Series:
+    """Base manifests (no sub_task); every row of a corpus that has no base manifest."""
+    base = df["sub_task"].fillna("") == ""
+    has_base = base.groupby([df["task"], df["lang"], df["corpus"]]).transform("any")
+    return base | ~has_base
+
+
+def _corpus_tables(df: pd.DataFrame):
+    """Per corpus: base manifests only, and all variants with draws counted against the base size."""
+    base = _usage_group_table(df[_base_rows(df)], ["corpus"])
+    all_variants = _usage_group_table(df, ["corpus"]).set_index("corpus")
+    b = base.set_index("corpus")
+    all_variants["size"] = b["size"]
+    all_variants["hours_available"] = b["hours_available"]
+    all_variants["passes"] = all_variants["seen"] / all_variants["size"]
+    all_variants["coverage_pct"] = float("nan")
+    all_variants["hours_distinct"] = float("nan")
+    return base, all_variants.reset_index()
+
+
+_PLURAL = {"task": "tasks", "lang": "languages", "sub_task": "subtasks", "corpus": "corpora"}
+
+
+def _group_labels(g: pd.DataFrame, key: str):
+    if key == "sub_task":
+        return g["task"] + "/" + g["sub_task"].replace("", "-")
+    return g[key].astype(str).replace("", "-")
+
+
+def _corpus_label(dataset: str) -> str:
+    """asr/fr/clean/CFPB/events:train_x -> CFPB; ast/es-fr/clean/CoVoST:train -> es-fr/CoVoST."""
+    parts = dataset.split("/")
+    pair = parts[1] if len(parts) > 1 and "-" in parts[1] else None
+    rest = [p for p in parts[2:] if p != "clean"]
+    if not rest:
+        return dataset
+    corpus = rest[0].split(":")[0]
+    return f"{pair}/{corpus}" if pair else corpus
+
+
+def _short_label(dataset: str) -> str:
+    """Drops the task/lang prefix and clean/: asr/fr/clean/CFPB/events:train -> CFPB/events:train."""
+    parts = dataset.split("/")
+    pair = parts[1] if len(parts) > 1 and "-" in parts[1] else None
+    rest = [p for p in parts[2:] if p != "clean"]
+    return "/".join(([pair] if pair else []) + rest) if rest else dataset
+
+
+def _safe_name(value) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)) or "none"
+
+
+def _scatter_passes(ax, size, passes, colors) -> None:
+    ax.scatter(size, passes, c=list(colors), s=18, alpha=0.85)
+    ax.axhline(1.0, color="grey", lw=1, ls="--")
+    ax.set(xscale="log", yscale="log", xlabel="lines in the manifest (log scale)", ylabel="passes (log scale)")
+    _plain_log_ticks(ax.xaxis)
+    _plain_log_ticks(ax.yaxis)
+
+
+_LOG_TICKS = [m * 10**e for e in range(-3, 8) for m in (1, 2, 5)]
+
+
+def _plain_log_ticks(axis) -> None:
+    """Log axis labelled 0.1, 0.2, 0.5, 1, 2, 5, 10, 20k, 1M instead of 10^-1, 10^0, 10^1."""
+    from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
+
+    def fmt(v, _):
+        for div, suffix in ((1e6, "M"), (1e3, "k")):
+            if v >= div:
+                return f"{v / div:g}{suffix}"
+        return f"{v:g}"
+
+    axis.set_major_locator(FixedLocator(_LOG_TICKS))
+    axis.set_major_formatter(FuncFormatter(fmt))
+    axis.set_minor_formatter(NullFormatter())
+
+
+def _bar_hours(plt, labels, df: pd.DataFrame, path: Path, title: str) -> None:
+    if not (df["hours_available"] > 0).any():  # text-only data has no duration
+        return
+    n = len(df)
+    fig, ax = plt.subplots(figsize=(11, 0.4 * n + 1.5))
+    y = list(range(n))[::-1]
+    h = 0.27
+    ax.barh([v + h for v in y], df["hours_available"], height=h, label="available", color="#BBBBBB")
+    if df["hours_distinct"].notna().any():
+        ax.barh(y, df["hours_distinct"], height=h, label="distinct seen", color="#55A868")
+    ax.barh([v - h for v in y], df["hours_seen"], height=h, label="seen (with repeats)", color="#4C72B0")
+    for v, s, p, c in zip(y, df["hours_seen"], df["passes"], df["coverage_pct"], strict=True):
+        text = f" {p:.2f} passes per base line" if pd.isna(c) else f" {p:.2f} passes, {c:.0f}% seen"
+        ax.text(s, v - h, text, va="center", fontsize=6)
+    ax.set_yticks(y)
+    ax.set_yticklabels(list(labels), fontsize=7)
+    ax.set(xscale="log", xlabel="hours (est., log scale)")
+    _plain_log_ticks(ax.xaxis)
+    ax.legend(loc="lower right", fontsize=7)
+    ax.set_title(title)
+    _save(fig, path)
 
 
 def _plot_evolution(plt, evolution: pd.DataFrame, task_color: dict, out_dir: Path) -> None:
