@@ -121,6 +121,9 @@ data:
   input_roles: ["user"]
   output_roles: ["agent"]
   word_align_position: left
+  # One timing for the model, injected into every conversation_as_duplex entry by duplex_train.py
+  # (agent_timing.py): the agent answers after the user turn, as one block (agent_text_timestamps false).
+  agent_timing: after
 
   train_ds:
     input_cfg: null  # conf/data/input_cfg_qa.yaml, passed on the command line

@@ -26,8 +26,9 @@ import sys
 import torch
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
-from omegaconf import OmegaConf, open_dict
+from omegaconf import OmegaConf
 
+from agent_timing import apply_agent_timing
 from nemo.collections.speechlm2 import DataModule, DuplexSTTDataset, DuplexSTTModel
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
@@ -63,11 +64,10 @@ def _validate_and_log(trainer, model, datamodule, step, tag, ckpt_path=None):
 
 @hydra_runner(config_path="conf", config_name="duplex_qa")
 def train(cfg):
-    # Validation sets in their own YAML (conf/data/val_cfg_qa.yaml), passed as a path like the train
-    # input_cfg; loaded before resolve so its ${oc.env:...} interpolations are resolved with the rest.
-    if isinstance(val_sets := cfg.data.validation_ds.get("datasets"), str):
-        with open_dict(cfg):
-            cfg.data.validation_ds.datasets = OmegaConf.load(val_sets)
+    # data.agent_timing (+ lag, wait_words) into every conversation_as_duplex entry, and the derived
+    # data.agent_text_timestamps. Loads the train input_cfg and the validation sets (conf/data/val_cfg_<model>.yaml),
+    # both passed as paths, before resolve so their ${oc.env:...} interpolations are resolved with the rest.
+    apply_agent_timing(cfg)
     OmegaConf.resolve(cfg)
     torch.distributed.init_process_group(backend="nccl")
     torch.set_float32_matmul_precision("medium")

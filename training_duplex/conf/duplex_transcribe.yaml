@@ -2,7 +2,7 @@
 # in the system prompt sets the task and the style), single head. Derived from duplex_qa.yaml (2 heads,
 # ASR/QA, the v4 logic): only the differences are commented below, the rest is the same.
 # The agent channel writes the transcript (or translation) WHILE the user speaks: conversation_as_duplex with
-# `agent_timing: simultaneous` places each word from its end + lag (conf/data/input_cfg_transcribe.yaml).
+# `data.agent_timing: simultaneous` places each word from its end + lag, in every dataset of the input_cfgs.
 #
 # Run with the NeMo fork, branch luciole_duplexstt_3.1 (trainable_head_rows + conversation_as_duplex):
 #   examples/speechlm2/stt_duplex_train.py --config-path=<this dir> --config-name=duplex_transcribe
@@ -111,8 +111,14 @@ data:
   input_roles: ["user"]
   output_roles: ["agent"]
   word_align_position: left
-  # The agent text is timestamped (agent_timing: simultaneous): place it word by word instead of in one block.
-  agent_text_timestamps: true
+  # One timing for the model, injected into every conversation_as_duplex entry of the train and validation
+  # input_cfgs by duplex_train.py (agent_timing.py; an entry with another value is an error). It also sets
+  # agent_text_timestamps (true for simultaneous: the agent text is placed word by word, not in one block).
+  # simultaneous: transcription words from their end + lag (s); translation word i of n at the end of source
+  # word ceil((i + 1) * n_src / n) - 1 + wait_words, + lag.
+  agent_timing: simultaneous
+  lag: 0.16
+  wait_words: 2
 
   train_ds:
     input_cfg: null  # conf/data/input_cfg_transcribe.yaml, passed on the command line

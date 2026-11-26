@@ -1,7 +1,7 @@
 # Luciole-Audio-Transcribe streaming (conf/duplex_transcribe.yaml, single head): streaming ASR and AST, the
 # v5_transcribe logic. Every line keeps its instruction (system prompt: task, case / punctuation style, target
-# language) and the agent writes the answer WHILE the user speaks (`agent_timing: simultaneous`, NeMo fork
-# conversation_as_duplex): transcription words from their end + lag, translation words in proportion to the
+# language) and the agent writes the answer WHILE the user speaks (`data.agent_timing: simultaneous` of
+# conf/duplex_transcribe.yaml): transcription words from their end + lag, translation words in proportion to the
 # source words heard + wait_words.
 # Data: the word-aligned copies of the clean/ BASE manifests under audio/duplex/nemo/.../clean/
 # (alignment/align_asr.slurm SET=clean / clean_spont, join_ast_words.slurm VARIANT=clean): no events tags, no
@@ -15,39 +15,30 @@
   input_cfg:
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/CommonVoice/train_shards/train__OP_0..118_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.210
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/Multilingual_LibriSpeech_recasepunc/train_recasepunc_shards/train_recasepunc__OP_0..49_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.090
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/VoxPopuli/train_shards/train__OP_0..14_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.025
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/ESLO/train_recasepunc_shards/train_recasepunc__OP_0..83_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.110  # 324k lines kept of 416k, 2.2 s segments
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/LVL-Atril-CTFAR/train_shards/train__OP_0..11_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.032  # 39k of 56k
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/LVL-Atril-CTFNN1/train_shards/train__OP_0..13_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.017  # 49k of 69k
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/fr/clean/CFPP2000/train_recasepunc_shards/train_recasepunc__OP_0..5_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.016  # 22k of 28k
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/en/clean/CommonVoice/train_shards/train__OP_0..227_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.430
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/asr/en/clean/VoxPopuli/train_shards/train__OP_0..36_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.070
 - type: group
   weight: 0.30
@@ -57,9 +48,7 @@
   # without word timestamps, are dropped by agent_timing: simultaneous).
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/ast/fr-en/clean/CommonVoiceFR2EN/train_shards/train__OP_0..118_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.5
   - type: conversation_as_duplex
     manifest_filepath: /lustre/fsn1/projects/rech/qgz/commun/audio/duplex/nemo/ast/en-fr/clean/CommonVoiceEN2FR/train_shards/train__OP_0..227_CL_.jsonl
-    agent_timing: simultaneous
     weight: 0.5

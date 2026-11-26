@@ -7,10 +7,8 @@
 asr_fr:
   input_cfg:
     - type: conversation_as_duplex
-      agent_timing: simultaneous
       manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/fr/context/CommonVoice/dev.jsonl
 asr_en:
   input_cfg:
     - type: conversation_as_duplex
-      agent_timing: simultaneous
       manifest_filepath: ${oc.env:DATA_FOLDER}/duplex/nemo/asr/en/context/CommonVoice/dev.jsonl

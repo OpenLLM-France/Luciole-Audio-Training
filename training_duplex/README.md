@@ -139,11 +139,17 @@ prompt système, et le canal agent écrit la réponse au fil de l'audio. Une tê
 - `data.agent_text_timestamps: true` : le dataset place le texte agent mot par mot au lieu d'un bloc ;
 - `model.agent_wer: true` : WER du canal agent en validation (en plus du BLEU).
 
+Le timing est un réglage du modèle, pas d'un dataset : `data.agent_timing` (+ `data.lag`, `data.wait_words`) dans
+`conf/duplex_<model>.yaml` (`simultaneous` pour transcribe, `after` pour qa). `duplex_train.py` (`agent_timing.py`)
+l'injecte dans chaque entrée `conversation_as_duplex` du train et de la validation (une entrée avec une autre valeur
+est une erreur) et en déduit `data.agent_text_timestamps` : les deux timings ne se mélangent pas dans un run, le
+dataset lit tout le texte agent comme horodaté ou aucun.
+
 Vérifié sur CPU :
 - `tmp_tests/test_simultaneous_cpu.py` (ESLO, CV en, AST fr-en, 150 exemples, 0 erreur) : BOS à la trame 1, réponse
   relue à l'identique, EOS après le dernier token, aucun mot avant sa fin + `lag` (délai médian 0,16 s, max 0,56 s
   quand les tokens du mot précédent occupent encore les trames) ;
-- `tmp_tests/smoke_config_cpu.py --config duplex_transcribe --manifest <aligné> --agent-timing simultaneous` :
+- `tmp_tests/smoke_config_cpu.py --config duplex_transcribe --manifest <aligné>` :
   105,9M paramètres entraînés, prompt v5 en prompt système, loss finie, rechargement du checkpoint.
 
 ```bash
